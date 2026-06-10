@@ -326,41 +326,85 @@ const PREMIUM_FEATURES = [
   { icon: "✦", text: "AI detects gaps and suggests missing cards" },
 ];
 
-const PremiumModal: React.FC<PremiumModalProps> = ({ visible, onClose, onUpgrade }) => (
-  <Modal visible={visible} animationType="slide" transparent>
-    <TouchableOpacity activeOpacity={1} style={styles.premiumOverlay} onPress={onClose}>
-      <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-        <View style={styles.premiumSheet}>
-          <View style={styles.modalHandle} />
-          <View style={styles.premiumCrownCircle}>
-            <Text style={styles.premiumCrownEmoji}>👑</Text>
+const PremiumModal: React.FC<PremiumModalProps> = ({
+  visible,
+  onClose,
+  onUpgrade,
+}) => {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+    >
+      <TouchableOpacity
+        activeOpacity={1}
+        style={styles.premiumOverlay}
+        onPress={onClose}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <View
+            style={[
+              styles.premiumSheet,
+              {
+                paddingBottom: Math.max(insets.bottom, 16) + 24,
+              },
+            ]}
+          >
+            <View style={styles.modalHandle} />
+
+            <View style={styles.premiumCrownCircle}>
+              <Text style={styles.premiumCrownEmoji}>👑</Text>
+            </View>
+
+            <Text style={styles.premiumTitle}>Premium Feature</Text>
+
+            <Text style={styles.premiumSub}>
+              Generate flashcards instantly from any topic using AI.
+              {"\n"}
+              Upgrade your plan to unlock this feature.
+            </Text>
+
+            <View style={styles.premiumFeatureBox}>
+              {PREMIUM_FEATURES.map((f, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.premiumFeatureItem,
+                    i < PREMIUM_FEATURES.length - 1 &&
+                      styles.premiumFeatureDivider,
+                  ]}
+                >
+                  <Text style={styles.premiumFeatureIcon}>{f.icon}</Text>
+                  <Text style={styles.premiumFeatureText}>{f.text}</Text>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.upgradeBtn}
+              onPress={onUpgrade}
+            >
+              <Text style={styles.upgradeBtnText}>
+                👑 Upgrade to Premium
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.maybeLaterBtn}
+              onPress={onClose}
+            >
+              <Text style={styles.maybeLaterText}>Maybe later</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.premiumTitle}>Premium Feature</Text>
-          <Text style={styles.premiumSub}>
-            Generate flashcards instantly from any topic using AI.{"\n"}Upgrade your plan to unlock this feature.
-          </Text>
-          <View style={styles.premiumFeatureBox}>
-            {PREMIUM_FEATURES.map((f, i) => (
-              <View
-                key={i}
-                style={[styles.premiumFeatureItem, i < PREMIUM_FEATURES.length - 1 && styles.premiumFeatureDivider]}
-              >
-                <Text style={styles.premiumFeatureIcon}>{f.icon}</Text>
-                <Text style={styles.premiumFeatureText}>{f.text}</Text>
-              </View>
-            ))}
-          </View>
-          <TouchableOpacity style={styles.upgradeBtn} onPress={onUpgrade}>
-            <Text style={styles.upgradeBtnText}>👑 Upgrade to Premium</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.maybeLaterBtn} onPress={onClose}>
-            <Text style={styles.maybeLaterText}>Maybe later</Text>
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  </Modal>
-);
+    </Modal>
+  );
+};
 
 // ─── Loading Modal ────────────────────────────────────────────────────────────
 
@@ -448,7 +492,10 @@ const CardSectionPage: React.FC = () => {
     }
   }
 
-  const handleAiGenerate = () => fetchData();
+const handleAiGenerate = () => {
+  fetchData();
+  // setPremiumModalVisible(true);
+}
   const handleUpgrade = () => {
     setPremiumModalVisible(false);
     Alert.alert("Upgrade", "Navigate to your subscription screen here.");
