@@ -5,7 +5,7 @@ import os
 
 load_dotenv()
 
-chunks = process_file(r"D:\download\burat.pdf")
+chunks = process_file(r"D:\download\tite.pdf")
 
 client = Groq(
     api_key=os.environ.get("GROQ_API_KEY"),
