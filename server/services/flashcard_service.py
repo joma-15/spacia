@@ -43,11 +43,14 @@ Answer: Star Topology
 OUTPUT FORMAT:
 [
   {{
+    "id" : "number (1-infinity)" each question uniquely identified by a number,
     "question": "string",
-    "answer": "string"
+    "answer": "string",
+    "status": "review"
   }}
 ]
-
+make sure that the order of the json data is in exact order like in the prompt
+id first, then question, then answer, then status
 CONTENT:
 {chunks}
 """

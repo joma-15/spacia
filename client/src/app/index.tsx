@@ -1,10 +1,10 @@
 // import HomeScreen from "@/components/HomeScreen";
-import CardSectionPage from "@/components/CardSectionPage";
 import HomeScreen from "@/components/HomeScreen";
+import CardPage from "@/components/CardPage";
 
 export default function Index() {
   return (
-    <HomeScreen />
-    // <CardSectionPage />
+    // <HomeScreen />
+    <CardPage />
   );
 }

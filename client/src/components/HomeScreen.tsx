@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+
 import {
   Platform,
   SafeAreaView,
@@ -348,6 +350,8 @@ const PopupToggleBanner: React.FC<PopupToggleBannerProps> = ({
 // ─────────────────────────────────────────────
 // 🏠 HOME SCREEN
 // ─────────────────────────────────────────────
+
+
 export default function HomeScreen() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [popupEnabled, setPopupEnabled] = useState<boolean>(true);

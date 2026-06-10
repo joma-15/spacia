@@ -19,6 +19,5 @@ def get_flashcards():
         })
 
     return jsonify({
-        "success": True,
         "flashcards": flashcards
     })
