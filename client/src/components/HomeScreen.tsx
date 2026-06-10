@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { router } from "expo-router";
 
 import {
   Platform,
@@ -90,9 +90,14 @@ const ACCENT_COLORS: { label: string; value: string }[] = [
 interface FolderCardProps {
   folder: Folder;
   onDelete: (id: string) => void;
+  onPress: () => void;
 }
 
-const FolderCard: React.FC<FolderCardProps> = ({ folder, onDelete }) => {
+const FolderCard: React.FC<FolderCardProps> = ({
+  folder,
+  onDelete,
+  onPress,
+}) => {
   const { subject, cardCount, accentColor } = folder;
 
   const handleDelete = (): void => {
@@ -110,6 +115,7 @@ const FolderCard: React.FC<FolderCardProps> = ({ folder, onDelete }) => {
     <TouchableOpacity
       activeOpacity={0.8}
       style={[styles.folderCard, THEME.cardShadow]}
+      onPress={onPress}
     >
       <TouchableOpacity
         style={styles.folderOverflow}
@@ -168,10 +174,9 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
   onClose,
   onAdd,
 }) => {
+  const insets = useSafeAreaInsets(); // ← KEY FIX: get safe area insets inside modal
   const [subject, setSubject] = useState<string>("");
-  const [selectedColor, setSelectedColor] = useState<string>(
-    THEME.folderGreen
-  );
+  const [selectedColor, setSelectedColor] = useState<string>(THEME.folderGreen);
 
   const handleAdd = (): void => {
     if (!subject.trim()) {
@@ -191,12 +196,30 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalSheet}>
+        {/* Tap backdrop to dismiss */}
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={handleClose}
+        />
+
+        <View
+          style={[
+            styles.modalSheet,
+            // ← KEY FIX: push sheet above system nav bar + your app nav bar
+            { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+          ]}
+        >
           <View style={styles.modalHandle} />
           <Text style={styles.modalTitle}>New Subject Folder</Text>
 
@@ -275,10 +298,18 @@ const NavItem: React.FC<NavItemProps> = ({
   accent,
   onPress,
 }) => {
-  const color = active ? THEME.primary : accent ? THEME.accent : THEME.textMuted;
+  const color = active
+    ? THEME.primary
+    : accent
+      ? THEME.accent
+      : THEME.textMuted;
 
   return (
-    <TouchableOpacity style={styles.navItem} activeOpacity={0.7} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.navItem}
+      activeOpacity={0.7}
+      onPress={onPress}
+    >
       {active && <View style={styles.navActiveDot} />}
       <Text style={[styles.navIcon, { color }]}>{icon}</Text>
       <Text style={[styles.navLabel, { color }]}>{label}</Text>
@@ -351,7 +382,6 @@ const PopupToggleBanner: React.FC<PopupToggleBannerProps> = ({
 // 🏠 HOME SCREEN
 // ─────────────────────────────────────────────
 
-
 export default function HomeScreen() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [popupEnabled, setPopupEnabled] = useState<boolean>(true);
@@ -359,7 +389,7 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   const filteredFolders = folders.filter((f) =>
-    f.subject.toLowerCase().includes(searchQuery.toLowerCase())
+    f.subject.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const handleAddFolder = (subject: string, accentColor: string): void => {
@@ -427,6 +457,15 @@ export default function HomeScreen() {
                 key={folder.id}
                 folder={folder}
                 onDelete={handleDeleteFolder}
+                onPress={() =>
+                  router.push({
+                    pathname: "/CardPageRoute",
+                    params: {
+                      folderId: folder.id,
+                      subject: folder.subject,
+                    },
+                  })
+                }
               />
             ))}
           </View>
@@ -435,8 +474,12 @@ export default function HomeScreen() {
             {searchQuery.length > 0 ? (
               <>
                 <Text style={styles.emptyIcon}>🔍</Text>
-                <Text style={styles.emptyText}>No results for "{searchQuery}"</Text>
-                <Text style={styles.emptySubText}>Try a different search term.</Text>
+                <Text style={styles.emptyText}>
+                  No results for "{searchQuery}"
+                </Text>
+                <Text style={styles.emptySubText}>
+                  Try a different search term.
+                </Text>
               </>
             ) : (
               <>
@@ -449,7 +492,7 @@ export default function HomeScreen() {
                   style={styles.emptyAddBtn}
                   onPress={() => setModalVisible(true)}
                 >
-                  <Text style={styles.emptyAddBtnText}>＋  Create Folder</Text>
+                  <Text style={styles.emptyAddBtnText}>＋ Create Folder</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -771,7 +814,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 40,
+    // ← paddingBottom is now set dynamically via insets in the component
     borderWidth: 1,
     borderColor: THEME.borderBright,
   },

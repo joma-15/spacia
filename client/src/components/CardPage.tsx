@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import {
   View,
   Text,
@@ -44,6 +46,7 @@ const COLORS = {
   tagOrangeBorder: "#e67e22",
   danger: "#c0392b",
   dangerDim: "#7b241c",
+  dangerBorder: "#c0392b",
   border: "#2a4a3a",
   premiumPurple: "#1e1035",
   premiumPurpleBorder: "#7c3aed",
@@ -78,10 +81,7 @@ const CardItem: React.FC<CardItemProps> = ({
   const isUnderstood = card.status === "understood";
 
   const handlePressIn = () =>
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      useNativeDriver: true,
-    }).start();
+    Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true }).start();
   const handlePressOut = () =>
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start();
 
@@ -103,11 +103,7 @@ const CardItem: React.FC<CardItemProps> = ({
   const handleDelete = () => {
     Alert.alert("Delete Card", "Are you sure you want to remove this card?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => onDelete(card.id),
-      },
+      { text: "Delete", style: "destructive", onPress: () => onDelete(card.id) },
     ]);
   };
 
@@ -118,40 +114,19 @@ const CardItem: React.FC<CardItemProps> = ({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={() => !isEditing && setExpanded((p) => !p)}
-        style={[
-          styles.card,
-          isUnderstood ? styles.cardUnderstood : styles.cardReview,
-        ]}
+        style={[styles.card, isUnderstood ? styles.cardUnderstood : styles.cardReview]}
       >
         <View style={styles.cardHeader}>
-          <View
-            style={[
-              styles.statusBadge,
-              isUnderstood ? styles.badgeUnderstood : styles.badgeReview,
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusBadgeText,
-                isUnderstood
-                  ? styles.badgeTextUnderstood
-                  : styles.badgeTextReview,
-              ]}
-            >
+          <View style={[styles.statusBadge, isUnderstood ? styles.badgeUnderstood : styles.badgeReview]}>
+            <Text style={[styles.statusBadgeText, isUnderstood ? styles.badgeTextUnderstood : styles.badgeTextReview]}>
               {isUnderstood ? "✓ Understood" : "⟳ In Review"}
             </Text>
           </View>
           <View style={styles.cardActions}>
-            <TouchableOpacity
-              onPress={() => setIsEditing(true)}
-              style={styles.iconBtn}
-            >
+            <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.iconBtn}>
               <Text style={styles.iconBtnText}>✎</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleDelete}
-              style={styles.iconBtnDanger}
-            >
+            <TouchableOpacity onPress={handleDelete} style={styles.iconBtnDanger}>
               <Text style={styles.iconBtnText}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -176,10 +151,7 @@ const CardItem: React.FC<CardItemProps> = ({
               placeholderTextColor={COLORS.textMuted}
             />
             <View style={styles.rowActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={handleCancelEdit}
-              >
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelEdit}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={handleSaveEdit}>
@@ -202,17 +174,11 @@ const CardItem: React.FC<CardItemProps> = ({
                 {expanded ? "Tap to collapse" : "Tap to reveal answer"}
               </Text>
               {!isUnderstood ? (
-                <TouchableOpacity
-                  style={styles.understandBtn}
-                  onPress={() => onUnderstand(card.id)}
-                >
+                <TouchableOpacity style={styles.understandBtn} onPress={() => onUnderstand(card.id)}>
                   <Text style={styles.understandBtnText}>Got it ✓</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity
-                  style={styles.reviewBtn}
-                  onPress={() => onMoveToReview(card.id)}
-                >
+                <TouchableOpacity style={styles.reviewBtn} onPress={() => onMoveToReview(card.id)}>
                   <Text style={styles.reviewBtnText}>Re-review ⟳</Text>
                 </TouchableOpacity>
               )}
@@ -232,11 +198,8 @@ interface AddCardModalProps {
   onAdd: (question: string, answer: string) => void;
 }
 
-const AddCardModal: React.FC<AddCardModalProps> = ({
-  visible,
-  onClose,
-  onAdd,
-}) => {
+const AddCardModal: React.FC<AddCardModalProps> = ({ visible, onClose, onAdd }) => {
+  const insets = useSafeAreaInsets();
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
 
@@ -258,12 +221,13 @@ const AddCardModal: React.FC<AddCardModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalSheet}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
+        <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
           <View style={styles.modalHandle} />
           <Text style={styles.modalTitle}>Add New Card</Text>
           <Text style={styles.fieldLabel}>Question</Text>
@@ -298,6 +262,55 @@ const AddCardModal: React.FC<AddCardModalProps> = ({
   );
 };
 
+// ─── Delete All Confirmation Modal ───────────────────────────────────────────
+
+interface DeleteAllModalProps {
+  visible: boolean;
+  cardCount: number;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+const DeleteAllModal: React.FC<DeleteAllModalProps> = ({
+  visible,
+  cardCount,
+  onClose,
+  onConfirm,
+}) => {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent>
+      <View style={styles.deleteOverlay}>
+        <View style={[styles.deleteSheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+          <View style={styles.deleteIconCircle}>
+            <Text style={styles.deleteIconEmoji}>🗑️</Text>
+          </View>
+          <Text style={styles.deleteTitle}>Delete All Cards?</Text>
+          <Text style={styles.deleteSub}>
+            You're about to permanently remove{" "}
+            <Text style={styles.deleteHighlight}>
+              {cardCount} {cardCount === 1 ? "card" : "cards"}
+            </Text>
+            . This action cannot be undone.
+          </Text>
+          <View style={styles.deleteWarnPill}>
+            <Text style={styles.deleteWarnText}>⚠ All progress will be lost</Text>
+          </View>
+          <View style={styles.rowActions}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.deleteConfirmBtn} onPress={onConfirm}>
+              <Text style={styles.deleteConfirmBtnText}>Delete All</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 // ─── Premium Modal ────────────────────────────────────────────────────────────
 
 interface PremiumModalProps {
@@ -313,17 +326,9 @@ const PREMIUM_FEATURES = [
   { icon: "✦", text: "AI detects gaps and suggests missing cards" },
 ];
 
-const PremiumModal: React.FC<PremiumModalProps> = ({
-  visible,
-  onClose,
-  onUpgrade,
-}) => (
+const PremiumModal: React.FC<PremiumModalProps> = ({ visible, onClose, onUpgrade }) => (
   <Modal visible={visible} animationType="slide" transparent>
-    <TouchableOpacity
-      activeOpacity={1}
-      style={styles.premiumOverlay}
-      onPress={onClose}
-    >
+    <TouchableOpacity activeOpacity={1} style={styles.premiumOverlay} onPress={onClose}>
       <TouchableOpacity activeOpacity={1} onPress={() => {}}>
         <View style={styles.premiumSheet}>
           <View style={styles.modalHandle} />
@@ -332,18 +337,13 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
           </View>
           <Text style={styles.premiumTitle}>Premium Feature</Text>
           <Text style={styles.premiumSub}>
-            Generate flashcards instantly from any topic using AI.{"\n"}Upgrade
-            your plan to unlock this feature.
+            Generate flashcards instantly from any topic using AI.{"\n"}Upgrade your plan to unlock this feature.
           </Text>
           <View style={styles.premiumFeatureBox}>
             {PREMIUM_FEATURES.map((f, i) => (
               <View
                 key={i}
-                style={[
-                  styles.premiumFeatureItem,
-                  i < PREMIUM_FEATURES.length - 1 &&
-                    styles.premiumFeatureDivider,
-                ]}
+                style={[styles.premiumFeatureItem, i < PREMIUM_FEATURES.length - 1 && styles.premiumFeatureDivider]}
               >
                 <Text style={styles.premiumFeatureIcon}>{f.icon}</Text>
                 <Text style={styles.premiumFeatureText}>{f.text}</Text>
@@ -369,32 +369,18 @@ interface LoadingModalProps {
 }
 
 const LoadingModal: React.FC<LoadingModalProps> = ({ visible }) => (
-  <Modal
-    visible={visible}
-    animationType="fade"
-    transparent
-    statusBarTranslucent
-  >
+  <Modal visible={visible} animationType="fade" transparent statusBarTranslucent>
     <View style={styles.loadingOverlay}>
       <View style={styles.loadingSheet}>
         <View style={styles.loadingIconCircle}>
           <Text style={styles.loadingIconEmoji}>✦</Text>
         </View>
-        <ActivityIndicator
-          size="large"
-          color={COLORS.primary}
-          style={styles.loadingSpinner}
-        />
+        <ActivityIndicator size="large" color={COLORS.primary} style={styles.loadingSpinner} />
         <Text style={styles.loadingTitle}>Generating Cards</Text>
-        <Text style={styles.loadingSubText}>
-          Fetching your flashcards via AI…
-        </Text>
+        <Text style={styles.loadingSubText}>Fetching your flashcards via AI…</Text>
         <View style={styles.loadingDotsRow}>
           {[0, 1, 2].map((i) => (
-            <View
-              key={i}
-              style={[styles.loadingDot, { opacity: 0.3 + i * 0.3 }]}
-            />
+            <View key={i} style={[styles.loadingDot, { opacity: 0.3 + i * 0.3 }]} />
           ))}
         </View>
       </View>
@@ -405,64 +391,50 @@ const LoadingModal: React.FC<LoadingModalProps> = ({ visible }) => (
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 const CardSectionPage: React.FC = () => {
+  const insets = useSafeAreaInsets(); // ← for back button top positioning
   const [cards, setCards] = useState<FlashCard[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [modalVisible, setModalVisible] = useState(false);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
+  const [deleteAllModalVisible, setDeleteAllModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [flashcards, setFlashcards] = useState<FlashCard[]>([]);
-
-  const isPremium: boolean = false;
 
   const reviewCards = cards.filter((c) => c.status === "review");
   const understoodCards = cards.filter((c) => c.status === "understood");
   const displayedCards =
-    activeTab === "all"
-      ? cards
-      : activeTab === "review"
-        ? reviewCards
-        : understoodCards;
+    activeTab === "all" ? cards : activeTab === "review" ? reviewCards : understoodCards;
 
   const handleUnderstand = (id: string) =>
-    setCards((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, status: "understood" as CardStatus } : c,
-      ),
-    );
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, status: "understood" as CardStatus } : c)));
   const handleMoveToReview = (id: string) =>
-    setCards((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, status: "review" as CardStatus } : c,
-      ),
-    );
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, status: "review" as CardStatus } : c)));
   const handleDelete = (id: string) =>
     setCards((prev) => prev.filter((c) => c.id !== id));
   const handleEdit = (id: string, question: string, answer: string) =>
-    setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, question, answer } : c)),
-    );
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, question, answer } : c)));
   const handleAddCard = (question: string, answer: string) => {
     setCards((prev) => [
       { id: Date.now().toString(), question, answer, status: "review" },
       ...prev,
     ]);
   };
+  const handleDeleteAll = () => {
+    setCards([]);
+    setDeleteAllModalVisible(false);
+    setActiveTab("all");
+  };
 
   async function fetchData() {
     setLoading(true);
-
     try {
       const response = await fetch("http://192.168.8.35:5000/flashcards");
-
       const data = await response.json();
-
       const newCards: FlashCard[] = data.flashcards.map((item: any) => ({
         id: item.id ?? Date.now().toString() + Math.random(),
         question: item.question,
         answer: item.answer,
         status: (item.status as CardStatus) ?? "review",
       }));
-
       setCards((prev) => {
         const existingIds = new Set(prev.map((c) => c.id));
         const fresh = newCards.filter((c) => !existingIds.has(c.id));
@@ -476,30 +448,7 @@ const CardSectionPage: React.FC = () => {
     }
   }
 
-  // async function fetchData() {
-  //   try {
-  //     console.log("BEFORE FETCH");
-
-  //     const response = await fetch("http://192.168.8.35:5000/flashcards");
-
-  //     console.log("AFTER FETCH", response);
-
-  //     const text = await response.text();
-  //     console.log("RAW RESPONSE:", text);
-
-  //   } catch (error) {
-  //     console.log("FETCH ERROR:", error);
-  //   }
-  // }
-  const handleAiGenerate = () => {
-    // if (isPremium) {
-    //   Alert.alert('AI Generate', 'Open your AI card generation screen here.');
-    // } else {
-    //   setPremiumModalVisible(true);
-    // }
-    fetchData();
-  };
-
+  const handleAiGenerate = () => fetchData();
   const handleUpgrade = () => {
     setPremiumModalVisible(false);
     Alert.alert("Upgrade", "Navigate to your subscription screen here.");
@@ -514,29 +463,46 @@ const CardSectionPage: React.FC = () => {
   const progress = cards.length > 0 ? understoodCards.length / cards.length : 0;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
+
       {/* ── Header ── */}
       <View style={styles.header}>
+
+        {/* ← BACK BUTTON */}
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.backBtnIcon}>‹</Text>
+        </TouchableOpacity>
+
+        {/* Title block */}
         <View style={styles.headerLeft}>
           <Text style={styles.headerSub}>My Subjects</Text>
           <Text style={styles.headerTitle}>Physics Cards</Text>
         </View>
+
+        {/* Right-side action chips */}
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.aiChip}
-            onPress={handleAiGenerate}
-            activeOpacity={0.75}
-          >
+          {cards.length > 0 && (
+            <TouchableOpacity
+              style={styles.deleteAllChip}
+              onPress={() => setDeleteAllModalVisible(true)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.deleteAllChipText}>🗑 Clear</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.aiChip} onPress={handleAiGenerate} activeOpacity={0.75}>
             <Text style={styles.aiChipStar}>✦</Text>
             <Text style={styles.aiChipText}>AI</Text>
             <View style={styles.aiChipCrown}>
               <Text style={styles.aiChipCrownText}>👑</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => setModalVisible(true)}
-          >
+          <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)}>
             <Text style={styles.addBtnText}>＋</Text>
           </TouchableOpacity>
         </View>
@@ -551,9 +517,7 @@ const CardSectionPage: React.FC = () => {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text
-              style={[styles.statNumber, { color: COLORS.tagOrangeBorder }]}
-            >
+            <Text style={[styles.statNumber, { color: COLORS.tagOrangeBorder }]}>
               {reviewCards.length}
             </Text>
             <Text style={styles.statLabel}>In Review</Text>
@@ -567,16 +531,9 @@ const CardSectionPage: React.FC = () => {
           </View>
         </View>
         <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${Math.round(progress * 100)}%` as any },
-            ]}
-          />
+          <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` as any }]} />
         </View>
-        <Text style={styles.progressLabel}>
-          {Math.round(progress * 100)}% mastered
-        </Text>
+        <Text style={styles.progressLabel}>{Math.round(progress * 100)}% mastered</Text>
       </View>
 
       {/* ── Tabs ── */}
@@ -587,12 +544,7 @@ const CardSectionPage: React.FC = () => {
             style={[styles.tab, activeTab === key && styles.tabActive]}
             onPress={() => setActiveTab(key)}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === key && styles.tabTextActive,
-              ]}
-            >
+            <Text style={[styles.tabText, activeTab === key && styles.tabTextActive]}>
               {label}
             </Text>
           </TouchableOpacity>
@@ -600,10 +552,7 @@ const CardSectionPage: React.FC = () => {
       </View>
 
       {/* ── Card list ── */}
-      <ScrollView
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {displayedCards.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>📭</Text>
@@ -625,17 +574,15 @@ const CardSectionPage: React.FC = () => {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <AddCardModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        onAdd={handleAddCard}
-      />
-      <PremiumModal
-        visible={premiumModalVisible}
-        onClose={() => setPremiumModalVisible(false)}
-        onUpgrade={handleUpgrade}
-      />
+      <AddCardModal visible={modalVisible} onClose={() => setModalVisible(false)} onAdd={handleAddCard} />
+      <PremiumModal visible={premiumModalVisible} onClose={() => setPremiumModalVisible(false)} onUpgrade={handleUpgrade} />
       <LoadingModal visible={loading} />
+      <DeleteAllModal
+        visible={deleteAllModalVisible}
+        cardCount={cards.length}
+        onClose={() => setDeleteAllModalVisible(false)}
+        onConfirm={handleDeleteAll}
+      />
     </View>
   );
 };
@@ -648,15 +595,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    paddingTop: 52,
+    // paddingTop is now dynamic via insets in the component
     paddingHorizontal: 16,
   },
+
+  // ── Header ──
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "center",        // vertically centres back btn, title, actions
     marginBottom: 16,
+    gap: 10,
   },
+
+  // ← NEW back button
+  backBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+    // no marginTop — aligns naturally with flexbox center
+  },
+  backBtnIcon: {
+    color: COLORS.text,
+    fontSize: 22,
+    fontWeight: "300",
+    lineHeight: 26,
+    marginTop: -1,   // optical correction for the ‹ glyph
+  },
+
   headerLeft: { flex: 1 },
   headerSub: {
     color: COLORS.textMuted,
@@ -676,6 +646,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+
+  deleteAllChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.dangerDim,
+    borderWidth: 1,
+    borderColor: COLORS.dangerBorder,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  deleteAllChipText: {
+    color: "#f87171",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+
   aiChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -686,19 +674,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    marginTop: 6,
   },
-  aiChipStar: {
-    color: COLORS.premiumPurpleText,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  aiChipText: {
-    color: COLORS.premiumPurpleText,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
+  aiChipStar: { color: COLORS.premiumPurpleText, fontSize: 11, fontWeight: "700" },
+  aiChipText: { color: COLORS.premiumPurpleText, fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
   aiChipCrown: {
     position: "absolute",
     top: -8,
@@ -721,12 +699,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  addBtnText: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "300",
-    lineHeight: 24,
-  },
+  addBtnText: { color: "#fff", fontSize: 20, fontWeight: "300", lineHeight: 24 },
+
   statsCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 14,
@@ -746,30 +720,11 @@ const styles = StyleSheet.create({
   statItem: { alignItems: "center", flex: 1 },
   statDivider: { width: 1, height: 28, backgroundColor: COLORS.border },
   statNumber: { color: COLORS.text, fontSize: 20, fontWeight: "700" },
-  statLabel: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    marginTop: 1,
-    letterSpacing: 0.3,
-  },
-  progressTrack: {
-    height: 5,
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: 5,
-    backgroundColor: COLORS.primary,
-    borderRadius: 3,
-  },
-  progressLabel: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    marginTop: 5,
-    textAlign: "right",
-    letterSpacing: 0.2,
-  },
+  statLabel: { color: COLORS.textMuted, fontSize: 10, marginTop: 1, letterSpacing: 0.3 },
+  progressTrack: { height: 5, backgroundColor: COLORS.surfaceElevated, borderRadius: 3, overflow: "hidden" },
+  progressFill: { height: 5, backgroundColor: COLORS.primary, borderRadius: 3 },
+  progressLabel: { color: COLORS.textMuted, fontSize: 10, marginTop: 5, textAlign: "right", letterSpacing: 0.2 },
+
   tabRow: {
     flexDirection: "row",
     backgroundColor: COLORS.surface,
@@ -783,6 +738,7 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: COLORS.primaryDim },
   tabText: { color: COLORS.textMuted, fontSize: 12, fontWeight: "500" },
   tabTextActive: { color: COLORS.primary, fontWeight: "700" },
+
   list: { paddingBottom: 20, gap: 10 },
   card: { borderRadius: 14, padding: 14, borderWidth: 1 },
   cardReview: { backgroundColor: COLORS.surface, borderColor: COLORS.border },
@@ -793,20 +749,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 9,
   },
-  statusBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  badgeReview: {
-    backgroundColor: COLORS.tagOrange,
-    borderColor: COLORS.tagOrangeBorder,
-  },
-  badgeUnderstood: {
-    backgroundColor: COLORS.tagGreen,
-    borderColor: COLORS.tagGreenBorder,
-  },
+  statusBadge: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20, borderWidth: 1 },
+  badgeReview: { backgroundColor: COLORS.tagOrange, borderColor: COLORS.tagOrangeBorder },
+  badgeUnderstood: { backgroundColor: COLORS.tagGreen, borderColor: COLORS.tagGreenBorder },
   statusBadgeText: { fontSize: 10, fontWeight: "600" },
   badgeTextReview: { color: COLORS.tagOrangeBorder },
   badgeTextUnderstood: { color: COLORS.primary },
@@ -828,34 +773,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   iconBtnText: { color: COLORS.text, fontSize: 13 },
-  cardQuestion: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 20,
-    marginBottom: 6,
-  },
+  cardQuestion: { color: COLORS.text, fontSize: 14, fontWeight: "600", lineHeight: 20, marginBottom: 6 },
   answerContainer: { marginTop: 4 },
   answerDivider: { height: 1, backgroundColor: COLORS.border, marginBottom: 8 },
-  answerLabel: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 3,
-  },
-  cardAnswer: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 6,
-  },
-  cardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
-  },
+  answerLabel: { color: COLORS.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 },
+  cardAnswer: { color: COLORS.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 6 },
+  cardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
   tapHint: { color: COLORS.textMuted, fontSize: 10, fontStyle: "italic" },
   understandBtn: {
     backgroundColor: COLORS.primaryDim,
@@ -874,11 +797,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.tagOrangeBorder,
   },
-  reviewBtnText: {
-    color: COLORS.tagOrangeBorder,
-    fontWeight: "700",
-    fontSize: 11,
-  },
+  reviewBtnText: { color: COLORS.tagOrangeBorder, fontWeight: "700", fontSize: 11 },
+
   fieldLabel: {
     color: COLORS.textMuted,
     fontSize: 10,
@@ -919,21 +839,18 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   saveBtnText: { color: COLORS.primary, fontWeight: "700", fontSize: 13 },
+
   emptyState: { alignItems: "center", paddingVertical: 60 },
   emptyIcon: { fontSize: 38, marginBottom: 10 },
   emptyText: { color: COLORS.text, fontSize: 15, fontWeight: "600" },
   emptySubText: { color: COLORS.textMuted, fontSize: 12, marginTop: 3 },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.6)",
-  },
+
+  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" },
   modalSheet: {
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     padding: 22,
-    paddingBottom: 38,
   },
   modalHandle: {
     width: 36,
@@ -943,12 +860,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 18,
   },
-  modalTitle: {
-    color: COLORS.text,
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 2,
-  },
+  modalTitle: { color: COLORS.text, fontSize: 18, fontWeight: "700", marginBottom: 2 },
   modalInput: {
     backgroundColor: COLORS.surfaceElevated,
     borderRadius: 11,
@@ -968,11 +880,60 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   addConfirmBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
-  premiumOverlay: {
+
+  deleteOverlay: {
     flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.75)",
+    paddingHorizontal: 28,
   },
+  deleteSheet: {
+    width: "100%",
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.dangerBorder + "55",
+  },
+  deleteIconCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: COLORS.dangerDim,
+    borderWidth: 1.5,
+    borderColor: COLORS.dangerBorder,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  deleteIconEmoji: { fontSize: 24 },
+  deleteTitle: { color: COLORS.text, fontSize: 18, fontWeight: "700", marginBottom: 8, textAlign: "center" },
+  deleteSub: { color: COLORS.textMuted, fontSize: 13, lineHeight: 20, textAlign: "center", marginBottom: 14 },
+  deleteHighlight: { color: "#f87171", fontWeight: "700" },
+  deleteWarnPill: {
+    backgroundColor: COLORS.dangerDim,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.dangerBorder + "88",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginBottom: 6,
+  },
+  deleteWarnText: { color: "#f87171", fontSize: 11, fontWeight: "600" },
+  deleteConfirmBtn: {
+    flex: 2,
+    backgroundColor: COLORS.danger,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.dangerBorder,
+  },
+  deleteConfirmBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+
+  premiumOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.7)" },
   premiumSheet: {
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: 26,
@@ -993,20 +954,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   premiumCrownEmoji: { fontSize: 28 },
-  premiumTitle: {
-    color: COLORS.text,
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 7,
-    textAlign: "center",
-  },
-  premiumSub: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    lineHeight: 20,
-    textAlign: "center",
-    marginBottom: 20,
-  },
+  premiumTitle: { color: COLORS.text, fontSize: 20, fontWeight: "700", marginBottom: 7, textAlign: "center" },
+  premiumSub: { color: COLORS.textMuted, fontSize: 13, lineHeight: 20, textAlign: "center", marginBottom: 20 },
   premiumFeatureBox: {
     width: "100%",
     backgroundColor: "#162a1e",
@@ -1016,25 +965,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 20,
   },
-  premiumFeatureItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 11,
-  },
+  premiumFeatureItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11 },
   premiumFeatureDivider: { borderBottomWidth: 1, borderBottomColor: "#1a3a28" },
-  premiumFeatureIcon: {
-    color: COLORS.primary,
-    fontSize: 14,
-    width: 18,
-    textAlign: "center",
-  },
-  premiumFeatureText: {
-    color: COLORS.text,
-    fontSize: 13,
-    flex: 1,
-    lineHeight: 19,
-  },
+  premiumFeatureIcon: { color: COLORS.primary, fontSize: 14, width: 18, textAlign: "center" },
+  premiumFeatureText: { color: COLORS.text, fontSize: 13, flex: 1, lineHeight: 19 },
   upgradeBtn: {
     width: "100%",
     backgroundColor: "#5b21b6",
@@ -1056,13 +990,7 @@ const styles = StyleSheet.create({
   },
   maybeLaterText: { color: COLORS.textMuted, fontWeight: "600", fontSize: 13 },
 
-  // ── Loading Modal ──
-  loadingOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.75)",
-  },
+  loadingOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.75)" },
   loadingSheet: {
     backgroundColor: COLORS.surface,
     borderRadius: 22,
@@ -1084,36 +1012,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 18,
   },
-  loadingIconEmoji: {
-    color: COLORS.premiumPurpleText,
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  loadingSpinner: {
-    marginBottom: 16,
-  },
-  loadingTitle: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 6,
-    letterSpacing: -0.2,
-  },
-  loadingSubText: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    textAlign: "center",
-    lineHeight: 18,
-    marginBottom: 18,
-  },
-  loadingDotsRow: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  loadingDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: COLORS.primary,
-  },
+  loadingIconEmoji: { color: COLORS.premiumPurpleText, fontSize: 22, fontWeight: "700" },
+  loadingSpinner: { marginBottom: 16 },
+  loadingTitle: { color: COLORS.text, fontSize: 16, fontWeight: "700", marginBottom: 6, letterSpacing: -0.2 },
+  loadingSubText: { color: COLORS.textMuted, fontSize: 12, textAlign: "center", lineHeight: 18, marginBottom: 18 },
+  loadingDotsRow: { flexDirection: "row", gap: 6 },
+  loadingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.primary },
 });
