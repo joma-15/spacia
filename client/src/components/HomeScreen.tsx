@@ -33,8 +33,11 @@ const THEME = {
   textWhite: "#F0FFF6",
   textMid: "#A8C5B0",
   textMuted: "#5A7A65",
+  textDim: "#3d6b50",
   border: "#243D2C",
   borderBright: "#2E5438",
+  navBg: "#111e17",
+  navBorder: "#1e3828",
   folderBlue: "#4A90D9",
   folderGreen: "#3DDC84",
   folderRed: "#E05C7A",
@@ -73,6 +76,8 @@ interface Folder {
   accentColor: string;
 }
 
+type NavTab = "profile" | "streak" | "add" | "popup" | "stats";
+
 const ACCENT_COLORS: { label: string; value: string }[] = [
   { label: "Blue", value: THEME.folderBlue },
   { label: "Green", value: THEME.folderGreen },
@@ -93,11 +98,7 @@ interface FolderCardProps {
   onPress: () => void;
 }
 
-const FolderCard: React.FC<FolderCardProps> = ({
-  folder,
-  onDelete,
-  onPress,
-}) => {
+const FolderCard: React.FC<FolderCardProps> = ({ folder, onDelete, onPress }) => {
   const { subject, cardCount, accentColor } = folder;
 
   const handleDelete = (): void => {
@@ -169,12 +170,8 @@ interface AddFolderModalProps {
   onAdd: (subject: string, accentColor: string) => void;
 }
 
-const AddFolderModal: React.FC<AddFolderModalProps> = ({
-  visible,
-  onClose,
-  onAdd,
-}) => {
-  const insets = useSafeAreaInsets(); // ← KEY FIX: get safe area insets inside modal
+const AddFolderModal: React.FC<AddFolderModalProps> = ({ visible, onClose, onAdd }) => {
+  const insets = useSafeAreaInsets();
   const [subject, setSubject] = useState<string>("");
   const [selectedColor, setSelectedColor] = useState<string>(THEME.folderGreen);
 
@@ -196,34 +193,25 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      statusBarTranslucent
-    >
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.modalOverlay}
       >
-        {/* Tap backdrop to dismiss */}
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
           onPress={handleClose}
         />
-
         <View
           style={[
             styles.modalSheet,
-            // ← KEY FIX: push sheet above system nav bar + your app nav bar
             { paddingBottom: Math.max(insets.bottom, 16) + 24 },
           ]}
         >
           <View style={styles.modalHandle} />
           <Text style={styles.modalTitle}>New Subject Folder</Text>
 
-          {/* Subject name input */}
           <Text style={styles.fieldLabel}>Subject Name</Text>
           <TextInput
             style={styles.modalInput}
@@ -234,7 +222,6 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
             autoFocus
           />
 
-          {/* Color picker */}
           <Text style={styles.fieldLabel}>Folder Color</Text>
           <View style={styles.colorRow}>
             {ACCENT_COLORS.map((c) => (
@@ -250,7 +237,6 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
             ))}
           </View>
 
-          {/* Preview */}
           <View
             style={[
               styles.colorPreview,
@@ -265,7 +251,6 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
             </Text>
           </View>
 
-          {/* Actions */}
           <View style={styles.modalActions}>
             <TouchableOpacity style={styles.cancelBtn} onPress={handleClose}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -281,72 +266,6 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
 };
 
 // ─────────────────────────────────────────────
-// 🔲 NAV ITEM
-// ─────────────────────────────────────────────
-interface NavItemProps {
-  icon: string;
-  label: string;
-  active?: boolean;
-  accent?: boolean;
-  onPress?: () => void;
-}
-
-const NavItem: React.FC<NavItemProps> = ({
-  icon,
-  label,
-  active,
-  accent,
-  onPress,
-}) => {
-  const color = active
-    ? THEME.primary
-    : accent
-      ? THEME.accent
-      : THEME.textMuted;
-
-  return (
-    <TouchableOpacity
-      style={styles.navItem}
-      activeOpacity={0.7}
-      onPress={onPress}
-    >
-      {active && <View style={styles.navActiveDot} />}
-      <Text style={[styles.navIcon, { color }]}>{icon}</Text>
-      <Text style={[styles.navLabel, { color }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-};
-
-// ─────────────────────────────────────────────
-// 🧭 BOTTOM NAV BAR
-// ─────────────────────────────────────────────
-interface BottomNavBarProps {
-  onAddPress: () => void;
-}
-
-const BottomNavBar: React.FC<BottomNavBarProps> = ({ onAddPress }) => {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View style={[styles.navBar, { paddingBottom: insets.bottom + 10 }]}>
-      <NavItem icon="👤" label="Profile" active />
-      <NavItem icon="🔥" label="Streak" accent />
-
-      <TouchableOpacity
-        style={[styles.fab, THEME.glowShadow]}
-        activeOpacity={0.85}
-        onPress={onAddPress}
-      >
-        <Text style={styles.fabIcon}>＋</Text>
-      </TouchableOpacity>
-
-      <NavItem icon="🔔" label="Pop-up" />
-      <NavItem icon="📊" label="Stats" />
-    </View>
-  );
-};
-
-// ─────────────────────────────────────────────
 // 🔔 POPUP TOGGLE BANNER
 // ─────────────────────────────────────────────
 interface PopupToggleBannerProps {
@@ -354,42 +273,109 @@ interface PopupToggleBannerProps {
   onToggle: (val: boolean) => void;
 }
 
-const PopupToggleBanner: React.FC<PopupToggleBannerProps> = ({
-  enabled,
-  onToggle,
-}) => {
-  return (
-    <View style={styles.popupBanner}>
-      <View style={styles.popupIconWrap}>
-        <Text style={styles.popupIcon}>🔒</Text>
-      </View>
-      <View style={styles.popupTextWrap}>
-        <Text style={styles.popupTitle}>Flashcards will pop up</Text>
-        <Text style={styles.popupSubtitle}>when you unlock your device</Text>
-      </View>
-      <Switch
-        value={enabled}
-        onValueChange={onToggle}
-        trackColor={{ false: THEME.border, true: THEME.primaryDim }}
-        thumbColor={enabled ? THEME.primary : THEME.textMuted}
-        ios_backgroundColor={THEME.border}
-      />
+const PopupToggleBanner: React.FC<PopupToggleBannerProps> = ({ enabled, onToggle }) => (
+  <View style={styles.popupBanner}>
+    <View style={styles.popupIconWrap}>
+      <Text style={styles.popupIcon}>🔒</Text>
     </View>
-  );
-};
+    <View style={styles.popupTextWrap}>
+      <Text style={styles.popupTitle}>Flashcards will pop up</Text>
+      <Text style={styles.popupSubtitle}>when you unlock your device</Text>
+    </View>
+    <Switch
+      value={enabled}
+      onValueChange={onToggle}
+      trackColor={{ false: THEME.border, true: THEME.primaryDim }}
+      thumbColor={enabled ? THEME.primary : THEME.textMuted}
+      ios_backgroundColor={THEME.border}
+    />
+  </View>
+);
+
+// ─────────────────────────────────────────────
+// 🧭 BOTTOM NAV  (PaymentScreen style)
+// ─────────────────────────────────────────────
+const NAV_ITEMS: {
+  id: NavTab;
+  label: string;
+  emoji: string;
+  isCenter?: boolean;
+}[] = [
+  { id: "profile", label: "Profile", emoji: "👤" },
+  { id: "streak",  label: "Streak",  emoji: "🔥" },
+  { id: "add",     label: "",        emoji: "+", isCenter: true },
+  { id: "popup",   label: "Library", emoji: "📂" },
+  { id: "stats",   label: "Premium",   emoji: "👑" },
+];
+
+interface BottomNavProps {
+  activeTab: NavTab;
+  onTabPress: (tab: NavTab) => void;
+  bottomInset: number;
+  onAddPress: () => void;
+}
+
+const BottomNav: React.FC<BottomNavProps> = ({
+  activeTab,
+  onTabPress,
+  bottomInset,
+  onAddPress,
+}) => (
+  <View style={[styles.navContainer, { paddingBottom: Math.max(bottomInset, 8) }]}>
+    <View style={styles.navInner}>
+      {NAV_ITEMS.map((item) => {
+        const isActive = activeTab === item.id;
+
+        if (item.isCenter) {
+          return (
+            <TouchableOpacity
+              key={item.id}
+              onPress={onAddPress}
+              style={styles.navCenterWrap}
+              activeOpacity={0.85}
+            >
+              <View style={styles.navCenterBtn}>
+                <Text style={styles.navCenterIcon}>+</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        }
+
+        return (
+          <TouchableOpacity
+            key={item.id}
+            onPress={() => onTabPress(item.id)}
+            style={styles.navItem}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.navEmoji, isActive && styles.navEmojiActive]}>
+              {item.emoji}
+            </Text>
+            <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+              {item.label}
+            </Text>
+            {isActive && <View style={styles.navActiveDot} />}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  </View>
+);
 
 // ─────────────────────────────────────────────
 // 🏠 HOME SCREEN
 // ─────────────────────────────────────────────
-
 export default function HomeScreen() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [popupEnabled, setPopupEnabled] = useState<boolean>(true);
   const [modalVisible, setModalVisible] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<NavTab>("popup");
+
+  const insets = useSafeAreaInsets();
 
   const filteredFolders = folders.filter((f) =>
-    f.subject.toLowerCase().includes(searchQuery.toLowerCase()),
+    f.subject.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleAddFolder = (subject: string, accentColor: string): void => {
@@ -406,13 +392,28 @@ export default function HomeScreen() {
     setFolders((prev) => prev.filter((f) => f.id !== id));
   };
 
+  const handleTabPress = (tab: NavTab) => {
+    if (tab === "add") {
+      setModalVisible(true);
+    } else {
+      setActiveTab(tab);
+    }
+  };
+
+  // Nav height + bottom inset used to pad scroll content
+  const NAV_BAR_HEIGHT = 64;
+  const scrollPaddingBottom = NAV_BAR_HEIGHT + Math.max(insets.bottom, 8) + 16;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={THEME.bg} />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: scrollPaddingBottom },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -421,7 +422,6 @@ export default function HomeScreen() {
           <Text style={styles.greetingSub}>Welcome back,</Text>
           <Text style={styles.greetingMain}>Let's keep learning.</Text>
 
-          {/* Search bar */}
           <View style={styles.searchBar}>
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
@@ -460,10 +460,7 @@ export default function HomeScreen() {
                 onPress={() =>
                   router.push({
                     pathname: "/CardPageRoute",
-                    params: {
-                      folderId: folder.id,
-                      subject: folder.subject,
-                    },
+                    params: { folderId: folder.id, subject: folder.subject },
                   })
                 }
               />
@@ -474,12 +471,8 @@ export default function HomeScreen() {
             {searchQuery.length > 0 ? (
               <>
                 <Text style={styles.emptyIcon}>🔍</Text>
-                <Text style={styles.emptyText}>
-                  No results for "{searchQuery}"
-                </Text>
-                <Text style={styles.emptySubText}>
-                  Try a different search term.
-                </Text>
+                <Text style={styles.emptyText}>No results for "{searchQuery}"</Text>
+                <Text style={styles.emptySubText}>Try a different search term.</Text>
               </>
             ) : (
               <>
@@ -505,8 +498,13 @@ export default function HomeScreen() {
         <View style={{ height: 8 }} />
       </ScrollView>
 
-      {/* ── Bottom nav ── */}
-      <BottomNavBar onAddPress={() => setModalVisible(true)} />
+      {/* ── Bottom Nav (PaymentScreen style) ── */}
+      <BottomNav
+        activeTab={activeTab}
+        onTabPress={handleTabPress}
+        bottomInset={insets.bottom}
+        onAddPress={() => setModalVisible(true)}
+      />
 
       {/* ── Add Folder Modal ── */}
       <AddFolderModal
@@ -526,18 +524,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: THEME.bg,
   },
-  scroll: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === "android" ? 20 : 8,
   },
 
   // ── Greeting ──
-  greetingWrap: {
-    marginBottom: 30,
-  },
+  greetingWrap: { marginBottom: 30 },
   greetingSub: {
     fontSize: 14,
     color: THEME.textMuted,
@@ -566,9 +560,7 @@ const styles = StyleSheet.create({
     borderColor: THEME.borderBright,
     gap: 10,
   },
-  searchIcon: {
-    fontSize: 15,
-  },
+  searchIcon: { fontSize: 15 },
   searchInput: {
     flex: 1,
     color: THEME.textWhite,
@@ -576,11 +568,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     padding: 0,
   },
-  searchClear: {
-    color: THEME.textMuted,
-    fontSize: 13,
-    fontWeight: "700",
-  },
+  searchClear: { color: THEME.textMuted, fontSize: 13, fontWeight: "700" },
 
   // ── Section header ──
   sectionHeader: {
@@ -595,11 +583,7 @@ const styles = StyleSheet.create({
     color: THEME.textWhite,
     letterSpacing: 0.1,
   },
-  sectionCount: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: THEME.textMuted,
-  },
+  sectionCount: { fontSize: 12, fontWeight: "600", color: THEME.textMuted },
 
   // ── Folder grid ──
   folderGrid: {
@@ -620,22 +604,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.border,
   },
-  folderOverflow: {
-    position: "absolute",
-    top: 10,
-    right: 12,
-    zIndex: 1,
-  },
-  folderOverflowDots: {
-    fontSize: 13,
-    color: THEME.textMuted,
-    fontWeight: "700",
-  },
-  folderIconWrap: {
-    marginTop: 6,
-    marginBottom: 14,
-    alignSelf: "flex-start",
-  },
+  folderOverflow: { position: "absolute", top: 10, right: 12, zIndex: 1 },
+  folderOverflowDots: { fontSize: 13, color: THEME.textMuted, fontWeight: "700" },
+  folderIconWrap: { marginTop: 6, marginBottom: 14, alignSelf: "flex-start" },
   folderTab: {
     width: 28,
     height: 8,
@@ -652,9 +623,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  folderEmoji: {
-    fontSize: 22,
-  },
+  folderEmoji: { fontSize: 22 },
   folderTitle: {
     fontSize: 15,
     fontWeight: "700",
@@ -668,11 +637,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderWidth: 1,
   },
-  cardCountText: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
+  cardCountText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.2 },
 
   // ── Empty state ──
   emptyState: {
@@ -680,10 +645,7 @@ const styles = StyleSheet.create({
     paddingVertical: 52,
     marginBottom: 22,
   },
-  emptyIcon: {
-    fontSize: 44,
-    marginBottom: 14,
-  },
+  emptyIcon: { fontSize: 44, marginBottom: 14 },
   emptyText: {
     color: THEME.textWhite,
     fontSize: 17,
@@ -705,11 +667,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.primary,
   },
-  emptyAddBtnText: {
-    color: THEME.primary,
-    fontWeight: "700",
-    fontSize: 14,
-  },
+  emptyAddBtnText: { color: THEME.primary, fontWeight: "700", fontSize: 14 },
 
   // ── Pop-up banner ──
   popupBanner: {
@@ -733,74 +691,80 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.border,
   },
-  popupIcon: {
-    fontSize: 18,
-  },
-  popupTextWrap: {
-    flex: 1,
-  },
+  popupIcon: { fontSize: 18 },
+  popupTextWrap: { flex: 1 },
   popupTitle: {
     fontSize: 15,
     fontWeight: "700",
     color: THEME.textWhite,
     marginBottom: 2,
   },
-  popupSubtitle: {
-    fontSize: 12,
-    color: THEME.textMuted,
-  },
+  popupSubtitle: { fontSize: 12, color: THEME.textMuted },
 
-  // ── Bottom nav ──
-  navBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    backgroundColor: THEME.bgElevated,
-    paddingTop: 10,
-    paddingBottom: 10,
+  // ─────────────────────────────────────────────
+  // 🧭 NAV  —  PaymentScreen style
+  // ─────────────────────────────────────────────
+  navContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: THEME.navBg,
     borderTopWidth: 1,
-    borderTopColor: THEME.border,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 12,
+    borderTopColor: THEME.navBorder,
+    paddingTop: 10,
+    paddingHorizontal: 8,
+  },
+  navInner: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-around",
   },
   navItem: {
-    alignItems: "center",
-    gap: 3,
     flex: 1,
+    alignItems: "center",
+    paddingVertical: 4,
+    gap: 3,
     position: "relative",
   },
+  navEmoji: { fontSize: 22, opacity: 0.45 },
+  navEmojiActive: { opacity: 1 },
+  navLabel: { color: THEME.textDim, fontSize: 10, fontWeight: "500" },
+  navLabelActive: { color: THEME.primary, fontWeight: "700" },
   navActiveDot: {
+    position: "absolute",
+    bottom: -4,
     width: 4,
     height: 4,
     borderRadius: 2,
     backgroundColor: THEME.primary,
-    marginBottom: 2,
   },
-  navIcon: {
-    fontSize: 20,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    letterSpacing: 0.2,
-  },
-  fab: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: THEME.primary,
-    justifyContent: "center",
+  navCenterWrap: {
+    flex: 1,
     alignItems: "center",
-    marginTop: -30,
+    justifyContent: "center",
+    marginBottom: 6,
   },
-  fabIcon: {
-    fontSize: 28,
+  navCenterBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: THEME.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: THEME.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
+    marginTop: -16,
+  },
+  navCenterIcon: {
     color: THEME.bg,
-    lineHeight: 34,
-    fontWeight: "400",
+    fontSize: 28,
+    fontWeight: "300",
+    lineHeight: 32,
+    marginTop: -2,
   },
 
   // ── Modal ──
@@ -814,7 +778,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    // ← paddingBottom is now set dynamically via insets in the component
     borderWidth: 1,
     borderColor: THEME.borderBright,
   },
@@ -849,11 +812,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.borderBright,
   },
-  colorRow: {
-    flexDirection: "row",
-    gap: 12,
-    flexWrap: "wrap",
-  },
+  colorRow: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
   colorDot: {
     width: 32,
     height: 32,
@@ -873,15 +832,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
   },
-  colorPreviewText: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 20,
-  },
+  colorPreviewText: { fontSize: 15, fontWeight: "700" },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 20 },
   cancelBtn: {
     flex: 1,
     backgroundColor: THEME.bg,
@@ -891,11 +843,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.border,
   },
-  cancelBtnText: {
-    color: THEME.textMuted,
-    fontWeight: "600",
-    fontSize: 14,
-  },
+  cancelBtnText: { color: THEME.textMuted, fontWeight: "600", fontSize: 14 },
   addConfirmBtn: {
     flex: 2,
     backgroundColor: THEME.primary,
@@ -903,9 +851,5 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: "center",
   },
-  addConfirmBtnText: {
-    color: THEME.bg,
-    fontWeight: "700",
-    fontSize: 15,
-  },
+  addConfirmBtnText: { color: THEME.bg, fontWeight: "700", fontSize: 15 },
 });
