@@ -11,14 +11,18 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
+import {
+  useSafeAreaInsets,
+  SafeAreaView,
+} from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 // --- Pricing (fixed USD) ---
 const PRICING = {
-  monthly: { amount: 2.50, display: "$2.50/mo" },
-  annual: { amount: 25.00, display: "$25.00/yr", perMonth: "$2.08/mo" },
+  monthly: { amount: 2.5, display: "$2.50/mo" },
+  annual: { amount: 25.0, display: "$25.00/yr", perMonth: "$2.08/mo" },
 };
-const SAVINGS_PERCENT = Math.round(((2.50 * 12 - 25) / (2.50 * 12)) * 100); // 17%
+const SAVINGS_PERCENT = Math.round(((2.5 * 12 - 25) / (2.5 * 12)) * 100); // 17%
 
 // --- Color tokens ---
 const COLORS = {
@@ -78,17 +82,24 @@ const PERKS = [
 // --- Nav ---
 type NavTab = "profile" | "streak" | "add" | "popup" | "stats";
 
-const NAV_ITEMS: { id: NavTab; label: string; emoji: string; isCenter?: boolean }[] = [
+const NAV_ITEMS: {
+  id: NavTab;
+  label: string;
+  emoji: string;
+  isCenter?: boolean;
+}[] = [
   { id: "profile", label: "Profile", emoji: "👤" },
   { id: "streak", label: "Streak", emoji: "🔥" },
   { id: "add", label: "", emoji: "+", isCenter: true },
-  { id: "popup", label: "Pop-up", emoji: "🔔" },
+  { id: "popup", label: "Library", emoji: "📂" },
   { id: "stats", label: "Premium", emoji: "👑" },
 ];
 
 // --- GlowDot ---
 const GlowDot = ({ color }: { color: string }) => (
-  <View style={[styles.glowDot, { backgroundColor: color, shadowColor: color }]} />
+  <View
+    style={[styles.glowDot, { backgroundColor: color, shadowColor: color }]}
+  />
 );
 
 // --- PerkSection ---
@@ -99,20 +110,38 @@ interface PerkSectionProps {
   delay: number;
 }
 
-const PerkSection: React.FC<PerkSectionProps> = ({ emoji, title, items, delay }) => {
+const PerkSection: React.FC<PerkSectionProps> = ({
+  emoji,
+  title,
+  items,
+  delay,
+}) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, delay, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 400, delay, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        delay,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, []);
 
   return (
     <Animated.View
-      style={[styles.perkSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+      style={[
+        styles.perkSection,
+        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+      ]}
     >
       <View style={styles.perkHeader}>
         <Text style={styles.perkEmoji}>{emoji}</Text>
@@ -138,19 +167,38 @@ interface PlanCardProps {
   onSelect: () => void;
 }
 
-const PlanCard: React.FC<PlanCardProps> = ({ label, price, perMonth, badge, selected, onSelect }) => {
+const PlanCard: React.FC<PlanCardProps> = ({
+  label,
+  price,
+  perMonth,
+  badge,
+  selected,
+  onSelect,
+}) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.97, duration: 80, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.97,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 120,
+        useNativeDriver: true,
+      }),
     ]).start();
     onSelect();
   };
 
   return (
-    <TouchableOpacity onPress={handlePress} activeOpacity={0.85} style={{ flex: 1 }}>
+    <TouchableOpacity
+      onPress={handlePress}
+      activeOpacity={0.85}
+      style={{ flex: 1 }}
+    >
       <Animated.View
         style={[
           styles.planCard,
@@ -166,8 +214,12 @@ const PlanCard: React.FC<PlanCardProps> = ({ label, price, perMonth, badge, sele
         <View style={[styles.planRadio, selected && styles.planRadioSelected]}>
           {selected && <View style={styles.planRadioDot} />}
         </View>
-        <Text style={[styles.planLabel, selected && styles.planLabelSelected]}>{label}</Text>
-        <Text style={[styles.planPrice, selected && styles.planPriceSelected]}>{price}</Text>
+        <Text style={[styles.planLabel, selected && styles.planLabelSelected]}>
+          {label}
+        </Text>
+        <Text style={[styles.planPrice, selected && styles.planPriceSelected]}>
+          {price}
+        </Text>
         {perMonth && <Text style={styles.planPerMonth}>{perMonth}</Text>}
       </Animated.View>
     </TouchableOpacity>
@@ -181,8 +233,14 @@ interface BottomNavProps {
   bottomInset: number;
 }
 
-const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabPress, bottomInset }) => (
-  <View style={[styles.navContainer, { paddingBottom: Math.max(bottomInset, 8) }]}>
+const BottomNav: React.FC<BottomNavProps> = ({
+  activeTab,
+  onTabPress,
+  bottomInset,
+}) => (
+  <View
+    style={[styles.navContainer, { paddingBottom: Math.max(bottomInset, 8) }]}
+  >
     <View style={styles.navInner}>
       {NAV_ITEMS.map((item) => {
         const isActive = activeTab === item.id;
@@ -207,8 +265,12 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabPress, bottomInse
             style={styles.navItem}
             activeOpacity={0.7}
           >
-            <Text style={[styles.navEmoji, isActive && styles.navEmojiActive]}>{item.emoji}</Text>
-            <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>{item.label}</Text>
+            <Text style={[styles.navEmoji, isActive && styles.navEmojiActive]}>
+              {item.emoji}
+            </Text>
+            <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+              {item.label}
+            </Text>
             {isActive && <View style={styles.navActiveDot} />}
           </TouchableOpacity>
         );
@@ -219,7 +281,11 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabPress, bottomInse
 
 // --- Main Screen ---
 export default function PaymentScreen() {
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual">("annual");
+  const router = useRouter();
+
+  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual">(
+    "annual",
+  );
   const [loadingPurchase, setLoadingPurchase] = useState(false);
   const [activeTab, setActiveTab] = useState<NavTab>("stats");
 
@@ -233,16 +299,38 @@ export default function PaymentScreen() {
   const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(headerFade, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+    Animated.timing(headerFade, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
     Animated.parallel([
-      Animated.timing(buttonFade, { toValue: 1, duration: 500, delay: 800, useNativeDriver: true }),
-      Animated.timing(buttonSlide, { toValue: 0, duration: 500, delay: 800, useNativeDriver: true }),
+      Animated.timing(buttonFade, {
+        toValue: 1,
+        duration: 500,
+        delay: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonSlide, {
+        toValue: 0,
+        duration: 500,
+        delay: 800,
+        useNativeDriver: true,
+      }),
     ]).start();
     Animated.loop(
       Animated.sequence([
-        Animated.timing(shimmer, { toValue: 1, duration: 1800, useNativeDriver: true }),
-        Animated.timing(shimmer, { toValue: 0, duration: 1800, useNativeDriver: true }),
-      ])
+        Animated.timing(shimmer, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmer, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+      ]),
     ).start();
   }, []);
 
@@ -273,7 +361,10 @@ export default function PaymentScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingHorizontal: isTablet ? 40 : 20, paddingBottom: scrollBottom },
+          {
+            paddingHorizontal: isTablet ? 40 : 20,
+            paddingBottom: scrollBottom,
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -289,7 +380,8 @@ export default function PaymentScreen() {
             Unlock Your{"\n"}Full Potential
           </Text>
           <Text style={styles.subheadline}>
-            Study smarter, not harder — with AI that{"\n"}works as hard as you do.
+            Study smarter, not harder — with AI that{"\n"}works as hard as you
+            do.
           </Text>
         </Animated.View>
 
@@ -334,7 +426,8 @@ export default function PaymentScreen() {
         ))}
 
         <Text style={styles.footerNote}>
-          Cancel anytime. No hidden fees.{"\n"}Billed as a single payment for annual plans.
+          Cancel anytime. No hidden fees.{"\n"}Billed as a single payment for
+          annual plans.
         </Text>
       </ScrollView>
 
@@ -362,16 +455,30 @@ export default function PaymentScreen() {
             ) : (
               <>
                 <Text style={styles.ctaText}>{ctaLabel}</Text>
-                <Text style={styles.ctaSub}>7-day free trial · cancel anytime</Text>
+                <Text style={styles.ctaSub}>
+                  7-day free trial · cancel anytime
+                </Text>
               </>
             )}
           </TouchableOpacity>
         </Animated.View>
-        <Text style={styles.ctaLegal}>Secure payment · Subscriptions auto-renew</Text>
+        <Text style={styles.ctaLegal}>
+          Secure payment · Subscriptions auto-renew
+        </Text>
       </Animated.View>
 
       {/* Bottom Nav */}
-      <BottomNav activeTab={activeTab} onTabPress={setActiveTab} bottomInset={insets.bottom} />
+      <BottomNav
+        activeTab={activeTab}
+        onTabPress={(tab) => {
+          setActiveTab(tab);
+
+          if (tab === "popup") {
+            router.push("/LibraryRoute");
+          }
+        }}
+        bottomInset={insets.bottom}
+      />
     </SafeAreaView>
   );
 }
@@ -382,7 +489,12 @@ const styles = StyleSheet.create({
   scroll: { paddingTop: 20 },
 
   header: { marginBottom: 28 },
-  crownRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
+  crownRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14,
+  },
   crownEmoji: { fontSize: 28 },
   premiumBadgeWrap: {
     backgroundColor: COLORS.goldDim,
@@ -392,7 +504,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
-  premiumBadgeText: { color: COLORS.gold, fontSize: 11, fontWeight: "700", letterSpacing: 1.8 },
+  premiumBadgeText: {
+    color: COLORS.gold,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.8,
+  },
   headline: {
     color: COLORS.text,
     fontSize: 34,
@@ -402,7 +519,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   headlineTablet: { fontSize: 42, lineHeight: 50 },
-  subheadline: { color: COLORS.textMuted, fontSize: 15, lineHeight: 22, marginBottom: 16 },
+  subheadline: {
+    color: COLORS.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
 
   plansRow: { flexDirection: "row", gap: 12, marginBottom: 14 },
   plansRowTablet: { gap: 20 },
@@ -435,7 +557,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  badgeText: { color: COLORS.bg, fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
+  badgeText: {
+    color: COLORS.bg,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
   planRadio: {
     width: 18,
     height: 18,
@@ -447,10 +574,25 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   planRadioSelected: { borderColor: COLORS.accent },
-  planRadioDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: COLORS.accent },
-  planLabel: { color: COLORS.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 4 },
+  planRadioDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: COLORS.accent,
+  },
+  planLabel: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
   planLabelSelected: { color: COLORS.accentText },
-  planPrice: { color: COLORS.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.3 },
+  planPrice: {
+    color: COLORS.text,
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
   planPriceSelected: { color: COLORS.white },
   planPerMonth: { color: COLORS.textMuted, fontSize: 11, marginTop: 2 },
 
@@ -469,9 +611,19 @@ const styles = StyleSheet.create({
   savingsEmoji: { fontSize: 16 },
   savingsText: { color: COLORS.accentText, fontSize: 13, fontWeight: "600" },
 
-  divider: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 22 },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 22,
+  },
   dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerLabel: { color: COLORS.textMuted, fontSize: 12, fontWeight: "600", letterSpacing: 0.5 },
+  dividerLabel: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
 
   perkSection: {
     backgroundColor: COLORS.surface,
@@ -481,10 +633,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  perkHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  perkHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
   perkEmoji: { fontSize: 20 },
   perkTitle: { color: COLORS.text, fontSize: 15, fontWeight: "700" },
-  perkRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  perkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
   glowDot: {
     width: 7,
     height: 7,
@@ -494,7 +656,12 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  perkItem: { color: COLORS.textMuted, fontSize: 13.5, flex: 1, lineHeight: 19 },
+  perkItem: {
+    color: COLORS.textMuted,
+    fontSize: 13.5,
+    flex: 1,
+    lineHeight: 19,
+  },
 
   footerNote: {
     color: COLORS.textDim,
@@ -528,9 +695,24 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   ctaButtonTablet: { paddingVertical: 18, borderRadius: 20 },
-  ctaText: { color: COLORS.bg, fontSize: 16, fontWeight: "800", letterSpacing: 0.2 },
-  ctaSub: { color: COLORS.accentDim, fontSize: 11, marginTop: 2, fontWeight: "500" },
-  ctaLegal: { color: COLORS.textDim, fontSize: 11, marginTop: 8, textAlign: "center" },
+  ctaText: {
+    color: COLORS.bg,
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  ctaSub: {
+    color: COLORS.accentDim,
+    fontSize: 11,
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  ctaLegal: {
+    color: COLORS.textDim,
+    fontSize: 11,
+    marginTop: 8,
+    textAlign: "center",
+  },
 
   navContainer: {
     position: "absolute",
@@ -543,8 +725,18 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingHorizontal: 8,
   },
-  navInner: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-around" },
-  navItem: { flex: 1, alignItems: "center", paddingVertical: 4, gap: 3, position: "relative" },
+  navInner: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-around",
+  },
+  navItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 4,
+    gap: 3,
+    position: "relative",
+  },
   navEmoji: { fontSize: 22, opacity: 0.45 },
   navEmojiActive: { opacity: 1 },
   navLabel: { color: COLORS.textDim, fontSize: 10, fontWeight: "500" },
@@ -557,7 +749,12 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: COLORS.accent,
   },
-  navCenterWrap: { flex: 1, alignItems: "center", justifyContent: "center", marginBottom: 6 },
+  navCenterWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
   navCenterBtn: {
     width: 52,
     height: 52,

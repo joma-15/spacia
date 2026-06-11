@@ -98,7 +98,11 @@ interface FolderCardProps {
   onPress: () => void;
 }
 
-const FolderCard: React.FC<FolderCardProps> = ({ folder, onDelete, onPress }) => {
+const FolderCard: React.FC<FolderCardProps> = ({
+  folder,
+  onDelete,
+  onPress,
+}) => {
   const { subject, cardCount, accentColor } = folder;
 
   const handleDelete = (): void => {
@@ -170,7 +174,11 @@ interface AddFolderModalProps {
   onAdd: (subject: string, accentColor: string) => void;
 }
 
-const AddFolderModal: React.FC<AddFolderModalProps> = ({ visible, onClose, onAdd }) => {
+const AddFolderModal: React.FC<AddFolderModalProps> = ({
+  visible,
+  onClose,
+  onAdd,
+}) => {
   const insets = useSafeAreaInsets();
   const [subject, setSubject] = useState<string>("");
   const [selectedColor, setSelectedColor] = useState<string>(THEME.folderGreen);
@@ -193,7 +201,12 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({ visible, onClose, onAdd
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.modalOverlay}
@@ -273,7 +286,10 @@ interface PopupToggleBannerProps {
   onToggle: (val: boolean) => void;
 }
 
-const PopupToggleBanner: React.FC<PopupToggleBannerProps> = ({ enabled, onToggle }) => (
+const PopupToggleBanner: React.FC<PopupToggleBannerProps> = ({
+  enabled,
+  onToggle,
+}) => (
   <View style={styles.popupBanner}>
     <View style={styles.popupIconWrap}>
       <Text style={styles.popupIcon}>🔒</Text>
@@ -302,10 +318,10 @@ const NAV_ITEMS: {
   isCenter?: boolean;
 }[] = [
   { id: "profile", label: "Profile", emoji: "👤" },
-  { id: "streak",  label: "Streak",  emoji: "🔥" },
-  { id: "add",     label: "",        emoji: "+", isCenter: true },
-  { id: "popup",   label: "Library", emoji: "📂" },
-  { id: "stats",   label: "Premium",   emoji: "👑" },
+  { id: "streak", label: "Streak", emoji: "🔥" },
+  { id: "add", label: "", emoji: "+", isCenter: true },
+  { id: "popup", label: "Library", emoji: "📂" },
+  { id: "stats", label: "Premium", emoji: "👑" },
 ];
 
 interface BottomNavProps {
@@ -321,7 +337,9 @@ const BottomNav: React.FC<BottomNavProps> = ({
   bottomInset,
   onAddPress,
 }) => (
-  <View style={[styles.navContainer, { paddingBottom: Math.max(bottomInset, 8) }]}>
+  <View
+    style={[styles.navContainer, { paddingBottom: Math.max(bottomInset, 8) }]}
+  >
     <View style={styles.navInner}>
       {NAV_ITEMS.map((item) => {
         const isActive = activeTab === item.id;
@@ -375,7 +393,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   const filteredFolders = folders.filter((f) =>
-    f.subject.toLowerCase().includes(searchQuery.toLowerCase())
+    f.subject.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const handleAddFolder = (subject: string, accentColor: string): void => {
@@ -398,6 +416,19 @@ export default function HomeScreen() {
     } else {
       setActiveTab(tab);
     }
+  };
+
+  const handleNavigation = (tab: NavTab) => {
+    switch (tab) {
+      case "stats":
+        router.push("/PaymentPageRoute");
+        break;
+
+      default:
+        break;
+    }
+
+    setActiveTab(tab);
   };
 
   // Nav height + bottom inset used to pad scroll content
@@ -471,8 +502,12 @@ export default function HomeScreen() {
             {searchQuery.length > 0 ? (
               <>
                 <Text style={styles.emptyIcon}>🔍</Text>
-                <Text style={styles.emptyText}>No results for "{searchQuery}"</Text>
-                <Text style={styles.emptySubText}>Try a different search term.</Text>
+                <Text style={styles.emptyText}>
+                  No results for "{searchQuery}"
+                </Text>
+                <Text style={styles.emptySubText}>
+                  Try a different search term.
+                </Text>
               </>
             ) : (
               <>
@@ -501,7 +536,7 @@ export default function HomeScreen() {
       {/* ── Bottom Nav (PaymentScreen style) ── */}
       <BottomNav
         activeTab={activeTab}
-        onTabPress={handleTabPress}
+        onTabPress={handleNavigation }
         bottomInset={insets.bottom}
         onAddPress={() => setModalVisible(true)}
       />
@@ -605,7 +640,11 @@ const styles = StyleSheet.create({
     borderColor: THEME.border,
   },
   folderOverflow: { position: "absolute", top: 10, right: 12, zIndex: 1 },
-  folderOverflowDots: { fontSize: 13, color: THEME.textMuted, fontWeight: "700" },
+  folderOverflowDots: {
+    fontSize: 13,
+    color: THEME.textMuted,
+    fontWeight: "700",
+  },
   folderIconWrap: { marginTop: 6, marginBottom: 14, alignSelf: "flex-start" },
   folderTab: {
     width: 28,
