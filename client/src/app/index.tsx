@@ -1,6 +1,5 @@
-import PaymentPage from "@/oldComponents/PaymentPage";
+import LibraryScreen from "./LibraryScreen";
 
-export default function Index() {
-  // return <HomeScreen />;
-  return <PaymentPage />;
+export default function index(){
+  return <LibraryScreen />;
 }
