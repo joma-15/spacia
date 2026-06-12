@@ -1,4 +1,4 @@
-import CardPage from "@/components/CardPage";
+import CardPage from "@/oldComponents/CardPage";
 
 export default function CardPageRoute() {
   return <CardPage />;
