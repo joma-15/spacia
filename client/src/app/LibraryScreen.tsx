@@ -74,7 +74,7 @@ export default function LibraryScreen() {
    */
   const handleTabPress = (tab: NavTab): void => {
     if (tab === "stats") {
-      router.push("/PaymentPageRoute");
+      router.push("/PaymentScreen");
     }
     setActiveTab(tab);
   };
