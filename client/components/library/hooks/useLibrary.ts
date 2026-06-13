@@ -17,7 +17,6 @@ import type { Folder } from "../types";
 import { THEME } from "../theme";
 
 export function useLibrary() {
-
   // ── State ────────────────────────────────────────────────────────────────
 
   /** The master list of all subject folders */
@@ -37,7 +36,7 @@ export function useLibrary() {
    * that way it's always in sync with both `folders` and `searchQuery`.
    */
   const filteredFolders = folders.filter((folder) =>
-    folder.subject.toLowerCase().includes(searchQuery.toLowerCase())
+    folder.subject.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   // ── Folder actions ────────────────────────────────────────────────────────
@@ -46,14 +45,42 @@ export function useLibrary() {
    * Create a brand-new folder and add it to the top of the list.
    * Called when the user taps "Create Folder" in the modal.
    */
-  const addFolder = (subject: string, accentColor: string): void => {
-    const newFolder: Folder = {
-      id: Date.now().toString(), // simple unique ID using current timestamp
-      subject,
-      cardCount: 0,              // new folders start empty
-      accentColor,
-    };
-    setFolders((previousFolders) => [newFolder, ...previousFolders]);
+  // const addFolder = (subject: string, accentColor: string): void => {
+  //   const newFolder: Folder = {
+  //     id: Date.now().toString(), // simple unique ID using current timestamp
+  //     subject,
+  //     cardCount: 0,              // new folders start empty
+  //     accentColor,
+  //   };
+  //   setFolders((previousFolders) => [newFolder, ...previousFolders]);
+  // };
+
+  const addFolder = async (
+    subject: string,
+    accentColor: string,
+  ): Promise<void> => {
+    try {
+      const response = await fetch("http://192.168.8.35:5000/folders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subject,
+          accentColor,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to create folder");
+      }
+      const newFolder = await response.json();
+      console.log(newFolder);
+
+      // update UI after saving to database
+      setFolders((previousFolders) => [newFolder, ...previousFolders]);
+    } catch (error) {
+      console.error("Failed to create folder ", error);
+    }
   };
 
   /**
@@ -62,7 +89,7 @@ export function useLibrary() {
    */
   const deleteFolder = (id: string): void => {
     setFolders((previousFolders) =>
-      previousFolders.filter((folder) => folder.id !== id)
+      previousFolders.filter((folder) => folder.id !== id),
     );
   };
 

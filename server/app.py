@@ -11,9 +11,17 @@ def create_app():
     db.init_app(app)
     cors.init_app(app)
 
+    # Import models so SQLAlchemy registers tables
+    from models.users import User
+    from models.folders import Folder
+
+
     # register routes
     from routes.pdf_routes import flashcards_bp
     app.register_blueprint(flashcards_bp)
+
+    from routes.folder_routes import folders_bp
+    app.register_blueprint(folders_bp)
 
     @app.route("/")
     def home():
