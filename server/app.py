@@ -1,52 +1,25 @@
 from flask import Flask
-from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
+from config import Config
+from extensions import db, cors
 from sqlalchemy import text
-from dotenv import load_dotenv
-from urllib.parse import quote_plus
-import os
 
-# Load environment variables
-load_dotenv()
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(Config)
 
-app = Flask(__name__)
-CORS(app)
+    # init extensions
+    db.init_app(app)
+    cors.init_app(app)
 
-# =========================
-# DATABASE CONFIG (FIXED)
-# =========================
+    # register routes
+    from routes.pdf_routes import flashcards_bp
+    app.register_blueprint(flashcards_bp)
 
-db_user = os.getenv("DB_USER")
-db_password = quote_plus(os.getenv("DB_PASSWORD", ""))  # FIX for @, :, etc.
-db_host = os.getenv("DB_HOST", "localhost")
-db_name = os.getenv("DB_NAME")
+    @app.route("/")
+    def home():
+        return {"message": "Spacia Backend Running"}
 
-app.config["SQLALCHEMY_DATABASE_URI"] = (
-    f"mysql+pymysql://{db_user}:{db_password}"
-    f"@{db_host}/{db_name}"
-)
-
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-# Initialize DB
-db = SQLAlchemy(app)
-
-# =========================
-# ROUTES
-# =========================
-
-from routes.pdf_routes import flashcards_bp
-app.register_blueprint(flashcards_bp)
-
-@app.route("/")
-def home():
-    return {"message": "Spacia Backend Running"}
-
-# =========================
-# TEST CONNECTION
-# =========================
-
-if __name__ == "__main__":
+    # test DB connection
     with app.app_context():
         try:
             db.session.execute(text("SELECT 1"))
@@ -54,4 +27,10 @@ if __name__ == "__main__":
         except Exception as e:
             print("❌ Database Error:", e)
 
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    return app
+
+
+app = create_app()
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
