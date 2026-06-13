@@ -10,7 +10,7 @@
 
 /** A single subject folder that holds flashcards */
 export interface Folder {
-  id: string;         // unique ID (we use Date.now() as a string)
+  id: string;         // unique ID (we use Date.now() as a string)    // unique ID (we use Date.now() as a string)
   subject: string;    // name shown on the card, e.g. "Physics"
   cardCount: number;  // number of flashcards inside this folder
   accentColor: string; // hex color string, e.g. "#4A90D9"
