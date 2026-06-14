@@ -17,7 +17,7 @@ def folder():
         folder= save_folder_to_db(subject, accent_color)
 
         return jsonify({
-            "folder": folder,
+            "folder": folder.id,
             "cardCount": 0
         }), 201
     

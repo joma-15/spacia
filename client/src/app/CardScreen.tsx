@@ -8,6 +8,7 @@
 import React, { useState } from "react";
 import { View, Alert, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLocalSearchParams } from "expo-router";
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 import { useFlashCards } from "../../components/flashcards/hooks/useFlashCards";
@@ -33,7 +34,10 @@ const CardScreen: React.FC = () => {
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [deleteAllModalVisible, setDeleteAllModalVisible] = useState(false);
 
-  // ── All card state and actions ─────────────────────────────────────────────
+  // ── Get folder id ──────────────────────────────────────────────────────────
+  const { folderId } = useLocalSearchParams<{ folderId: string }>();
+
+  // ── All card state and actions (single hook call) ──────────────────────────
   const {
     cards,
     activeTab,
@@ -50,21 +54,21 @@ const CardScreen: React.FC = () => {
     handleAddCard,
     handleDeleteAll,
     fetchAiCards,
-  } = useFlashCards();
+  } = useFlashCards(folderId);
 
-  // ── AI button: swap between fetchAiCards() and setPremiumModalVisible(true) ─
+  // ── AI button ──────────────────────────────────────────────────────────────
   const handleAiGenerate = () => {
     fetchAiCards();
     // setPremiumModalVisible(true); // ← uncomment to gate behind paywall
   };
 
-  /** Confirm delete-all then close modal */
+  // ── Confirm delete-all then close modal ────────────────────────────────────
   const handleConfirmDeleteAll = () => {
     handleDeleteAll();
     setDeleteAllModalVisible(false);
   };
 
-  /** Navigate to subscription screen */
+  // ── Navigate to subscription screen ───────────────────────────────────────
   const handleUpgrade = () => {
     setPremiumModalVisible(false);
     Alert.alert("Upgrade", "Navigate to your subscription screen here.");

@@ -14,7 +14,6 @@
 
 import { useState, useEffect } from "react";
 import type { Folder } from "../types";
-import { THEME } from "../theme";
 
 export function useLibrary() {
   // ── State ────────────────────────────────────────────────────────────────

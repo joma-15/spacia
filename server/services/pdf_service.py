@@ -103,8 +103,8 @@ def process_file(file_path):
 # =========================
 # 7. TEST RUN
 # =========================
-if __name__ == "__main__":
-    file_path = r"D:\download\tite.pdf"
+# if __name__ == "__main__":
+#     # file_path = r"D:\download\tite.pdf"
 
     # print("TOTAL CHUNKS:", len(chunks))
     # print("\nFIRST CHUNK:\n")

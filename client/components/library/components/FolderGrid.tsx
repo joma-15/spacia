@@ -32,7 +32,7 @@ const FolderGrid: React.FC<Props> = ({ folders, onDelete }) => (
           // passing the folder id and name as URL params
           router.push({
             pathname: "/CardScreen",
-            params: { folderId: folder.id, subject: folder.subject },
+            params: { folderId: folder.id},
           })
         }
       />

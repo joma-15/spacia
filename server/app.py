@@ -14,10 +14,11 @@ def create_app():
     # Import models so SQLAlchemy registers tables
     from models.users import User
     from models.folders import Folder
+    from models.flashcard import Flashcard
 
 
     # register routes
-    from routes.pdf_routes import flashcards_bp
+    from routes.flashcard_routes import flashcards_bp
     app.register_blueprint(flashcards_bp)
 
     from routes.folder_routes import folders_bp
@@ -34,6 +35,12 @@ def create_app():
             print("✅ Connected to MySQL successfully!")
         except Exception as e:
             print("❌ Database Error:", e)
+
+    with app.app_context():
+            print("=== REGISTERED ROUTES ===")
+            for rule in app.url_map.iter_rules():
+                print(f"{rule.methods} {rule}")
+                print("=========================")
 
     return app
 

@@ -14,7 +14,7 @@ def save_folder_to_db(subject: str, accent_color: str):
 
         print("folder saved success")
 
-        return folder.id
+        return folder
 
     except Exception as e:
         db.session.rollback()

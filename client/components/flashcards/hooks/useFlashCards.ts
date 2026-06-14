@@ -4,14 +4,23 @@
  * Manages CRUD operations, tab filtering, and AI card fetching.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Alert } from "react-native";
 import { FlashCard, CardStatus, TabType } from "../types";
 
-export function useFlashCards() {
+const BASE_URL = "http://192.168.8.35:5000";
+
+export function useFlashCards(folderId: string) {
   const [cards, setCards] = useState<FlashCard[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [loading, setLoading] = useState(false);
+
+  // ── Auto-load existing cards on mount ─────────────────────────────────────
+  useEffect(() => {
+    if (folderId) {
+      loadSavedCards();
+    }
+  }, [folderId]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -23,21 +32,25 @@ export function useFlashCards() {
     activeTab === "all"
       ? cards
       : activeTab === "review"
-      ? reviewCards
-      : understoodCards;
+        ? reviewCards
+        : understoodCards;
 
   // ── Card mutations ─────────────────────────────────────────────────────────
 
   /** Mark a card as understood */
   const handleUnderstand = (id: string) =>
     setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: "understood" as CardStatus } : c))
+      prev.map((c) =>
+        c.id === id ? { ...c, status: "understood" as CardStatus } : c,
+      ),
     );
 
   /** Move a card back to review */
   const handleMoveToReview = (id: string) =>
     setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: "review" as CardStatus } : c))
+      prev.map((c) =>
+        c.id === id ? { ...c, status: "review" as CardStatus } : c,
+      ),
     );
 
   /** Remove a single card by id */
@@ -47,7 +60,7 @@ export function useFlashCards() {
   /** Update question/answer for an existing card */
   const handleEdit = (id: string, question: string, answer: string) =>
     setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, question, answer } : c))
+      prev.map((c) => (c.id === id ? { ...c, question, answer } : c)),
     );
 
   /** Prepend a brand-new card to the list */
@@ -64,35 +77,93 @@ export function useFlashCards() {
     setActiveTab("all");
   };
 
-  // ── AI fetch ───────────────────────────────────────────────────────────────
+  // ── Loaders ────────────────────────────────────────────────────────────────
 
-  /** Fetch AI-generated flashcards from the local backend and merge them in */
-  const fetchAiCards = async () => {
-    setLoading(true);
+  /** Silently loads already-saved cards from DB on mount (no AI call) */
+  const loadSavedCards = async () => {
     try {
-      const response = await fetch("http://192.168.8.35:5000/flashcards");
+      const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`);
       const data = await response.json();
 
-      const newCards: FlashCard[] = data.flashcards.map((item: any) => ({
-        id: item.id ?? Date.now().toString() + Math.random(),
+      if (!response.ok || data.error) return;
+
+      const saved: FlashCard[] = data.map((item: any) => ({
+        id: String(item.id),
         question: item.question,
         answer: item.answer,
         status: (item.status as CardStatus) ?? "review",
       }));
 
-      setCards((prev) => {
-        const existingIds = new Set(prev.map((c) => c.id));
-        const fresh = newCards.filter((c) => !existingIds.has(c.id));
-        return [...fresh, ...prev];
-      });
+      setCards(saved);
     } catch (error) {
-      console.error("Error fetching flashcards:", error);
-      Alert.alert("Error", "Failed to fetch flashcards.");
+      console.error("Error loading saved cards:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  /** AI button: generates NEW cards via Groq and merges them in */
+  const fetchAiCards = async () => {
+    setLoading(true);
+    try {
+      // 1. Kick off background generation
+      const triggerResponse = await fetch(`${BASE_URL}/flashcards/${folderId}`);
+      const triggerText = await triggerResponse.text();
+      console.log("Trigger status:", triggerResponse.status);
+      console.log("Trigger response:", triggerText);
+
+      // 2. Poll /saved every 2 seconds
+      let attempts = 0;
+      const maxAttempts = 15;
+
+      const poll = setInterval(async () => {
+        attempts++;
+        console.log(`Polling attempt ${attempts}...`);
+        try {
+          const response = await fetch(
+            `${BASE_URL}/flashcards/${folderId}/saved`,
+          );
+          console.log("Poll status:", response.status);
+          const text = await response.text();
+          console.log("Poll response:", text);
+
+          const data = JSON.parse(text);
+
+          if (Array.isArray(data) && data.length > 0) {
+            const newCards: FlashCard[] = data.map((item: any) => ({
+              id: String(item.id),
+              question: item.question,
+              answer: item.answer,
+              status: (item.status as CardStatus) ?? "review",
+            }));
+
+            setCards((prev) => {
+              const existingIds = new Set(prev.map((c) => c.id));
+              const fresh = newCards.filter((c) => !existingIds.has(c.id));
+              return fresh.length > 0 ? [...fresh, ...prev] : prev;
+            });
+
+            clearInterval(poll);
+            setLoading(false);
+          }
+
+          if (attempts >= maxAttempts) {
+            clearInterval(poll);
+            setLoading(false);
+            Alert.alert("Timeout", "Generation is taking too long, try again.");
+          }
+        } catch (pollError) {
+          console.error("Poll error:", pollError); // 👈 shows exact poll failure
+          clearInterval(poll);
+          setLoading(false);
+        }
+      }, 2000);
+    } catch (error) {
+      console.error("Trigger error:", error); // 👈 shows exact trigger failure
+      Alert.alert("Error", "Failed to generate flashcards.");
+      setLoading(false);
+    }
+  };
   return {
     // state
     cards,
@@ -111,6 +182,6 @@ export function useFlashCards() {
     handleEdit,
     handleAddCard,
     handleDeleteAll,
-    fetchAiCards,
+    fetchAiCards, // 👈 called by AI button, no args needed
   };
 }
