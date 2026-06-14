@@ -12,7 +12,7 @@
  * This makes both files much shorter and easier to test.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Folder } from "../types";
 import { THEME } from "../theme";
 
@@ -55,6 +55,22 @@ export function useLibrary() {
   //   setFolders((previousFolders) => [newFolder, ...previousFolders]);
   // };
 
+  //for fetching current folder data to database
+  const fetchFolder = async () => {
+    const response = await fetch("http://192.168.8.35:5000/folders");
+
+    if (!response.ok) {
+      throw new Error("failed to fetch folders");
+    }
+    const foldersFromDB = await response.json();
+    setFolders(foldersFromDB.response);
+  };
+
+  // everytime the screen first open and load
+  useEffect(() => {
+    fetchFolder();
+  });
+
   const addFolder = async (
     subject: string,
     accentColor: string,
@@ -73,11 +89,7 @@ export function useLibrary() {
       if (!response.ok) {
         throw new Error("Failed to create folder");
       }
-      const newFolder = await response.json();
-      console.log(newFolder);
-
-      // update UI after saving to database
-      setFolders((previousFolders) => [newFolder, ...previousFolders]);
+      await fetchFolder();
     } catch (error) {
       console.error("Failed to create folder ", error);
     }
@@ -87,10 +99,22 @@ export function useLibrary() {
    * Remove a folder permanently by its id.
    * Called after the user confirms the delete alert on a FolderCard.
    */
-  const deleteFolder = (id: string): void => {
-    setFolders((previousFolders) =>
-      previousFolders.filter((folder) => folder.id !== id),
-    );
+  // const deleteFolder = (id: string): void => {
+  //   setFolders((previousFolders) =>
+  //     previousFolders.filter((folder) => folder.id !== id),
+  //   );
+  // };
+
+  const deleteFolder = async (id: string) => {
+    try {
+      await fetch(`http://192.168.8.35:5000/folders/${id}`, {
+        method: "DELETE",
+      });
+      //fetch the latest data in the database
+      await fetchFolder();
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   /** Clear the search bar text */

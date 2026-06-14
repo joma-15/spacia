@@ -17,7 +17,7 @@ class Folder(db.Model):
         nullable=False, 
     )
 
-    name = db.Column(
+    subject = db.Column(
         db.String(100), 
         nullable=False
     )
