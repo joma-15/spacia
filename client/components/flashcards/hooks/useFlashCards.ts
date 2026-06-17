@@ -66,8 +66,22 @@ export function useFlashCards(folderId: string) {
     );
 
   /** Remove a single card by id */
-  const handleDelete = (id: string) =>
-    setCards((prev) => prev.filter((c) => c.id !== id));
+  // const handleDelete = (id: string) =>
+  //   setCards((prev) => prev.filter((c) => c.id !== id));
+
+  const handleDelete = async (id : string) => {
+    try {
+      const response = await fetch(`${BASE_URL}/flashcards/${id}`, {
+        method : "DELETE", 
+      });
+      //rerender the components in the cards
+      if(response.ok){
+        await loadSavedCards();
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
 
   /** Update question/answer for an existing card */
   const handleEdit = (id: string, question: string, answer: string) =>
@@ -83,6 +97,7 @@ export function useFlashCards(folderId: string) {
   //   ]);
   // };
 
+//send the manual added cards to the backend and process it to database 
 const handleAddCard = async (question : string, answer : string) => {
   try {
     const response = await fetch(`${BASE_URL}/flashcards/${folderId}/manualSaved`, {

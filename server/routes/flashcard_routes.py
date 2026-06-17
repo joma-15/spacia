@@ -1,7 +1,7 @@
 # routes/pdf_routes.py
 from flask import Blueprint, jsonify, request
 from services.ai_flashcard_service import generate_flashcards, get_flashcards_by_folder
-from services.flashcard_services import add_flashcard
+from services.flashcard_services import add_flashcard, delete_flashcard
 
 flashcards_bp = Blueprint("flashcards", __name__)
 
@@ -39,7 +39,7 @@ def get_saved_flashcards(folder_id):
         print("Route error:", e)
         return jsonify({"error": str(e)}), 500
     
-#Add flashcard to the database 
+#saved flashcard that is manually add by the user to the database 
 @flashcards_bp.route("/flashcards/<folder_id>/manualSaved", methods=["POST"])
 def post_flashcard(folder_id : str): 
     data = request.get_json()
@@ -48,12 +48,22 @@ def post_flashcard(folder_id : str):
     answer = data["answer"]
     status = data["status"]
 
-    print(question)
-    print(answer)
-    print(folder_id)
-    print(status)
+    # print(question)
+    # print(answer)
+    # print(folder_id)
+    # print(status)
 
     add_flashcard(question, answer, status, folder_id)
     
     return jsonify({"message": "flashcard created"})
+
+@flashcards_bp.route("/flashcards/<flashcard_id>", methods=["DELETE"])
+def flashcard_delete(flashcard_id : str): 
+    try: 
+        return delete_flashcard(flashcard_id)
+    except Exception as e: 
+        return jsonify({
+            "success": False, 
+            "error": str(e)
+        })
     

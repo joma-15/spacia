@@ -39,7 +39,7 @@ def get_folder_data():
         return []
     
 
-def delete_folder(foler_id):
+def delete_folder(foler_id : str):
     folder = Folder.query.get(foler_id) 
 
     if folder is None: 
