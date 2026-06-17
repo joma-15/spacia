@@ -43,21 +43,6 @@ export function useLibrary() {
   );
 
   // ── Folder actions ────────────────────────────────────────────────────────
-
-  /**
-   * Create a brand-new folder and add it to the top of the list.
-   * Called when the user taps "Create Folder" in the modal.
-   */
-  // const addFolder = (subject: string, accentColor: string): void => {
-  //   const newFolder: Folder = {
-  //     id: Date.now().toString(), // simple unique ID using current timestamp
-  //     subject,
-  //     cardCount: 0,              // new folders start empty
-  //     accentColor,
-  //   };
-  //   setFolders((previousFolders) => [newFolder, ...previousFolders]);
-  // };
-
   //load cache folders
   const loadCachedFolders = async () => {
     try {
@@ -94,7 +79,7 @@ export function useLibrary() {
   useEffect(() => {
     loadCachedFolders();
     fetchFolder();
-  });
+  },[]);
 
   const addFolder = async (
     subject: string,

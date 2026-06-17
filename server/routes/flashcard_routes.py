@@ -1,7 +1,7 @@
 # routes/pdf_routes.py
-from flask import Blueprint, jsonify
-from services.flashcard_service import generate_flashcards, get_flashcards_by_folder
-import threading
+from flask import Blueprint, jsonify, request
+from services.ai_flashcard_service import generate_flashcards, get_flashcards_by_folder
+from services.flashcard_services import add_flashcard
 
 flashcards_bp = Blueprint("flashcards", __name__)
 
@@ -9,7 +9,6 @@ flashcards_bp = Blueprint("flashcards", __name__)
 @flashcards_bp.route("/flashcards/<folder_id>", methods=["GET"])
 def get_flashcards(folder_id):
     try:
-        # Start generation in background thread
         generate_flashcards(folder_id, r"D:\download\burat.pdf")
 
         # Return immediately — don't wait for Groq
@@ -39,3 +38,22 @@ def get_saved_flashcards(folder_id):
     except Exception as e:
         print("Route error:", e)
         return jsonify({"error": str(e)}), 500
+    
+#Add flashcard to the database 
+@flashcards_bp.route("/flashcards/<folder_id>/manualSaved", methods=["POST"])
+def post_flashcard(folder_id : str): 
+    data = request.get_json()
+
+    question = data["question"]
+    answer = data["answer"]
+    status = data["status"]
+
+    print(question)
+    print(answer)
+    print(folder_id)
+    print(status)
+
+    add_flashcard(question, answer, status, folder_id)
+    
+    return jsonify({"message": "flashcard created"})
+    

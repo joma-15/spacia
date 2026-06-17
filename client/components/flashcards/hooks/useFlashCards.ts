@@ -25,7 +25,7 @@ export function useFlashCards(folderId: string) {
     }
   }, [folderId]);
 
-  //change the local storage whenever the card is change 
+  //change the local storage whenever the card is change
   useEffect(() => {
     if (!folderId) return;
 
@@ -76,12 +76,40 @@ export function useFlashCards(folderId: string) {
     );
 
   /** Prepend a brand-new card to the list */
-  const handleAddCard = (question: string, answer: string) => {
-    setCards((prev) => [
-      { id: Date.now().toString(), question, answer, status: "review" },
-      ...prev,
-    ]);
-  };
+  // const handleAddCard = (question: string, answer: string) => {
+  //   setCards((prev) => [
+  //     { id: Date.now().toString(), question, answer, status: "review" },
+  //     ...prev,
+  //   ]);
+  // };
+
+const handleAddCard = async (question : string, answer : string) => {
+  try {
+    const response = await fetch(`${BASE_URL}/flashcards/${folderId}/manualSaved`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        "question": question,
+        "answer": answer,
+        "status": "review",
+        "folderIdd": folderId,
+      }),
+    });
+
+    const data = await response.json();
+    console.log(data);
+
+    //load saved cards in the backend
+    if(response.ok){
+      loadSavedCards();
+    }
+
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   /** Remove every card and reset the active tab */
   const handleDeleteAll = () => {
@@ -122,6 +150,7 @@ export function useFlashCards(folderId: string) {
         status: (item.status as CardStatus) ?? "review",
       }));
 
+      console.log("status:", response.status);
       setCards(saved);
 
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(saved));
