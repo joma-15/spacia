@@ -56,7 +56,7 @@ export function useLibrary() {
 
   //for fetching current folder data to database
   const fetchFolder = async () => {
-    const response = await fetch("http://192.168.8.35:5000/folders");
+    const response = await fetch("http://192.168.8.40:5000/folders");
 
     if (!response.ok) {
       throw new Error("failed to fetch folders");
@@ -75,7 +75,7 @@ export function useLibrary() {
     accentColor: string,
   ): Promise<void> => {
     try {
-      const response = await fetch("http://192.168.8.35:5000/folders", {
+      const response = await fetch("http://192.168.8.40:5000/folders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -106,7 +106,7 @@ export function useLibrary() {
 
   const deleteFolder = async (id: string) => {
     try {
-      await fetch(`http://192.168.8.35:5000/folders/${id}`, {
+      await fetch(`http://192.168.8.40:5000/folders/${id}`, {
         method: "DELETE",
       });
       //fetch the latest data in the database

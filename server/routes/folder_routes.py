@@ -11,9 +11,6 @@ def folder():
         subject = data["subject"]
         accent_color = data["accentColor"]
 
-        print(subject)
-        print(accent_color)
-
         folder= save_folder_to_db(subject, accent_color)
 
         return jsonify({

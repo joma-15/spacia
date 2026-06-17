@@ -36,12 +36,6 @@ def create_app():
         except Exception as e:
             print("❌ Database Error:", e)
 
-    with app.app_context():
-            print("=== REGISTERED ROUTES ===")
-            for rule in app.url_map.iter_rules():
-                print(f"{rule.methods} {rule}")
-                print("=========================")
-
     return app
 
 

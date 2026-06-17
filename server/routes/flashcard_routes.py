@@ -10,12 +10,7 @@ flashcards_bp = Blueprint("flashcards", __name__)
 def get_flashcards(folder_id):
     try:
         # Start generation in background thread
-        thread = threading.Thread(
-            target=generate_flashcards,
-            args=(folder_id, r"D:\download\burat.pdf")
-        )
-        thread.daemon = True
-        thread.start()
+        generate_flashcards(folder_id, r"D:\download\burat.pdf")
 
         # Return immediately — don't wait for Groq
         return jsonify({"message": "Flashcard generation started"}), 202

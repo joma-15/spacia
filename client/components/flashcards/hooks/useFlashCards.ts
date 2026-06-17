@@ -7,20 +7,32 @@
 import { useState, useEffect } from "react";
 import { Alert } from "react-native";
 import { FlashCard, CardStatus, TabType } from "../types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const BASE_URL = "http://192.168.8.35:5000";
+const BASE_URL = "http://192.168.8.40:5000";
 
 export function useFlashCards(folderId: string) {
   const [cards, setCards] = useState<FlashCard[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [loading, setLoading] = useState(false);
+  const CACHE_KEY = `flashcards_${folderId}`;
 
   // ── Auto-load existing cards on mount ─────────────────────────────────────
   useEffect(() => {
     if (folderId) {
+      loadCachedCards();
       loadSavedCards();
     }
   }, [folderId]);
+
+  //change the local storage whenever the card is change 
+  useEffect(() => {
+    if (!folderId) return;
+
+    AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cards)).catch((err) =>
+      console.error("Error saving cache:", err),
+    );
+  }, [cards, folderId]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -78,6 +90,22 @@ export function useFlashCards(folderId: string) {
   };
 
   // ── Loaders ────────────────────────────────────────────────────────────────
+  //loads existing cards from the local storage
+  const loadCachedCards = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(CACHE_KEY);
+
+      if (cached) {
+        const parsedCards: FlashCard[] = JSON.parse(cached);
+
+        setCards(parsedCards);
+
+        console.log("Loaded flashcards from cache");
+      }
+    } catch (error) {
+      console.error("Error loading cached cards:", error);
+    }
+  };
 
   /** Silently loads already-saved cards from DB on mount (no AI call) */
   const loadSavedCards = async () => {
@@ -95,6 +123,8 @@ export function useFlashCards(folderId: string) {
       }));
 
       setCards(saved);
+
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(saved));
     } catch (error) {
       console.error("Error loading saved cards:", error);
     } finally {
