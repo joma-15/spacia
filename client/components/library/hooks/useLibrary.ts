@@ -14,6 +14,7 @@
 
 import { useState, useEffect } from "react";
 import type { Folder } from "../types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export function useLibrary() {
   // ── State ────────────────────────────────────────────────────────────────
@@ -26,6 +27,9 @@ export function useLibrary() {
 
   /** What the user has typed in the search bar */
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  //each folder key
+  const CACHE_KEY = "folders_cache";
 
   // ── Derived data (computed from state, not stored separately) ─────────────
 
@@ -54,6 +58,21 @@ export function useLibrary() {
   //   setFolders((previousFolders) => [newFolder, ...previousFolders]);
   // };
 
+  //load cache folders
+  const loadCachedFolders = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(CACHE_KEY);
+
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setFolders(parsed);
+        console.log("Loaded folders from cache");
+      }
+    } catch (err) {
+      console.error("Cache load error:", err);
+    }
+  };
+
   //for fetching current folder data to database
   const fetchFolder = async () => {
     const response = await fetch("http://192.168.8.40:5000/folders");
@@ -63,10 +82,17 @@ export function useLibrary() {
     }
     const foldersFromDB = await response.json();
     setFolders(foldersFromDB.response);
+
+    // ✅ SAVE TO CACHE
+    await AsyncStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify(foldersFromDB.response),
+    );
   };
 
   // everytime the screen first open and load
   useEffect(() => {
+    loadCachedFolders();
     fetchFolder();
   });
 
