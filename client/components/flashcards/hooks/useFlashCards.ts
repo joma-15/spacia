@@ -79,51 +79,6 @@ export function useFlashCards(folderId: string) {
     }
   };
 
-  /** Mark a card as understood */
-  // const handleUnderstand = async (id: string) => {
-  //   try {
-  //     // 1. Optimistic UI update (instant change)
-  //     setCards((prev) =>
-  //       prev.map((c) => (c.id === id ? { ...c, status: "understood" } : c)),
-  //     );
-
-  //     // 2. Update backend
-  //     const response = await fetch(`${BASE_URL}/flashcards/${id}`, {
-  //       method: "PATCH",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //       body: JSON.stringify({
-  //         status: "understood",
-  //       }),
-  //     });
-
-  //     if (!response.ok) {
-  //       throw new Error("Failed to update backend");
-  //     }
-
-  //     const data = await response.json();
-  //     console.log("backend updated:", data);
-
-  //     // 3. Sync SQLite cache
-  //     updateFlashcardStatus(id, "understood");
-  //   } catch (error) {
-  //     console.error("handleUnderstand error:", error);
-
-  //     // OPTIONAL: rollback UI if failed
-  //     setCards((prev) =>
-  //       prev.map((c) => (c.id === id ? { ...c, status: "review" } : c)),
-  //     );
-  //   }
-  // };
-
-  // /** Move a card back to review */
-  // const handleMoveToReview = (id: string) =>
-  //   setCards((prev) =>
-  //     prev.map((c) =>
-  //       c.id === id ? { ...c, status: "review" as CardStatus } : c,
-  //     ),
-  //   );
 
   const handleUnderstand = (id: string) => {
     updateCardStatus(id, "understood");
@@ -155,13 +110,6 @@ export function useFlashCards(folderId: string) {
       prev.map((c) => (c.id === id ? { ...c, question, answer } : c)),
     );
 
-  /** Prepend a brand-new card to the list */
-  // const handleAddCard = (question: string, answer: string) => {
-  //   setCards((prev) => [
-  //     { id: Date.now().toString(), question, answer, status: "review" },
-  //     ...prev,
-  //   ]);
-  // };
 
   //send the manual added cards to the backend and process it to database
   const handleAddCard = async (question: string, answer: string) => {
@@ -200,23 +148,6 @@ export function useFlashCards(folderId: string) {
     setActiveTab("all");
   };
 
-  // ── Loaders ────────────────────────────────────────────────────────────────
-  //loads existing cards from the local storage
-  // const loadCachedCards = async () => {
-  //   try {
-  //     const cached = await AsyncStorage.getItem(CACHE_KEY);
-
-  //     if (cached) {
-  //       const parsedCards: FlashCard[] = JSON.parse(cached);
-
-  //       setCards(parsedCards);
-
-  //       console.log("Loaded flashcards from cache");
-  //     }
-  //   } catch (error) {
-  //     console.error("Error loading cached cards:", error);
-  //   }
-  // };
   const loadCachedCards = () => {
     try {
       const cached = getFlashcardsByFolder(folderId);
