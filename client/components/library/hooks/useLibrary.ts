@@ -14,7 +14,11 @@
 
 import { useState, useEffect } from "react";
 import type { Folder } from "../types";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  saveFolders,
+  getFolders,
+  deleteFolder as deleteFolderCache
+} from "../../../src/database/folderRepository";
 
 export function useLibrary() {
   // ── State ────────────────────────────────────────────────────────────────
@@ -27,9 +31,6 @@ export function useLibrary() {
 
   /** What the user has typed in the search bar */
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-  //each folder key
-  const CACHE_KEY = "folders_cache";
 
   // ── Derived data (computed from state, not stored separately) ─────────────
 
@@ -44,20 +45,24 @@ export function useLibrary() {
 
   // ── Folder actions ────────────────────────────────────────────────────────
   //load cache folders
-  const loadCachedFolders = async () => {
+  const loadCachedFolders = () => {
     try {
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const cachedFolders = getFolders();
 
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        setFolders(parsed);
-        console.log("Loaded folders from cache");
-      }
-    } catch (err) {
-      console.error("Cache load error:", err);
+      const parsedFolders: Folder[] = cachedFolders.map((folder: any) => ({
+        cardCount: 0,
+        id: folder.id,
+        subject: folder.subject,
+        accentColor: folder.accent_color,
+      }));
+
+      setFolders(parsedFolders);
+
+      console.log("Loaded folders from SQLite");
+    } catch (error) {
+      console.error("SQLite load error:", error);
     }
   };
-
   //for fetching current folder data to database
   const fetchFolder = async () => {
     const response = await fetch("http://192.168.8.40:5000/folders");
@@ -66,20 +71,17 @@ export function useLibrary() {
       throw new Error("failed to fetch folders");
     }
     const foldersFromDB = await response.json();
+
     setFolders(foldersFromDB.response);
 
-    // ✅ SAVE TO CACHE
-    await AsyncStorage.setItem(
-      CACHE_KEY,
-      JSON.stringify(foldersFromDB.response),
-    );
+    saveFolders(foldersFromDB.response);
   };
 
   // everytime the screen first open and load
   useEffect(() => {
     loadCachedFolders();
     fetchFolder();
-  },[]);
+  }, []);
 
   const addFolder = async (
     subject: string,
@@ -120,8 +122,10 @@ export function useLibrary() {
       await fetch(`http://192.168.8.40:5000/folders/${id}`, {
         method: "DELETE",
       });
-      //fetch the latest data in the database
-      await fetchFolder();
+
+      deleteFolderCache(id);
+
+      setFolders((prev) => prev.filter((folder) => folder.id !== id));
     } catch (error) {
       console.error(error);
     }
