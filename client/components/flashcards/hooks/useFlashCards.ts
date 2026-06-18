@@ -7,7 +7,11 @@
 import { useState, useEffect } from "react";
 import { Alert } from "react-native";
 import { FlashCard, CardStatus, TabType } from "../types";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  saveFlashcards,
+  getFlashcardsByFolder,
+  deleteFlashcard,
+} from "../../../src/database/flashcardRepository";
 
 const BASE_URL = "http://192.168.8.40:5000";
 
@@ -15,7 +19,6 @@ export function useFlashCards(folderId: string) {
   const [cards, setCards] = useState<FlashCard[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [loading, setLoading] = useState(false);
-  const CACHE_KEY = `flashcards_${folderId}`;
 
   // ── Auto-load existing cards on mount ─────────────────────────────────────
   useEffect(() => {
@@ -24,15 +27,6 @@ export function useFlashCards(folderId: string) {
       loadSavedCards();
     }
   }, [folderId]);
-
-  //change the local storage whenever the card is change
-  useEffect(() => {
-    if (!folderId) return;
-
-    AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cards)).catch((err) =>
-      console.error("Error saving cache:", err),
-    );
-  }, [cards, folderId]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -69,19 +63,21 @@ export function useFlashCards(folderId: string) {
   // const handleDelete = (id: string) =>
   //   setCards((prev) => prev.filter((c) => c.id !== id));
 
-  const handleDelete = async (id : string) => {
+  const handleDelete = async (id: string) => {
     try {
       const response = await fetch(`${BASE_URL}/flashcards/${id}`, {
-        method : "DELETE", 
+        method: "DELETE",
       });
       //rerender the components in the cards
-      if(response.ok){
-        await loadSavedCards();
+      if (response.ok) {
+        deleteFlashcard(id);
+
+        setCards((prev) => prev.filter((c) => c.id !== id));
       }
     } catch (error) {
       console.log(error);
     }
-  }
+  };
 
   /** Update question/answer for an existing card */
   const handleEdit = (id: string, question: string, answer: string) =>
@@ -97,34 +93,36 @@ export function useFlashCards(folderId: string) {
   //   ]);
   // };
 
-//send the manual added cards to the backend and process it to database 
-const handleAddCard = async (question : string, answer : string) => {
-  try {
-    const response = await fetch(`${BASE_URL}/flashcards/${folderId}/manualSaved`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        "question": question,
-        "answer": answer,
-        "status": "review",
-        "folderIdd": folderId,
-      }),
-    });
+  //send the manual added cards to the backend and process it to database
+  const handleAddCard = async (question: string, answer: string) => {
+    try {
+      const response = await fetch(
+        `${BASE_URL}/flashcards/${folderId}/manualSaved`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            question: question,
+            answer: answer,
+            status: "review",
+            folderIdd: folderId,
+          }),
+        },
+      );
 
-    const data = await response.json();
-    console.log(data);
+      const data = await response.json();
+      console.log(data);
 
-    //load saved cards in the backend
-    if(response.ok){
-      loadSavedCards();
+      //load saved cards in the backend
+      if (response.ok) {
+        loadSavedCards();
+      }
+    } catch (error) {
+      console.error(error);
     }
-
-  } catch (error) {
-    console.error(error);
-  }
-};
+  };
 
   /** Remove every card and reset the active tab */
   const handleDeleteAll = () => {
@@ -134,19 +132,37 @@ const handleAddCard = async (question : string, answer : string) => {
 
   // ── Loaders ────────────────────────────────────────────────────────────────
   //loads existing cards from the local storage
-  const loadCachedCards = async () => {
+  // const loadCachedCards = async () => {
+  //   try {
+  //     const cached = await AsyncStorage.getItem(CACHE_KEY);
+
+  //     if (cached) {
+  //       const parsedCards: FlashCard[] = JSON.parse(cached);
+
+  //       setCards(parsedCards);
+
+  //       console.log("Loaded flashcards from cache");
+  //     }
+  //   } catch (error) {
+  //     console.error("Error loading cached cards:", error);
+  //   }
+  // };
+  const loadCachedCards = () => {
     try {
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const cached = getFlashcardsByFolder(folderId);
 
-      if (cached) {
-        const parsedCards: FlashCard[] = JSON.parse(cached);
+      const parsedCards: FlashCard[] = cached.map((card: any) => ({
+        id: card.id,
+        question: card.question,
+        answer: card.answer,
+        status: card.status,
+      }));
 
-        setCards(parsedCards);
+      setCards(parsedCards);
 
-        console.log("Loaded flashcards from cache");
-      }
+      console.log("Loaded flashcards from SQLite");
     } catch (error) {
-      console.error("Error loading cached cards:", error);
+      console.error(error);
     }
   };
 
@@ -168,7 +184,13 @@ const handleAddCard = async (question : string, answer : string) => {
       console.log("status:", response.status);
       setCards(saved);
 
-      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(saved));
+      // await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(saved));
+      saveFlashcards(
+        saved.map((card) => ({
+          ...card,
+          folderId,
+        })),
+      );
     } catch (error) {
       console.error("Error loading saved cards:", error);
     } finally {
