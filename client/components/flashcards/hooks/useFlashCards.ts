@@ -11,6 +11,7 @@ import {
   saveFlashcards,
   getFlashcardsByFolder,
   deleteFlashcard,
+  updateFlashcardStatus,
 } from "../../../src/database/flashcardRepository";
 
 const BASE_URL = "http://192.168.8.40:5000";
@@ -22,12 +23,18 @@ export function useFlashCards(folderId: string) {
 
   // ── Auto-load existing cards on mount ─────────────────────────────────────
   useEffect(() => {
-    if (folderId) {
-      loadCachedCards();
-      loadSavedCards();
-    }
-  }, [folderId]);
+    if (!folderId) return;
 
+    const init = async () => {
+      // 1. Load fast local cache first
+      loadCachedCards();
+
+      // 2. Then sync backend
+      await loadSavedCards();
+    };
+
+    init();
+  }, [folderId]);
   // ── Derived state ──────────────────────────────────────────────────────────
 
   const reviewCards = cards.filter((c) => c.status === "review");
@@ -44,12 +51,49 @@ export function useFlashCards(folderId: string) {
   // ── Card mutations ─────────────────────────────────────────────────────────
 
   /** Mark a card as understood */
-  const handleUnderstand = (id: string) =>
-    setCards((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, status: "understood" as CardStatus } : c,
-      ),
-    );
+  // const handleUnderstand = (id: string) =>
+  //   setCards((prev) =>
+  //     prev.map((c) =>
+  //       c.id === id ? { ...c, status: "understood" as CardStatus } : c,
+  //     ),
+  //   );
+
+  const handleUnderstand = async (id: string) => {
+    try {
+      // 1. Optimistic UI update (instant change)
+      setCards((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, status: "understood" } : c)),
+      );
+
+      // 2. Update backend
+      const response = await fetch(`${BASE_URL}/flashcards/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: "understood",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update backend");
+      }
+
+      const data = await response.json();
+      console.log("backend updated:", data);
+
+      // 3. Sync SQLite cache
+      updateFlashcardStatus(id, "understood");
+    } catch (error) {
+      console.error("handleUnderstand error:", error);
+
+      // OPTIONAL: rollback UI if failed
+      setCards((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, status: "review" } : c)),
+      );
+    }
+  };
 
   /** Move a card back to review */
   const handleMoveToReview = (id: string) =>
@@ -170,6 +214,7 @@ export function useFlashCards(folderId: string) {
   const loadSavedCards = async () => {
     try {
       const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`);
+
       const data = await response.json();
 
       if (!response.ok || data.error) return;
@@ -181,11 +226,10 @@ export function useFlashCards(folderId: string) {
         status: (item.status as CardStatus) ?? "review",
       }));
 
-      console.log("status:", response.status);
       setCards(saved);
 
-      // await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(saved));
-      saveFlashcards(
+      // ✅ safer SQLite sync (replace old cache instead of stacking)
+      await saveFlashcards(
         saved.map((card) => ({
           ...card,
           folderId,

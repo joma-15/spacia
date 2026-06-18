@@ -1,7 +1,7 @@
 # routes/pdf_routes.py
 from flask import Blueprint, jsonify, request
 from services.ai_flashcard_service import generate_flashcards, get_flashcards_by_folder
-from services.flashcard_services import add_flashcard, delete_flashcard
+from services.flashcard_services import add_flashcard, delete_flashcard, update_flashcard_status
 
 flashcards_bp = Blueprint("flashcards", __name__)
 
@@ -67,3 +67,12 @@ def flashcard_delete(flashcard_id : str):
             "error": str(e)
         })
     
+@flashcards_bp.route("/flashcards/<flashcard_id>", methods=["PATCH"])
+def flashcard_update(flashcard_id : str): 
+    try: 
+        data = request.get_json()
+        status = data["status"]
+        
+        return update_flashcard_status(flashcard_id, status)
+    except Exception as e: 
+        return jsonify({"error" : str(e)})

@@ -49,3 +49,17 @@ export function deleteFlashcard(
     [cardId]
   );
 }
+
+export function updateFlashcardStatus(
+  id: string,
+  status: string
+) {
+  db.runSync(
+    `
+    UPDATE flashcards
+    SET status = ?
+    WHERE id = ?
+    `,
+    [status, id]
+  );
+}

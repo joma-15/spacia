@@ -107,16 +107,6 @@ export function useLibrary() {
     }
   };
 
-  /**
-   * Remove a folder permanently by its id.
-   * Called after the user confirms the delete alert on a FolderCard.
-   */
-  // const deleteFolder = (id: string): void => {
-  //   setFolders((previousFolders) =>
-  //     previousFolders.filter((folder) => folder.id !== id),
-  //   );
-  // };
-
   const deleteFolder = async (id: string) => {
     try {
       await fetch(`http://192.168.8.40:5000/folders/${id}`, {
