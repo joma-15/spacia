@@ -14,6 +14,6 @@ export default function index(){
   // return <LibraryScreen />;
   // return <FlashcardScreen />;
   // return <ScheduledSessionsScreen />
-  return <ScheduleWizardScreen/>; 
+  return <ScheduleWizardScreen/>
 
 }

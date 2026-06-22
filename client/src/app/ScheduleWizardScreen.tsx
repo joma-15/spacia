@@ -1,25 +1,40 @@
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
-import { THEME } from "../../components/library/theme";
-import { useScheduleWizard } from "../../components/library/hooks/useScheduleWizard";
-import { useSchedules } from "../../components/library/hooks/useSchedules";
-import { useFolders } from "../../components/library/hooks/useFolders";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useFolderFlashcards } from "../../components/library/hooks/useFolderFlashcards";
-import WizardProgressBar from "../../components/library/components/schedule/WizardProgressBar";
-import FolderSelectStep from "../../components/library/components/schedule/FolderSelectStep";
-import FlashcardSelectStep from "../../components/library/components/schedule/FlashcardSelectStep";
-import ScheduleSettingsStep from "../../components/library/components/schedule/ScheduleSettingsStep";
-import ReviewStep from "../../components/library/components/schedule/ReviewStep";
+import { useFolders } from "../../components/library/hooks/useFolders";
+import { useSchedules } from "../../components/library/hooks/useSchedules";
+import { useScheduleWizard } from "../../components/library/hooks/useScheduleWizard";
+import { THEME } from "../../components/library/theme";
+import FlashcardSelectStep from "../../components/ScheduledCards/schedule/FlashcardSelectStep";
+import FolderSelectStep from "../../components/ScheduledCards/schedule/FolderSelectStep";
+import ReviewStep from "../../components/ScheduledCards/schedule/ReviewStep";
+import ScheduleSettingsStep from "../../components/ScheduledCards/schedule/ScheduleSettingsStep";
+import WizardProgressBar from "../../components/ScheduledCards/schedule/WizardProgressBar";
 
 export default function ScheduleWizardScreen() {
-  const { folders, loading: foldersLoading, error: foldersError } = useFolders();
+  const {
+    folders,
+    loading: foldersLoading,
+    error: foldersError,
+  } = useFolders();
+  const insets = useSafeAreaInsets();
   const wizard = useScheduleWizard();
   const { addSchedule } = useSchedules();
 
-  const {
-    cards: cardsInFolder,
-    loading: cardsLoading,
-  } = useFolderFlashcards(wizard.selectedFolder?.id ?? null);
+  const { cards: cardsInFolder, loading: cardsLoading } = useFolderFlashcards(
+    wizard.selectedFolder?.id ?? null,
+  );
 
   const handleCreate = (): void => {
     const schedule = wizard.buildSchedule();
@@ -40,7 +55,9 @@ export default function ScheduleWizardScreen() {
   if (foldersError) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Text style={styles.errorText}>Couldn't load folders: {foldersError}</Text>
+        <Text style={styles.errorText}>
+          Couldn't load folders: {foldersError}
+        </Text>
       </SafeAreaView>
     );
   }
@@ -57,7 +74,12 @@ export default function ScheduleWizardScreen() {
         );
       case 1:
         if (cardsLoading) {
-          return <ActivityIndicator color={THEME.primary} style={styles.centerSpinner} />;
+          return (
+            <ActivityIndicator
+              color={THEME.primary}
+              style={styles.centerSpinner}
+            />
+          );
         }
         return (
           <FlashcardSelectStep
@@ -106,20 +128,30 @@ export default function ScheduleWizardScreen() {
   const isLastStep = wizard.step === wizard.TOTAL_STEPS - 1;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <WizardProgressBar currentStep={wizard.step} />
         {renderStep()}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View
+        style={[
+          styles.footer,
+          {
+            paddingBottom: Math.max(insets.bottom, 20),
+          },
+        ]}
+      >
         {wizard.step > 0 && (
           <TouchableOpacity style={styles.backBtn} onPress={wizard.goBack}>
             <Text style={styles.backBtnText}>Back</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
-          style={[styles.continueBtn, !wizard.canContinue && styles.continueBtnDisabled]}
+          style={[
+            styles.continueBtn,
+            !wizard.canContinue && styles.continueBtnDisabled,
+          ]}
           disabled={!wizard.canContinue}
           onPress={isLastStep ? handleCreate : wizard.goNext}
         >
@@ -138,13 +170,30 @@ const styles = StyleSheet.create({
   content: { padding: 20 },
   centerSpinner: { marginTop: 40 },
   errorText: { color: THEME.textWhite, padding: 20 },
-  footer: { flexDirection: "row", gap: 10, padding: 20, borderTopWidth: 1, borderTopColor: THEME.border },
+  footer: {
+    flexDirection: "row",
+    gap: 10,
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: THEME.border,
+  },
   backBtn: {
-    flex: 1, backgroundColor: THEME.bgElevated, borderRadius: 12,
-    paddingVertical: 15, alignItems: "center", borderWidth: 1, borderColor: THEME.border,
+    flex: 1,
+    backgroundColor: THEME.bgElevated,
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: THEME.border,
   },
   backBtnText: { color: THEME.textMuted, fontWeight: "700" },
-  continueBtn: { flex: 2, backgroundColor: THEME.primary, borderRadius: 12, paddingVertical: 15, alignItems: "center" },
+  continueBtn: {
+    flex: 2,
+    backgroundColor: THEME.primary,
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
   continueBtnDisabled: { backgroundColor: THEME.primaryDim, opacity: 0.5 },
   continueBtnText: { color: THEME.bg, fontWeight: "700", fontSize: 15 },
 });

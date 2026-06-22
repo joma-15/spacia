@@ -1,8 +1,8 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { THEME } from "../../theme";
+import { THEME } from "../../library/theme";
+import type { DayOfWeek, ScheduleType } from "../../library/types";
 import ScheduleSummaryCard from "./ScheduleSummaryCard";
-import type { DayOfWeek, ScheduleType } from "../../types";
 
 interface Props {
   folderName: string;
@@ -18,7 +18,9 @@ interface Props {
 const ReviewStep: React.FC<Props> = (props) => (
   <View style={styles.wrap}>
     <Text style={styles.heading}>Review</Text>
-    <Text style={styles.subtitle}>Double check everything looks right before saving.</Text>
+    <Text style={styles.subtitle}>
+      Double check everything looks right before saving.
+    </Text>
     <ScheduleSummaryCard {...props} />
   </View>
 );
@@ -27,6 +29,11 @@ export default ReviewStep;
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  heading: { fontSize: 18, fontWeight: "700", color: THEME.textWhite, marginBottom: 6 },
+  heading: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: THEME.textWhite,
+    marginBottom: 6,
+  },
   subtitle: { fontSize: 13, color: THEME.textMuted, marginBottom: 16 },
 });

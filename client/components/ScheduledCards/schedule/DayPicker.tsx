@@ -1,8 +1,8 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { THEME } from "../../theme";
-import { DAYS_OF_WEEK } from "../../constants";
-import type { DayOfWeek } from "../../types";
+import { DAYS_OF_WEEK } from "../../library/constants";
+import { THEME } from "../../library/theme";
+import type { DayOfWeek } from "../../library/types";
 
 interface Props {
   selectedDays: DayOfWeek[];
@@ -19,7 +19,11 @@ const DayPicker: React.FC<Props> = ({ selectedDays, onToggle }) => (
           style={[styles.chip, isSelected && styles.chipSelected]}
           onPress={() => onToggle(day)}
         >
-          <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{day}</Text>
+          <Text
+            style={[styles.chipText, isSelected && styles.chipTextSelected]}
+          >
+            {day}
+          </Text>
         </TouchableOpacity>
       );
     })}
@@ -31,9 +35,13 @@ export default DayPicker;
 const styles = StyleSheet.create({
   row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
-    width: 44, paddingVertical: 10, borderRadius: THEME.radiusFull,
-    alignItems: "center", backgroundColor: THEME.bgElevated,
-    borderWidth: 1, borderColor: THEME.border,
+    width: 44,
+    paddingVertical: 10,
+    borderRadius: THEME.radiusFull,
+    alignItems: "center",
+    backgroundColor: THEME.bgElevated,
+    borderWidth: 1,
+    borderColor: THEME.border,
   },
   chipSelected: { backgroundColor: THEME.primary, borderColor: THEME.primary },
   chipText: { color: THEME.textMuted, fontWeight: "700", fontSize: 12 },
