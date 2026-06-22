@@ -33,7 +33,7 @@ import GreetingSection      from "../../components/library/components/GreetingSe
 import SectionHeader        from "../../components/library/components/SectionHeader";
 import FolderGrid           from "../../components/library/components/FolderGrid";
 import EmptyState           from "../../components/library/components/EmptyState";
-import PopupToggleBanner    from "../../components/library/components/PopupToggleBanner";
+import PopupNavBanner       from "../../components/library/components/PopupNavBanner";
 import BottomNav            from "../../components/library/components/BottomNav";
 import AddFolderModal       from "../../components/library/components/AddFolderModal";
 
@@ -49,11 +49,12 @@ export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
 
   // ── Business logic (state + actions) from the hook ────────────────────────
+  // Note: popupEnabled/setPopupEnabled removed from this destructure since
+  // the banner is now a nav button, not a toggle. The hook can still expose
+  // them for other screens if needed — they're just unused here now.
   const {
-    popupEnabled,
     searchQuery,
     filteredFolders,
-    setPopupEnabled,
     setSearchQuery,
     clearSearch,
     addFolder,
@@ -66,7 +67,7 @@ export default function LibraryScreen() {
   const [addModalVisible, setAddModalVisible] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<NavTab>("popup");
 
-  // ── Navigation handler ────────────────────────────────────────────────────
+  // ── Navigation handlers ───────────────────────────────────────────────────
 
   /**
    * Called when the user taps any bottom-nav tab.
@@ -77,6 +78,15 @@ export default function LibraryScreen() {
       router.push("/PaymentScreen");
     }
     setActiveTab(tab);
+  };
+
+  /**
+   * Called when the "Study reminders" banner is tapped.
+   * Adjust this route to wherever your scheduling/notification
+   * settings screen actually lives.
+   */
+  const handleStudyRemindersPress = (): void => {
+    router.push("/ScheduleWizardScreen");
   };
 
   // ── Layout calculation ────────────────────────────────────────────────────
@@ -123,11 +133,8 @@ export default function LibraryScreen() {
           />
         )}
 
-        {/* ── "Pop up on unlock" toggle ── */}
-        <PopupToggleBanner
-          enabled={popupEnabled}
-          onToggle={setPopupEnabled}
-        />
+        {/* ── "Study reminders" nav banner ── */}
+        <PopupNavBanner onPress={handleStudyRemindersPress} />
       </ScrollView>
 
       {/* ── Fixed bottom navigation bar ── */}

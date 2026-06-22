@@ -44,6 +44,20 @@ export default function ScheduleWizardScreen() {
     router.push("/ScheduledSessionsScreen" as any);
   };
 
+  /**
+   * Handles the footer "Back" button for every step.
+   * Step 0 has no previous wizard step, so it exits the wizard
+   * entirely (back to wherever the user launched it from, e.g. Library).
+   * Any other step just steps back within the wizard via wizard.goBack.
+   */
+  const handleBackPress = (): void => {
+    if (wizard.step === 0) {
+      router.back();
+    } else {
+      wizard.goBack();
+    }
+  };
+
   if (foldersLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -142,11 +156,12 @@ export default function ScheduleWizardScreen() {
           },
         ]}
       >
-        {wizard.step > 0 && (
-          <TouchableOpacity style={styles.backBtn} onPress={wizard.goBack}>
-            <Text style={styles.backBtnText}>Back</Text>
-          </TouchableOpacity>
-        )}
+        {/* Back button now always renders — step 0 exits the wizard,
+            every other step goes back within the wizard. */}
+        <TouchableOpacity style={styles.backBtn} onPress={handleBackPress}>
+          <Text style={styles.backBtnText}>Back</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[
             styles.continueBtn,

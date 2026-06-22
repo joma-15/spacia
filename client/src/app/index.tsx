@@ -11,9 +11,9 @@ export default function index(){
     initializeDatabase();
   },[]);
 
-  // return <LibraryScreen />;
+  return <LibraryScreen />;
   // return <FlashcardScreen />;
   // return <ScheduledSessionsScreen />
-  return <ScheduleWizardScreen/>
+  // return <ScheduleWizardScreen/>
 
 }
