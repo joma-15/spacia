@@ -10,7 +10,6 @@
 
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useRouter } from "expo-router";
 import { THEME } from "../theme";
 
 interface Props {

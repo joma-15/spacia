@@ -1,7 +1,6 @@
 import { router } from "expo-router";
 import {
   FlatList,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -9,6 +8,7 @@ import {
 } from "react-native";
 import { useSchedules } from "../../components/library/hooks/useSchedules";
 import { THEME } from "../../components/library/theme";
+import { SafeAreaView } from "react-native-safe-area-context";
 import ScheduleCard from "../../components/ScheduledCards/schedule/ScheduleCard";
 
 export default function ScheduledSessionsScreen() {
@@ -18,6 +18,14 @@ export default function ScheduledSessionsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.push("/LibraryScreen" as any)}
+          hitSlop={8}
+        >
+          <Text style={styles.backIcon}>‹</Text>
+        </TouchableOpacity>
+
         <Text style={styles.headerTitle}>Scheduled Sessions</Text>
       </View>
 
@@ -73,7 +81,30 @@ export default function ScheduledSessionsScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: THEME.bg },
-  header: { padding: 20, paddingBottom: 8 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 8,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: THEME.radiusFull,
+    backgroundColor: THEME.bgElevated,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backIcon: {
+    color: THEME.textWhite,
+    fontSize: 22,
+    fontWeight: "700",
+    marginTop: -2,
+  },
   headerTitle: { color: THEME.textWhite, fontSize: 22, fontWeight: "800" },
   list: { padding: 20 },
   empty: {

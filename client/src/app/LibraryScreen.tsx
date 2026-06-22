@@ -86,7 +86,7 @@ export default function LibraryScreen() {
    * settings screen actually lives.
    */
   const handleStudyRemindersPress = (): void => {
-    router.push("/ScheduleWizardScreen");
+    router.push("/ScheduledSessionsScreen");
   };
 
   // ── Layout calculation ────────────────────────────────────────────────────
