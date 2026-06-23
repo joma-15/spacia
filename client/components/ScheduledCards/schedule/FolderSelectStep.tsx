@@ -95,17 +95,6 @@ const FolderSelectStep: React.FC<Props> = ({ folders, selectedFolder, onSelect }
                   <Text style={styles.cardTitle} numberOfLines={1}>
                     {item.subject}
                   </Text>
-
-                  <View
-                    style={[
-                      styles.countPill,
-                      { borderColor: item.accentColor, backgroundColor: tint(item.accentColor) },
-                    ]}
-                  >
-                    <Text style={[styles.countPillText, { color: item.accentColor }]}>
-                      {item.cardCount} cards
-                    </Text>
-                  </View>
                 </TouchableOpacity>
               </View>
             );
@@ -214,15 +203,6 @@ const styles = StyleSheet.create({
   checkMark: { color: THEME.bg, fontSize: 12, fontWeight: "700" },
 
   cardTitle: { color: THEME.textWhite, fontWeight: "700", fontSize: 15, marginBottom: 8 },
-
-  countPill: {
-    alignSelf: "flex-start",
-    borderRadius: THEME.radiusFull,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  countPillText: { fontSize: 11, fontWeight: "700" },
 
   emptyWrap: { alignItems: "center", paddingVertical: 40, gap: 10 },
   emptyIconCircle: {
