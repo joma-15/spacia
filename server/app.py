@@ -15,6 +15,7 @@ def create_app():
     from models.users import User
     from models.folders import Folder
     from models.flashcard import Flashcard
+    from models.schedules import Schedule
 
 
     # register routes
@@ -23,6 +24,9 @@ def create_app():
 
     from routes.folder_routes import folders_bp
     app.register_blueprint(folders_bp)
+
+    from routes.schedule_route import schedules_bp
+    app.register_blueprint(schedules_bp)
 
     @app.route("/")
     def home():
@@ -35,7 +39,6 @@ def create_app():
             print("✅ Connected to MySQL successfully!")
         except Exception as e:
             print("❌ Database Error:", e)
-
     return app
 
 

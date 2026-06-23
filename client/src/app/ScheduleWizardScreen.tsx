@@ -36,10 +36,15 @@ export default function ScheduleWizardScreen() {
     wizard.selectedFolder?.id ?? null,
   );
 
-  const handleCreate = (): void => {
+  const handleCreate = async (): Promise<void> => {
     const schedule = wizard.buildSchedule();
+
     if (!schedule) return;
+
     addSchedule(schedule);
+
+    await wizard.handleSubmit();
+
     wizard.reset();
     router.push("/ScheduledSessionsScreen" as any);
   };

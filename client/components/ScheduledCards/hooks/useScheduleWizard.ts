@@ -1,7 +1,34 @@
 import { useState, useMemo } from "react";
-import type { Folder, Flashcard, Schedule, ScheduleType, DayOfWeek } from "../../library/types";
+import type {
+  Folder,
+  Flashcard,
+  Schedule,
+  ScheduleType,
+  DayOfWeek,
+} from "../../library/types";
 
 const TOTAL_STEPS = 4;
+const BASE_URL = "http://192.168.8.40:5000";
+
+
+const createSchedule = async (schedule: Schedule) => {
+  try {
+    const response = await fetch(`${BASE_URL}/schedules`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(schedule),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to create schedule");
+    }
+    console.log("schedule set successfully");
+  } catch (error) {
+    console.error(error);
+  }
+};
 
 export function useScheduleWizard() {
   const [step, setStep] = useState<number>(0); // 0=Folder,1=Cards,2=Schedule,3=Review
@@ -24,7 +51,8 @@ export function useScheduleWizard() {
   const canContinue = useMemo(() => {
     if (step === 0) return selectedFolder !== null;
     if (step === 1) return selectedCardIds.length > 0;
-    if (step === 2) return scheduleType !== "custom_days" || customDays.length > 0;
+    if (step === 2)
+      return scheduleType !== "custom_days" || customDays.length > 0;
     return true;
   }, [step, selectedFolder, selectedCardIds, scheduleType, customDays]);
 
@@ -33,7 +61,7 @@ export function useScheduleWizard() {
 
   const toggleCard = (id: string): void => {
     setSelectedCardIds((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
     );
   };
 
@@ -44,7 +72,7 @@ export function useScheduleWizard() {
 
   const toggleCustomDay = (day: DayOfWeek): void => {
     setCustomDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
     );
   };
 
@@ -67,6 +95,14 @@ export function useScheduleWizard() {
     };
   };
 
+  const handleSubmit = async () => {
+    const schedule = buildSchedule(); 
+
+    if(schedule){
+      await createSchedule(schedule);
+    }
+  }
+
   const reset = (): void => {
     setStep(0);
     setSelectedFolder(null);
@@ -80,16 +116,31 @@ export function useScheduleWizard() {
   };
 
   return {
-    step, goNext, goBack, canContinue, TOTAL_STEPS,
-    selectedFolder, setSelectedFolder,
-    selectedCardIds, toggleCard, selectAllCards, deselectAllCards,
-    scheduleType, setScheduleType,
-    customDays, toggleCustomDay,
-    time, setTime,
-    durationMinutes, setDurationMinutes,
-    intervalMinutes, setIntervalMinutes,
-    shuffle, setShuffle,
+    step,
+    goNext,
+    goBack,
+    canContinue,
+    TOTAL_STEPS,
+    selectedFolder,
+    setSelectedFolder,
+    selectedCardIds,
+    toggleCard,
+    selectAllCards,
+    deselectAllCards,
+    scheduleType,
+    setScheduleType,
+    customDays,
+    toggleCustomDay,
+    time,
+    setTime,
+    durationMinutes,
+    setDurationMinutes,
+    intervalMinutes,
+    setIntervalMinutes,
+    shuffle,
+    setShuffle,
     buildSchedule,
+    handleSubmit,
     reset,
   };
 }
