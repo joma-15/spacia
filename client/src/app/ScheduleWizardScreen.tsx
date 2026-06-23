@@ -13,14 +13,14 @@ import {
 } from "react-native-safe-area-context";
 import { useFolderFlashcards } from "../../components/library/hooks/useFolderFlashcards";
 import { useFolders } from "../../components/library/hooks/useFolders";
-import { useSchedules } from "../../components/library/hooks/useSchedules";
-import { useScheduleWizard } from "../../components/library/hooks/useScheduleWizard";
+import { useSchedules } from "../../components/ScheduledCards/hooks/useSchedules";
+import { useScheduleWizard } from "../../components/ScheduledCards/hooks/useScheduleWizard";
 import { THEME } from "../../components/library/theme";
-import FlashcardSelectStep from "../../components/ScheduledCards/schedule/FlashcardSelectStep";
-import FolderSelectStep from "../../components/ScheduledCards/schedule/FolderSelectStep";
-import ReviewStep from "../../components/ScheduledCards/schedule/ReviewStep";
-import ScheduleSettingsStep from "../../components/ScheduledCards/schedule/ScheduleSettingsStep";
-import WizardProgressBar from "../../components/ScheduledCards/schedule/WizardProgressBar";
+import FlashcardSelectStep from "../../components/ScheduledCards/components/FlashcardSelectStep";
+import FolderSelectStep from "../../components/ScheduledCards/components/FolderSelectStep";
+import ReviewStep from "../../components/ScheduledCards/components/ReviewStep";
+import ScheduleSettingsStep from "../../components/ScheduledCards/components/ScheduleSettingsStep";
+import WizardProgressBar from "../../components/ScheduledCards/components/WizardProgressBar";
 
 export default function ScheduleWizardScreen() {
   const {

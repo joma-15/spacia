@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import type { Folder, Flashcard, Schedule, ScheduleType, DayOfWeek } from "../types";
+import type { Folder, Flashcard, Schedule, ScheduleType, DayOfWeek } from "../../library/types";
 
 const TOTAL_STEPS = 4;
 

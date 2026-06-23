@@ -6,14 +6,18 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSchedules } from "../../components/library/hooks/useSchedules";
+import { useSchedules } from "../../components/ScheduledCards/hooks/useSchedules";
 import { THEME } from "../../components/library/theme";
-import { SafeAreaView } from "react-native-safe-area-context";
-import ScheduleCard from "../../components/ScheduledCards/schedule/ScheduleCard";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import ScheduleCard from "../../components/ScheduledCards/components/ScheduleCard";
 
 export default function ScheduledSessionsScreen() {
   const { schedules, toggleSchedule, deleteSchedule, duplicateSchedule } =
     useSchedules();
+  const insets = useSafeAreaInsets();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -69,7 +73,12 @@ export default function ScheduledSessionsScreen() {
 
       {schedules.length > 0 && (
         <TouchableOpacity
-          style={styles.fab}
+          style={[
+            styles.fab,
+            {
+              bottom: insets.bottom + 24,
+            },
+          ]}
           onPress={() => router.push("/ScheduleWizardScreen" as any)}
         >
           <Text style={styles.fabIcon}>+</Text>
@@ -138,7 +147,6 @@ const styles = StyleSheet.create({
   createBtnText: { color: THEME.primary, fontWeight: "700", fontSize: 14 },
   fab: {
     position: "absolute",
-    bottom: 24,
     right: 24,
     width: 56,
     height: 56,
