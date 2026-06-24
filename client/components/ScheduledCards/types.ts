@@ -6,7 +6,7 @@ export type DayOfWeek = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
 
 /** A saved flashcard pop-up schedule */
 export interface Schedule {
-  id: string;
+  id?: string;
   folderId: string;
   folderName: string;
   cardIds: string[];

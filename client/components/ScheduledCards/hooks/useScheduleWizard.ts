@@ -2,10 +2,8 @@ import { useState, useMemo } from "react";
 import type {
   Folder,
   Flashcard,
-  Schedule,
-  ScheduleType,
-  DayOfWeek,
 } from "../../library/types";
+import type { Schedule, ScheduleType,DayOfWeek } from "../types";
 
 const TOTAL_STEPS = 4;
 const BASE_URL = "http://192.168.8.40:5000";
@@ -80,7 +78,7 @@ export function useScheduleWizard() {
   const buildSchedule = (): Schedule | null => {
     if (!selectedFolder) return null;
     return {
-      id: Date.now().toString(),
+      // id : "burat", 
       folderId: selectedFolder.id,
       folderName: selectedFolder.subject,
       cardIds: selectedCardIds,

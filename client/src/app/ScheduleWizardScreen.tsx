@@ -36,13 +36,12 @@ export default function ScheduleWizardScreen() {
     wizard.selectedFolder?.id ?? null,
   );
 
+  //send the data to the database and also build the schedule 
   const handleCreate = async (): Promise<void> => {
     const schedule = wizard.buildSchedule();
 
     if (!schedule) return;
-
     addSchedule(schedule);
-
     await wizard.handleSubmit();
 
     wizard.reset();
