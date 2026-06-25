@@ -36,7 +36,6 @@ import EmptyState           from "../../components/library/components/EmptyState
 import PopupNavBanner       from "../../components/library/components/PopupNavBanner";
 import BottomNav            from "../../components/library/components/BottomNav";
 import AddFolderModal       from "../../components/library/components/AddFolderModal";
-import LoadingModal         from "../../components/library/components/LoadingModal";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 import { THEME } from "../../components/library/theme";
@@ -146,8 +145,6 @@ export default function LibraryScreen() {
         bottomInset={insets.bottom}
         onAddPress={() => setAddModalVisible(true)}
       />
-
-      <LoadingModal visible={loading}/>
 
       {/* ── Add folder modal (sits above everything) ── */}
       <AddFolderModal

@@ -3,13 +3,13 @@ import type {
   Folder,
   Flashcard,
 } from "../../library/types";
-import type { Schedule, ScheduleType,DayOfWeek } from "../types";
+import type { SendSchedule, ScheduleType,DayOfWeek } from "../types";
 
 const TOTAL_STEPS = 4;
 const BASE_URL = "http://192.168.8.40:5000";
 
 
-const createSchedule = async (schedule: Schedule) => {
+const createSchedule = async (schedule: SendSchedule) => {
   try {
     const response = await fetch(`${BASE_URL}/schedules`, {
       method: "POST",
@@ -75,7 +75,7 @@ export function useScheduleWizard() {
   };
 
   /** Builds the final Schedule object once the user confirms on the Review step */
-  const buildSchedule = (): Schedule | null => {
+  const buildSchedule = (): SendSchedule | null => {
     if (!selectedFolder) return null;
     return {
       // id : "burat", 

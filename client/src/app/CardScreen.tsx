@@ -22,6 +22,7 @@ import AddCardModal from "../../components/flashcards/components/AddCardModal";
 import DeleteAllModal from "../../components/flashcards/components/DeleteAllModal";
 import PremiumModal from "../../components/flashcards/components/PremiumModal";
 import LoadingModal from "../../components/flashcards/components/LoadingModal";
+import InitialLoadingModal from "../../components/flashcards/components/InitialLoadingModal";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 import { COLORS } from "../../components/flashcards/constants";
@@ -42,6 +43,7 @@ const CardScreen: React.FC = () => {
     cards,
     activeTab,
     loading,
+    initialLoading,
     reviewCards,
     understoodCards,
     displayedCards,
@@ -118,6 +120,7 @@ const CardScreen: React.FC = () => {
         onClose={() => setPremiumModalVisible(false)}
         onUpgrade={handleUpgrade}
       />
+      <InitialLoadingModal visible={initialLoading}/>
       <LoadingModal visible={loading} />
       <DeleteAllModal
         visible={deleteAllModalVisible}

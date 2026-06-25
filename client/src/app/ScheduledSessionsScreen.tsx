@@ -13,9 +13,9 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import ScheduleCard from "../../components/ScheduledCards/components/ScheduleCard";
-
+import InitialLoadingModal from "../../components/flashcards/components/InitialLoadingModal";
 export default function ScheduledSessionsScreen() {
-  const { schedules, toggleSchedule, deleteSchedule, duplicateSchedule } =
+  const { schedules, toggleSchedule, deleteSchedule, duplicateSchedule, loading } =
     useSchedules();
   const insets = useSafeAreaInsets();
 
@@ -52,7 +52,7 @@ export default function ScheduledSessionsScreen() {
       ) : (
         <FlatList
           data={schedules}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => item.id ?? index.toString()}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
             <ScheduleCard
@@ -84,6 +84,8 @@ export default function ScheduledSessionsScreen() {
           <Text style={styles.fabIcon}>+</Text>
         </TouchableOpacity>
       )}
+
+      <InitialLoadingModal visible={loading}/>
     </SafeAreaView>
   );
 }
