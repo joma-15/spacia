@@ -1,7 +1,7 @@
 # routes/pdf_routes.py
 from flask import Blueprint, jsonify, request
 from services.ai_flashcard_service import generate_flashcards, get_flashcards_by_folder
-from services.flashcard_services import add_flashcard, delete_flashcard, update_flashcard_status
+from services.flashcard_services import add_flashcard, delete_flashcard, update_flashcard_status, delete_all
 
 flashcards_bp = Blueprint("flashcards", __name__)
 
@@ -76,3 +76,20 @@ def flashcard_update(flashcard_id : str):
         return update_flashcard_status(flashcard_id, status)
     except Exception as e: 
         return jsonify({"error" : str(e)})
+    
+
+@flashcards_bp.route("/flashcards/folder/<folder_id>", methods=["DELETE"])
+def delete_all_flashcards(folder_id: str): 
+    try: 
+        delete_all(folder_id)
+
+        return jsonify({
+            "success": True, 
+            "message": "deleted successfully"
+        })
+    
+    except Exception as e: 
+        return jsonify({
+            "message": "cant delete data",
+            "success": False
+        })

@@ -14,7 +14,7 @@ interface Props {
   schedule: Schedule;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
+  // onDuplicate: (id: string) => void;
   onEdit: (id: string) => void;
 }
 
@@ -28,7 +28,7 @@ const ScheduleCard: React.FC<Props> = ({
   schedule,
   onToggle,
   onDelete,
-  onDuplicate,
+  // onDuplicate,
   onEdit,
 }) => {
   const confirmDelete = (): void => {
@@ -65,9 +65,9 @@ const ScheduleCard: React.FC<Props> = ({
         <TouchableOpacity onPress={() => onEdit(schedule.id)}>
           <Text style={styles.actionText}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => onDuplicate(schedule.id)}>
+        {/* <TouchableOpacity onPress={() => onDuplicate(schedule.id)}>
           <Text style={styles.actionText}>Duplicate</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <TouchableOpacity onPress={confirmDelete}>
           <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
         </TouchableOpacity>

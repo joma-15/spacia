@@ -105,22 +105,22 @@ export function useSchedules() {
     });
   }, []);
 
-  const duplicateSchedule = useCallback((id: string): void => {
-    setSchedules((prev) => {
-      const original = prev.find((s) => s.id === id);
-      if (!original) return prev;
+  // const duplicateSchedule = useCallback((id: string): void => {
+  //   setSchedules((prev) => {
+  //     const original = prev.find((s) => s.id === id);
+  //     if (!original) return prev;
 
-      const copy: Schedule = {
-        ...original,
-        id: Date.now().toString(),
-        createdAt: Date.now(),
-      };
+  //     const copy: Schedule = {
+  //       ...original,
+  //       id: Date.now().toString(),
+  //       createdAt: Date.now(),
+  //     };
 
-      const next = [copy, ...prev];
-      scheduleCache = next;
-      return next;
-    });
-  }, []);
+  //     const next = [copy, ...prev];
+  //     scheduleCache = next;
+  //     return next;
+  //   });
+  // }, []);
 
   return {
     schedules,
@@ -130,6 +130,6 @@ export function useSchedules() {
     addSchedule,
     deleteSchedule,
     toggleSchedule,
-    duplicateSchedule,
+    // duplicateSchedule,
   };
 }

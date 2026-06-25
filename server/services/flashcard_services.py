@@ -4,6 +4,7 @@ from flask import jsonify
 
 
 def add_flashcard(question : str, answer : str, status : str, folder_id : str):
+    print("add function was being triggred")
     try: 
         flashcard = Flashcard(
             question=question, 
@@ -19,6 +20,7 @@ def add_flashcard(question : str, answer : str, status : str, folder_id : str):
         raise RuntimeError("Error:", str(e))
     
 def delete_flashcard(flashcard_id : str): 
+    print("delete function was being triggred")
     flashcard = Flashcard.query.get(flashcard_id)
 
     if flashcard is None: 
@@ -28,6 +30,14 @@ def delete_flashcard(flashcard_id : str):
     db.session.commit()
 
     return {"message" : "flashcard deleted successfully"}, 200
+
+def delete_all(folder_id : str): 
+    deleted_count = Flashcard.query.filter_by(folder_id=folder_id).delete()
+    print("deleted rows:", deleted_count)
+    db.session.commit()
+
+    return {"message" : "deleted all successfully"}
+
 
 def update_flashcard_status(flashcard_id : str, status): 
    flashcard = Flashcard.query.get(flashcard_id)

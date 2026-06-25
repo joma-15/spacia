@@ -173,10 +173,25 @@ export function useFlashCards(folderId: string) {
   );
 
   /** Remove every card and reset the active tab */
-  const handleDeleteAll = useCallback(() => {
-    setCards([]);
-    setActiveTab("all");
-  }, []);
+  // const handleDeleteAll = useCallback(() => {
+  //   setCards([]);
+  //   setActiveTab("all");
+  // }, []);
+
+  const handleDeleteAll = useCallback(async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/flashcards/folder/${folderId}`, {
+        method: "DELETE",
+      }); 
+
+      if (response.ok) {
+        setCards([]); 
+        setActiveTab("all");
+      }
+    } catch (error) {
+      console.log(error)
+    }
+  },[]);
 
   // ── Loading ─────────────────────────────────────────────────────────────────
 

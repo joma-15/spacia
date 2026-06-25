@@ -29,7 +29,7 @@ def generate_ai_flashcards(chunks: str):
     prompt = f"""
 You are a flashcard generator.
 
-Generate exactly 100 flashcards in VALID JSON format.
+Generate exactly 10 flashcards in VALID JSON format.
 
 Each flashcard must contain:
 - question: clue-based description (NOT direct question)
