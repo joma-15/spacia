@@ -17,7 +17,7 @@ import type { Folder } from "../types";
 import {
   saveFolders,
   getFolders,
-  deleteFolder as deleteFolderCache
+  deleteFolder as deleteFolderCache,
 } from "../../../src/database/folderRepository";
 
 export function useLibrary() {
@@ -31,6 +31,9 @@ export function useLibrary() {
 
   /** What the user has typed in the search bar */
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  //loading for modals
+  const [loading, setLoading] = useState<boolean>(true);
 
   // ── Derived data (computed from state, not stored separately) ─────────────
 
@@ -65,16 +68,25 @@ export function useLibrary() {
   };
   //for fetching current folder data to database
   const fetchFolder = async () => {
-    const response = await fetch("http://192.168.8.40:5000/folders");
+    try {
+      setLoading(true);
 
-    if (!response.ok) {
-      throw new Error("failed to fetch folders");
+      const response = await fetch("http://192.168.8.40:5000/folders");
+
+      if (!response.ok) {
+        throw new Error("failed to fetch folders");
+      }
+
+      const foldersFromDB = await response.json();
+
+      setFolders(foldersFromDB.response);
+
+      saveFolders(foldersFromDB.response);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
-    const foldersFromDB = await response.json();
-
-    setFolders(foldersFromDB.response);
-
-    saveFolders(foldersFromDB.response);
   };
 
   // everytime the screen first open and load
@@ -132,6 +144,7 @@ export function useLibrary() {
     searchQuery,
     // derived
     filteredFolders,
+    loading,
     // actions
     setPopupEnabled,
     setSearchQuery,

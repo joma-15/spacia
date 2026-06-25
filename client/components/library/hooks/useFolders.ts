@@ -21,6 +21,7 @@ export function useFolders() {
 
   useEffect(() => {
     let isMounted = true;
+    setLoading(true);
 
     const loadFolders = async (): Promise<void> => {
       try {
@@ -35,6 +36,10 @@ export function useFolders() {
           accentColor: f.accent_color,
           cardCount: 0, // backend doesn't compute this per-folder yet
         }));
+
+        if (loading) {
+          console.log("still loading");
+        }
 
         setFolders(mapped);
       } catch (err) {

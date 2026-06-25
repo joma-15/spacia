@@ -1,122 +1,111 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Schedule } from "../types";
 
 const BASE_URL = "http://192.168.8.40:5000";
+const FETCH_TIMEOUT_MS = 8000;
 
-const dummySchedules: Schedule[] = [
-  {
-    id: "sched-001",
-    folderId: "folder-001",
-    folderName: "JavaScript Basics",
-    cardIds: ["card-001", "card-002", "card-003"],
-    scheduleType: "daily",
-    customDays: [],
-    time: "08:00",
-    durationMinutes: 30,
-    intervalMinutes: 5,
-    shuffle: true,
-    enabled: true,
-    createdAt: Date.now(),
-  },
-  {
-    id: "sched-002",
-    folderId: "folder-002",
-    folderName: "Networking Fundamentals",
-    cardIds: ["card-010", "card-011", "card-012", "card-013"],
-    scheduleType: "daily",
-    customDays: [],
-    time: "18:00",
-    durationMinutes: 45,
-    intervalMinutes: 10,
-    shuffle: false,
-    enabled: true,
-    createdAt: Date.now() - 86400000,
-  },
-  {
-    id: "sched-003",
-    folderId: "folder-003",
-    folderName: "Cybersecurity Terms",
-    cardIds: ["card-020", "card-021"],
-    scheduleType: "custom_days",
-    customDays: ["Mon", "Wed", "Tue"],
-    time: "20:30",
-    durationMinutes: 60,
-    intervalMinutes: 15,
-    shuffle: true,
-    enabled: true,
-    createdAt: Date.now() - 172800000,
-  },
-  {
-    id: "sched-004",
-    folderId: "folder-004",
-    folderName: "ASP.NET Core",
-    cardIds: ["card-030", "card-031", "card-032", "card-033"],
-    scheduleType: "one_time",
-    customDays: [],
-    time: "09:00",
-    durationMinutes: 90,
-    intervalMinutes: 20,
-    shuffle: true,
-    enabled: false,
-    createdAt: Date.now() - 259200000,
-  },
-  {
-    id: "sched-005",
-    folderId: "folder-005",
-    folderName: "Probability & Statistics",
-    cardIds: ["card-040", "card-041", "card-042"],
-    scheduleType: "custom_days",
-    customDays: ["Tue", "Mon"],
-    time: "14:00",
-    durationMinutes: 40,
-    intervalMinutes: 8,
-    shuffle: false,
-    enabled: false,
-    createdAt: Date.now() - 345600000,
-  },
-];
+// Module-level in-memory cache — survives unmount/remount, avoids refetch flicker
+let scheduleCache: Schedule[] | null = null;
 
-const fetchData = async () : Promise<Schedule[]> => {
-  try {
-    const response = await fetch(`${BASE_URL}/schedules`); 
+const fetchData = async (signal: AbortSignal): Promise<Schedule[]> => {
+  const response = await fetch(`${BASE_URL}/schedules`, { signal });
 
-    if (!response.ok) {
-      throw new Error("error fetching data to the database");
-    }
-    const result = await response.json(); 
-    console.log(result); 
-
-    return result.data
-  } catch (error) {
-    console.log(error); 
-    return[];
+  if (!response.ok) {
+    throw new Error(`Failed to fetch schedules: ${response.status}`);
   }
-}
+
+  const result = await response.json();
+  return result.data ?? [];
+};
 
 export function useSchedules() {
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  // Lazy init from cache so there's no blank flash if we already have data
+  const [schedules, setSchedules] = useState<Schedule[]>(() => scheduleCache ?? []);
+  const [loading, setLoading] = useState(scheduleCache === null);
+  const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
+
+    // Already have cached data — skip the loading spinner, just refresh quietly
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
     const loadSchedules = async () => {
-      const data = await fetchData();
-      setSchedules(data);
+      try {
+        if (scheduleCache === null) setLoading(true);
+        const data = await fetchData(controller.signal);
+        clearTimeout(timeoutId);
+
+        scheduleCache = data;
+        if (isMountedRef.current) {
+          setSchedules(data);
+          setError(null);
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (isMountedRef.current) {
+          const message =
+            err instanceof Error && err.name === "AbortError"
+              ? "Request timed out — check your connection"
+              : "Could not load schedules";
+          setError(message);
+        }
+      } finally {
+        if (isMountedRef.current) setLoading(false);
+      }
     };
 
     loadSchedules();
+
+    return () => {
+      isMountedRef.current = false;
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
   }, []);
 
-  const addSchedule = (schedule: Schedule): void =>
-    setSchedules((prev) => [schedule, ...prev]);
+  const refresh = useCallback(async () => {
+    const controller = new AbortController();
+    setLoading(true);
+    try {
+      const data = await fetchData(controller.signal);
+      scheduleCache = data;
+      setSchedules(data);
+      setError(null);
+    } catch {
+      setError("Could not refresh schedules");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const deleteSchedule = (id: string): void =>
-    setSchedules((prev) => prev.filter((s) => s.id !== id));
+  const addSchedule = useCallback((schedule: Schedule): void => {
+    setSchedules((prev) => {
+      const next = [schedule, ...prev];
+      scheduleCache = next;
+      return next;
+    });
+  }, []);
 
-  const toggleSchedule = (id: string): void =>
-    setSchedules((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s))
-    );
+  const deleteSchedule = useCallback((id: string): void => {
+    setSchedules((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      scheduleCache = next;
+      return next;
+    });
+  }, []);
 
-  const duplicateSchedule = (id: string): void =>
+  const toggleSchedule = useCallback((id: string): void => {
+    setSchedules((prev) => {
+      const next = prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s));
+      scheduleCache = next;
+      return next;
+    });
+  }, []);
+
+  const duplicateSchedule = useCallback((id: string): void => {
     setSchedules((prev) => {
       const original = prev.find((s) => s.id === id);
       if (!original) return prev;
@@ -127,11 +116,17 @@ export function useSchedules() {
         createdAt: Date.now(),
       };
 
-      return [copy, ...prev];
+      const next = [copy, ...prev];
+      scheduleCache = next;
+      return next;
     });
+  }, []);
 
   return {
     schedules,
+    loading,
+    error,
+    refresh,
     addSchedule,
     deleteSchedule,
     toggleSchedule,
