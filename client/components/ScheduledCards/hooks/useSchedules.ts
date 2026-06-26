@@ -20,7 +20,9 @@ const fetchData = async (signal: AbortSignal): Promise<Schedule[]> => {
 
 export function useSchedules() {
   // Lazy init from cache so there's no blank flash if we already have data
-  const [schedules, setSchedules] = useState<Schedule[]>(() => scheduleCache ?? []);
+  const [schedules, setSchedules] = useState<Schedule[]>(
+    () => scheduleCache ?? [],
+  );
   const [loading, setLoading] = useState(scheduleCache === null);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
@@ -97,13 +99,42 @@ export function useSchedules() {
     });
   }, []);
 
-  const toggleSchedule = useCallback((id: string): void => {
-    setSchedules((prev) => {
-      const next = prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s));
-      scheduleCache = next;
-      return next;
-    });
-  }, []);
+  // const toggleSchedule = useCallback((id: string): void => {
+  //   setSchedules((prev) => {
+  //     const next = prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s));
+  //     scheduleCache = next;
+  //     return next;
+  //   });
+  // }, []);
+
+  const toggleSchedule = useCallback(
+    async (id: string, enabled: boolean): Promise<void> => {
+      try {
+        const response = await fetch(`${BASE_URL}/schedules/${id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ enabled }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log("Status:", response.status);
+          console.log("Response:", errorText);
+          throw new Error(`Failed to update backend (${response.status})`);
+        }
+
+        // Update local state
+        setSchedules((prev) =>
+          prev.map((s) => (s.id === id ? { ...s, enabled } : s)),
+        );
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [],
+  );
 
   // const duplicateSchedule = useCallback((id: string): void => {
   //   setSchedules((prev) => {

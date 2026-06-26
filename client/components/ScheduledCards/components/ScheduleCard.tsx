@@ -12,7 +12,7 @@ import type { Schedule } from "../../library/types";
 
 interface Props {
   schedule: Schedule;
-  onToggle: (id: string) => void;
+  onToggle: (id: string, enabled: boolean) => void;
   onDelete: (id: string) => void;
   // onDuplicate: (id: string) => void;
   onEdit: (id: string) => void;
@@ -48,7 +48,7 @@ const ScheduleCard: React.FC<Props> = ({
         <Text style={styles.title}>📚 {schedule.folderName} Review</Text>
         <Switch
           value={schedule.enabled}
-          onValueChange={() => onToggle(schedule.id)}
+          onValueChange={(enabled) => onToggle(schedule.id, enabled)}
           trackColor={{ false: THEME.border, true: THEME.primaryDim }}
           thumbColor={schedule.enabled ? THEME.primary : THEME.textMuted}
         />

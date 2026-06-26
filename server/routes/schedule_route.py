@@ -1,4 +1,4 @@
-from services.schedule_service import add_data, get_data
+from services.schedule_service import add_data, get_data, update_data
 from flask import Blueprint, request, jsonify
 
 schedules_bp = Blueprint("schedules", __name__)
@@ -42,3 +42,18 @@ def get_sched():
             "error" : str(e), 
             "message": "cant get the data to dabatase "
         }),500
+    
+
+@schedules_bp.route("/schedules/<schedule_id>", methods=["PATCH"])
+def update_toggle(schedule_id : str): 
+    try: 
+        data = request.get_json()
+        print(data)
+        print(schedule_id)
+
+        return update_data(schedule_id, data["enabled"])
+    except Exception as e: 
+        return jsonify({
+            "message": str(e), 
+            "success": False
+        })

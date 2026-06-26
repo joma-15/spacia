@@ -3,6 +3,7 @@
 from typing import Dict
 from extensions import db
 from models.schedules import Schedule
+from flask import jsonify
 
 def add_data(data: Dict[str, any]): 
     schedule = Schedule(
@@ -45,5 +46,22 @@ def get_data():
         for s in schedule_folders
     ]
 
+
+def update_data(schedule_id : str, enabled : bool): 
+    print("getting the app data")
+    schedule = Schedule.query.get(schedule_id)
+
+    if schedule is None: 
+        return jsonify({
+            "message": "cant update the toggle", 
+            "success" : False
+        })
     
-    
+    schedule.enabled = enabled
+    print("before commit")
+    db.session.commit()
+
+    return jsonify({
+        "message" : "update the enabled successfully", 
+        "success": True
+    })
