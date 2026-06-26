@@ -33,7 +33,6 @@ const BottomNav = ({
   insets,
 }: any) => {
   const { setAddModalVisible } = useAddFolder();
-  console.log("bottom nav was being rendered");
 
   return(
   <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
