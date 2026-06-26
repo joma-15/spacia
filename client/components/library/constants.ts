@@ -44,8 +44,8 @@ export const NAV_ITEMS: {
   { id: "profile", label: "Profile", emoji: "👤"           },
   { id: "streak",  label: "Streak",  emoji: "🔥"           },
   { id: "add",     label: "",        emoji: "+", isCenter: true },
-  { id: "popup",   label: "Library", emoji: "📂"           },
-  { id: "stats",   label: "Premium", emoji: "👑"           },
+  { id: "library",   label: "Library", emoji: "📂"           },
+  { id: "payment",   label: "Premium", emoji: "👑"           },
 ];
 
 

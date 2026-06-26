@@ -29,7 +29,6 @@ import SavingsCallout  from "../../components/payment/components/SavingsCallout"
 import FeatureDivider  from "../../components/payment/components/FeatureDivider";
 import PerkList        from "../../components/payment/components/PerkList";
 import CtaButton       from "../../components/payment/components/CtaButton";
-import BottomNav       from "../../components/payment/components/BottomNav";
 
 // ── Colors ────────────────────────────────────────────────────────────────────
 import { COLORS } from "../../components/payment/colors";
@@ -115,13 +114,6 @@ export default function PaymentScreen() {
         buttonSlide={buttonSlide}
         shimmerOpacity={shimmerOpacity}
         horizontalPadding={isTablet ? 40 : 20}
-      />
-
-      {/* ── Fixed bottom navigation bar ── */}
-      <BottomNav
-        activeTab={activeTab}
-        onTabPress={handleTabPress}
-        bottomInset={insets.bottom}
       />
     </SafeAreaView>
   );

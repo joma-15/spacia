@@ -34,12 +34,11 @@ import SectionHeader        from "../../components/library/components/SectionHea
 import FolderGrid           from "../../components/library/components/FolderGrid";
 import EmptyState           from "../../components/library/components/EmptyState";
 import PopupNavBanner       from "../../components/library/components/PopupNavBanner";
-import BottomNav            from "../../components/library/components/BottomNav";
 import AddFolderModal       from "../../components/library/components/AddFolderModal";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 import { THEME } from "../../components/library/theme";
-import type { NavTab } from "../../components/library/types";
+import { useAddFolder } from "../../context/AddFolderContext";
 
 // The nav bar is a fixed height — we need this to add padding below the scroll
 // content so the last item isn't hidden behind the bar.
@@ -65,8 +64,8 @@ export default function LibraryScreen() {
   // ── UI-only state (modal visibility, active tab) ──────────────────────────
   // These are kept here (not in the hook) because they're pure UI concerns
   // that don't affect any business data.
-  const [addModalVisible, setAddModalVisible] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<NavTab>("popup");
+
+  const { addModalVisible, setAddModalVisible } = useAddFolder();
 
   // ── Navigation handlers ───────────────────────────────────────────────────
 
@@ -74,12 +73,6 @@ export default function LibraryScreen() {
    * Called when the user taps any bottom-nav tab.
    * Some tabs navigate to a new screen; others just update the active state.
    */
-  const handleTabPress = (tab: NavTab): void => {
-    if (tab === "stats") {
-      router.push("/PaymentScreen");
-    }
-    setActiveTab(tab);
-  };
 
   /**
    * Called when the "Study reminders" banner is tapped.
@@ -137,14 +130,6 @@ export default function LibraryScreen() {
         {/* ── "Study reminders" nav banner ── */}
         <PopupNavBanner onPress={handleStudyRemindersPress} />
       </ScrollView>
-
-      {/* ── Fixed bottom navigation bar ── */}
-      <BottomNav
-        activeTab={activeTab}
-        onTabPress={handleTabPress}
-        bottomInset={insets.bottom}
-        onAddPress={() => setAddModalVisible(true)}
-      />
 
       {/* ── Add folder modal (sits above everything) ── */}
       <AddFolderModal
