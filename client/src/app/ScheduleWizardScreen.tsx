@@ -41,7 +41,7 @@ export default function ScheduleWizardScreen() {
     const schedule = wizard.buildSchedule();
 
     if (!schedule) return;
-    addSchedule(schedule);
+    // addSchedule(schedule);
     await wizard.handleSubmit();
 
     wizard.reset();

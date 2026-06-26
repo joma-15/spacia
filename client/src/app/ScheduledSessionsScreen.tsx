@@ -15,7 +15,7 @@ import {
 import ScheduleCard from "../../components/ScheduledCards/components/ScheduleCard";
 import InitialLoadingModal from "../../components/flashcards/components/InitialLoadingModal";
 export default function ScheduledSessionsScreen() {
-  const { schedules, toggleSchedule, deleteSchedule, duplicateSchedule, loading } =
+  const { schedules, toggleSchedule, deleteSchedule,  loading } =
     useSchedules();
   const insets = useSafeAreaInsets();
 
@@ -24,7 +24,8 @@ export default function ScheduledSessionsScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => router.push("/LibraryScreen" as any)}
+          // onPress={() => router.push("/(tabs)/libary" as any)}
+          onPress={() => router.navigate("/(tabs)/library")}
           hitSlop={8}
         >
           <Text style={styles.backIcon}>‹</Text>
@@ -59,7 +60,6 @@ export default function ScheduledSessionsScreen() {
               schedule={item}
               onToggle={toggleSchedule}
               onDelete={deleteSchedule}
-              onDuplicate={duplicateSchedule}
               onEdit={(id) =>
                 router.push({
                   pathname: "/ScheduleWizardScreen" as any,
