@@ -4,6 +4,7 @@ import type {
   Flashcard,
 } from "../../library/types";
 import type { SendSchedule, ScheduleType,DayOfWeek } from "../types";
+import { saveNewSchedules } from "@/database/scheduleRepository";
 
 const TOTAL_STEPS = 4;
 const BASE_URL = "http://192.168.8.40:5000";
@@ -22,6 +23,9 @@ const createSchedule = async (schedule: SendSchedule) => {
     if (!response.ok) {
       throw new Error("Failed to create schedule");
     }
+    const result = await response.json(); 
+    saveNewSchedules(result.data);
+    
     console.log("schedule set successfully");
   } catch (error) {
     console.error(error);
