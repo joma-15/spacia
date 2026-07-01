@@ -24,6 +24,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { sendTestNotification } from "../../services/NotificationService";
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 import { useLibrary } from "../../components/library/hooks/useLibrary";
@@ -135,7 +136,8 @@ export default function LibraryScreen() {
       <AddFolderModal
         visible={addModalVisible}
         onClose={() => setAddModalVisible(false)}
-        onAdd={addFolder}
+        // onAdd={addFolder}
+        onAdd={sendTestNotification}
       />
     </SafeAreaView>
   );

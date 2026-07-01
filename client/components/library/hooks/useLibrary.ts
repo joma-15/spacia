@@ -100,7 +100,7 @@ export function useLibrary() {
     accentColor: string,
   ): Promise<void> => {
     try {
-      const response = await fetch("http://192.168.8.40:5000/folders", {
+      const response = await fetch("http://192.168.8.33:5000/folders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -121,7 +121,7 @@ export function useLibrary() {
 
   const deleteFolder = async (id: string) => {
     try {
-      await fetch(`http://192.168.8.40:5000/folders/${id}`, {
+      await fetch(`http://192.168.8.33:5000/folders/${id}`, {
         method: "DELETE",
       });
 
