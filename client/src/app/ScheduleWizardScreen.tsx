@@ -30,7 +30,7 @@ export default function ScheduleWizardScreen() {
   } = useFolders();
   const insets = useSafeAreaInsets();
   const wizard = useScheduleWizard();
-  const { addSchedule } = useSchedules();
+  // const { addSchedule } = useSchedules();
 
   const { cards: cardsInFolder, loading: cardsLoading } = useFolderFlashcards(
     wizard.selectedFolder?.id ?? null,

@@ -1,14 +1,10 @@
 import { useState, useMemo } from "react";
-import type {
-  Folder,
-  Flashcard,
-} from "../../library/types";
-import type { SendSchedule, ScheduleType,DayOfWeek } from "../types";
+import type { Folder, Flashcard } from "../../library/types";
+import type { SendSchedule, ScheduleType, DayOfWeek } from "../types";
 import { saveNewSchedules } from "@/database/scheduleRepository";
 
 const TOTAL_STEPS = 4;
-const BASE_URL = "http://192.168.8.40:5000";
-
+const BASE_URL = "http://192.168.8.33:5000";
 
 const createSchedule = async (schedule: SendSchedule) => {
   try {
@@ -23,9 +19,15 @@ const createSchedule = async (schedule: SendSchedule) => {
     if (!response.ok) {
       throw new Error("Failed to create schedule");
     }
-    const result = await response.json(); 
+    const result = await response.json();
     saveNewSchedules(result.data);
-    
+
+    console.log("Backend response:", result);
+    console.log("Returned schedule:", result.data);
+    console.log("Returned ID:", result.data.id);
+
+    await saveNewSchedules(result.data);
+
     console.log("schedule set successfully");
   } catch (error) {
     console.error(error);
@@ -82,7 +84,7 @@ export function useScheduleWizard() {
   const buildSchedule = (): SendSchedule | null => {
     if (!selectedFolder) return null;
     return {
-      // id : "burat", 
+      // id : "burat",
       folderId: selectedFolder.id,
       folderName: selectedFolder.subject,
       cardIds: selectedCardIds,
@@ -98,12 +100,12 @@ export function useScheduleWizard() {
   };
 
   const handleSubmit = async () => {
-    const schedule = buildSchedule(); 
+    const schedule = buildSchedule();
 
-    if(schedule){
+    if (schedule) {
       await createSchedule(schedule);
     }
-  }
+  };
 
   const reset = (): void => {
     setStep(0);

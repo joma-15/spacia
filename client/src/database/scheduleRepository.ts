@@ -44,8 +44,7 @@ export async function loadLocalSchedule(): Promise<Schedule[]> {
 }
 
 // Saves only schedules that don't already exist locally
-export async function saveNewSchedules(schedules: Schedule[]): Promise<void> {
-  for (const schedule of schedules) {
+export async function saveNewSchedules(schedules: Schedule): Promise<void> {
     await db.runAsync(
       `
       INSERT OR IGNORE INTO schedules (
@@ -63,21 +62,21 @@ export async function saveNewSchedules(schedules: Schedule[]): Promise<void> {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
-        schedule.id,
-        schedule.folderId,
-        schedule.scheduleType,
-        schedule.customDays.length > 0
-          ? JSON.stringify(schedule.customDays)
+        schedules.id,
+        schedules.folderId,
+        schedules.scheduleType,
+        schedules.customDays.length > 0
+          ? JSON.stringify(schedules.customDays)
           : null,
-        schedule.time,
-        schedule.durationMinutes,
-        schedule.intervalMinutes,
-        schedule.shuffle,
-        schedule.enabled,
-        schedule.createdAt,
+        schedules.time,
+        schedules.durationMinutes,
+        schedules.intervalMinutes,
+        schedules.shuffle,
+        schedules.enabled,
+        schedules.createdAt,
       ],
     );
-  }
+  console.log(schedules);
 }
 
 // Deletes a schedule from the local SQLite database
@@ -86,5 +85,24 @@ export async function deleteLocalSchedule(id: string): Promise<void> {
     `DELETE FROM schedules WHERE id = ?`,
     [id]
   );
-  console.log("deleted the schedule");
+  console.log("deleted the schedule from local");
+}
+
+export async function resetSchedules(): Promise<void> {
+  await db.runAsync(`DELETE FROM schedules`);
+  console.log("All schedules deleted.");
+}
+
+//update the toggle 
+export async function updateLocalToggle(id : string, enabled : boolean): Promise<void>{
+  await db.runAsync(
+    `
+    UPDATE schedules
+    SET enabled =?
+    WHERE id = ?;
+    `, 
+    enabled, 
+    id
+  );
+  console.log("updage the toggle ");
 }

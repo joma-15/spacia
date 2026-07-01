@@ -4,26 +4,41 @@ from flask import Blueprint, request, jsonify
 schedules_bp = Blueprint("schedules", __name__)
 
 @schedules_bp.route("/schedules", methods=["POST"])
-def add_sched(): 
-    try: 
+def add_sched():
+    try:
         data = request.get_json()
 
-        if not data: 
+        if not data:
             return jsonify({
-                "success": False, 
+                "success": False,
                 "message": "cant post to the database"
-            }),400
+            }), 400
 
-        add_data(data)
+        schedule = add_data(data)
+
         return jsonify({
             "success": True,
-            "data" : data
+            "data": {
+                "id": schedule.id,
+                "folderId": schedule.folder_id,
+                "folderName": schedule.folder_name,
+                "cardIds": schedule.card_ids,
+                "scheduleType": schedule.schedule_type,
+                "customDays": schedule.custom_days,
+                "time": schedule.time,
+                "durationMinutes": schedule.duration_minutes,
+                "intervalMinutes": schedule.interval_minutes,
+                "shuffle": schedule.shuffle,
+                "enabled": schedule.enabled,
+                "createdAt": schedule.created_at
+            }
         })
-    except Exception as e: 
+
+    except Exception as e:
         return jsonify({
-            "message": str(e), 
-            "success": False
-        })
+            "success": False,
+            "message": str(e)
+        }), 500
     
 @schedules_bp.route("/schedules", methods=["GET"])
 def get_sched(): 
