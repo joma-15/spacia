@@ -1,4 +1,4 @@
-from services.schedule_service import add_data, get_data, update_data
+from services.schedule_service import add_data, get_data, update_data, delete_data
 from flask import Blueprint, request, jsonify
 
 schedules_bp = Blueprint("schedules", __name__)
@@ -55,5 +55,16 @@ def update_toggle(schedule_id : str):
     except Exception as e: 
         return jsonify({
             "message": str(e), 
+            "success": False
+        })
+    
+@schedules_bp.route("/schedules/<schedule_id>", methods=["DELETE"])
+def delete_schedule(schedule_id : str): 
+    try: 
+        return delete_data(schedule_id)
+
+    except Exception as e: 
+        return jsonify({
+            "message": "error deleting the data", 
             "success": False
         })

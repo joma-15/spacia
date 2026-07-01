@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Schedule } from "../types";
-import { loadLocalSchedule, saveNewSchedules } from "@/database/scheduleRepository";
+import { loadLocalSchedule, saveNewSchedules, deleteLocalSchedule } from "@/database/scheduleRepository";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-const BASE_URL = "http://192.168.8.40:5000";
+const BASE_URL = "http://192.168.8.33:5000";
 const FETCH_TIMEOUT_MS = 8000;
 
 // ─── Module-level cache (persists across unmount/remount) ─────────────────────
@@ -111,9 +111,35 @@ export function useSchedules() {
     }
   }, []);
 
+  const deleteSchedule = useCallback(async (id: string): Promise<void> => {
+  try {
+    const response = await fetch(`${BASE_URL}/schedules/${id}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete schedule (${response.status})`);
+    }
+
+    // 1. Delete from SQLite
+    await deleteLocalSchedule(id);
+
+    // 2. Update React state and cache
+    setSchedules((prev) => {
+      const updated = prev.filter((schedule) => schedule.id !== id);
+      scheduleCache = updated;
+      return updated;
+    });
+
+  } catch (error) {
+    console.error(error);
+  }
+}, []);
+
   return {
     schedules,
     loading,
+    deleteSchedule,
     error,
     toggleSchedule,
   };

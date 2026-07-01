@@ -14,7 +14,7 @@ import {
   updateFlashcardStatus,
 } from "../../../src/database/flashcardRepository";
 
-const BASE_URL = "http://192.168.8.40:5000";
+const BASE_URL = "http://192.168.8.33:5000";
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 15;
 

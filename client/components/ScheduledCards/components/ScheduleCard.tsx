@@ -21,7 +21,7 @@ interface Props {
 const scheduleLabel = (schedule: Schedule): string => {
   if (schedule.scheduleType === "one_time") return "One Time";
   if (schedule.scheduleType === "daily") return "Daily";
-  return schedule.customDays.join(", ") || "Custom";
+  return (schedule.customDays ?? []).join(", ") || "Custom";
 };
 
 const ScheduleCard: React.FC<Props> = ({

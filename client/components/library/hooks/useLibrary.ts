@@ -71,7 +71,7 @@ export function useLibrary() {
     try {
       setLoading(true);
 
-      const response = await fetch("http://192.168.8.40:5000/folders");
+      const response = await fetch("http://192.168.8.33:5000/folders");
 
       if (!response.ok) {
         throw new Error("failed to fetch folders");

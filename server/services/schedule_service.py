@@ -65,3 +65,20 @@ def update_data(schedule_id : str, enabled : bool):
         "message" : "update the enabled successfully", 
         "success": True
     })
+
+def delete_data(schedule_id : str): 
+    schedule = Schedule.query.get(schedule_id)
+
+    if schedule is None: 
+        return jsonify({
+            "message": "schedule does not exist", 
+            "success": False
+        })
+    
+    db.session.delete(schedule)
+    db.session.commit()
+
+    return jsonify({
+        "message" : "schedule deleted successfully",
+        "success" : True
+    })

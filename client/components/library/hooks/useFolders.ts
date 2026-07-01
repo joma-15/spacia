@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Folder } from "../types";
 
-const BASE_URL = "http://192.168.8.40:5000";
+const BASE_URL = "http://192.168.8.33:5000";
 
 interface RawFolder {
   id: number | string;
