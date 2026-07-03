@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Flashcard } from "../types";
 
-const BASE_URL = "http://192.168.8.33:5000";
+const BASE_URL = "http://192.168.8.39:5000";
 
 interface RawFlashcard {
   id: number | string;

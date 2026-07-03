@@ -81,6 +81,8 @@ export default function LibraryScreen() {
    * settings screen actually lives.
    */
   const handleStudyRemindersPress = (): void => {
+    // Ensure no shared modal state leaks across route transitions.
+    setAddModalVisible(false);
     router.push("/ScheduledSessionsScreen");
   };
 
@@ -136,8 +138,8 @@ export default function LibraryScreen() {
       <AddFolderModal
         visible={addModalVisible}
         onClose={() => setAddModalVisible(false)}
-        // onAdd={addFolder}
-        onAdd={sendTestNotification}
+        onAdd={addFolder}
+        // onAdd={sendTestNotification}
       />
     </SafeAreaView>
   );

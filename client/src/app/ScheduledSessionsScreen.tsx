@@ -24,8 +24,13 @@ export default function ScheduledSessionsScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          // onPress={() => router.push("/(tabs)/libary" as any)}
-          onPress={() => router.navigate("/(tabs)/library")}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+              return;
+            }
+            router.replace("/(tabs)/library");
+          }}
           hitSlop={8}
         >
           <Text style={styles.backIcon}>‹</Text>
