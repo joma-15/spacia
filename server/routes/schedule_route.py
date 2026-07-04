@@ -39,6 +39,7 @@ def add_sched():
             "success": False,
             "message": str(e)
         }), 500
+  
     
 @schedules_bp.route("/schedules", methods=["GET"])
 def get_sched(): 
@@ -73,6 +74,7 @@ def update_toggle(schedule_id : str):
             "success": False
         })
     
+
 @schedules_bp.route("/schedules/<schedule_id>", methods=["DELETE"])
 def delete_schedule(schedule_id : str): 
     try: 

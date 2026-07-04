@@ -25,18 +25,23 @@ export function initializeDatabase() {
       ON flashcards(folder_id);
 
     CREATE TABLE IF NOT EXISTS schedules (
-      id TEXT PRIMARY KEY,
-      folder_id TEXT NOT NULL,
-      schedule_type TEXT NOT NULL,
-      custom_days TEXT,
-      time TEXT NOT NULL,
-      duration_minutes INTEGER NOT NULL,
-      interval_minutes INTEGER NOT NULL,
-      shuffle INTEGER NOT NULL DEFAULT 1,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER,
-      sync_status TEXT NOT NULL DEFAULT 'pending_create'
-    );
+    id TEXT PRIMARY KEY,
+    folder_id TEXT NOT NULL,
+    schedule_type TEXT NOT NULL,
+    custom_days TEXT,
+    time TEXT NOT NULL,
+    duration_minutes INTEGER NOT NULL,
+    interval_minutes INTEGER NOT NULL,
+    shuffle INTEGER NOT NULL DEFAULT 1,
+    enabled INTEGER NOT NULL DEFAULT 1,
+
+    notification_id TEXT,
+
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER,
+    sync_status TEXT NOT NULL DEFAULT 'pending_create'
+  );
+
+  
   `);
 }

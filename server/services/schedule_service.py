@@ -25,6 +25,7 @@ def add_data(data: Dict[str, any]):
 
     return schedule
 
+
 def get_data():
     schedule_folders = Schedule.query.all()
 
@@ -65,6 +66,7 @@ def update_data(schedule_id : str, enabled : bool):
         "message" : "update the enabled successfully", 
         "success": True
     })
+
 
 def delete_data(schedule_id : str): 
     schedule = Schedule.query.get(schedule_id)

@@ -26,9 +26,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications",
       [
-        
+        "expo-notifications",
+        {
+          "sounds": ["./assets/sounds/alarm.wav"]
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",

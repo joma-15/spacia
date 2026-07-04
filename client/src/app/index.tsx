@@ -1,13 +1,14 @@
 import { Redirect } from "expo-router";
-import { initializeDatabase } from '../database/database';
 import { useEffect } from "react";
-import { requestNotificationPermission } from "../../services/NotificationService";
+import { initializeDatabase } from "../database/database";
+import { requestNotificationPermission, configureNotifications } from "../services/NotificationService";
 
 export default function Index() {
   useEffect(() => {
     initializeDatabase();
+    configureNotifications();
     requestNotificationPermission().catch(console.error);
-  },[]);
-  
+  }, []);
+
   return <Redirect href="/(tabs)/library" />;
 }

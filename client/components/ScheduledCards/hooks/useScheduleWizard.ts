@@ -4,7 +4,7 @@ import type { SendSchedule, ScheduleType, DayOfWeek } from "../types";
 import { saveNewSchedules } from "@/database/scheduleRepository";
 
 const TOTAL_STEPS = 4;
-const BASE_URL = "http://192.168.8.33:5000";
+const BASE_URL = "http://192.168.8.39:5000";
 
 const createSchedule = async (schedule: SendSchedule) => {
   try {

@@ -14,7 +14,7 @@
  * If you want to change the COLORS            → edit theme.ts.
  */
 
-import React, { useState } from "react";
+import { router } from "expo-router";
 import {
   Platform,
   SafeAreaView,
@@ -23,23 +23,23 @@ import {
   StyleSheet,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { sendTestNotification } from "../../services/NotificationService";
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 import { useLibrary } from "../../components/library/hooks/useLibrary";
 
 // ── Components ────────────────────────────────────────────────────────────────
-import GreetingSection      from "../../components/library/components/GreetingSection";
-import SectionHeader        from "../../components/library/components/SectionHeader";
-import FolderGrid           from "../../components/library/components/FolderGrid";
-import EmptyState           from "../../components/library/components/EmptyState";
-import PopupNavBanner       from "../../components/library/components/PopupNavBanner";
-import AddFolderModal       from "../../components/library/components/AddFolderModal";
+import AddFolderModal from "../../components/library/components/AddFolderModal";
+import EmptyState from "../../components/library/components/EmptyState";
+import FolderGrid from "../../components/library/components/FolderGrid";
+import GreetingSection from "../../components/library/components/GreetingSection";
+import PopupNavBanner from "../../components/library/components/PopupNavBanner";
+import SectionHeader from "../../components/library/components/SectionHeader";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 import { THEME } from "../../components/library/theme";
 import { useAddFolder } from "../../context/AddFolderContext";
+
+import { ScheduleNotification } from "@/services/NotificationService";
 
 // The nav bar is a fixed height — we need this to add padding below the scroll
 // content so the last item isn't hidden behind the bar.
@@ -119,10 +119,7 @@ export default function LibraryScreen() {
 
         {/* ── Folder grid OR empty state, depending on what we have ── */}
         {filteredFolders.length > 0 ? (
-          <FolderGrid
-            folders={filteredFolders}
-            onDelete={deleteFolder}
-          />
+          <FolderGrid folders={filteredFolders} onDelete={deleteFolder} />
         ) : (
           <EmptyState
             searchQuery={searchQuery}
@@ -138,8 +135,8 @@ export default function LibraryScreen() {
       <AddFolderModal
         visible={addModalVisible}
         onClose={() => setAddModalVisible(false)}
-        onAdd={addFolder}
-        // onAdd={sendTestNotification}
+        // onAdd={addFolder}
+        onAdd={ScheduleNotification}
       />
     </SafeAreaView>
   );
@@ -147,7 +144,7 @@ export default function LibraryScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: THEME.bg },
-  scroll:   { flex: 1 },
+  scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === "android" ? 20 : 8,

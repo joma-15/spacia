@@ -9,7 +9,7 @@ import {
 } from "@/database/scheduleRepository";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-const BASE_URL = "http://192.168.8.33:5000";
+const BASE_URL = "http://192.168.8.39:5000";
 const FETCH_TIMEOUT_MS = 8000;
 
 // ─── Module-level cache (persists across unmount/remount) ─────────────────────
@@ -40,115 +40,6 @@ export function useSchedules() {
   useEffect(() => {
     isMountedRef.current = true;
     const controller = new AbortController();
-
-    // const syncSchedules = async () => {
-    //   // ── Step 1: Load from SQLite and show immediately ──────────────────────
-    //   const localData = await loadLocalSchedule();
-
-    //   if (isMountedRef.current && localData.length > 0) {
-    //     setSchedules(localData);
-    //     scheduleCache = localData;
-    //   } else {
-    //     // No local data yet — show spinner while waiting for backend
-    //     setLoading(true);
-    //   }
-
-    //   // ── Step 2: Fetch from backend ─────────────────────────────────────────
-    //   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-    //   try {
-    //     const backendData = await fetchData(controller.signal);
-    //     clearTimeout(timeoutId);
-
-    //     // ── Step 3: Save only new schedules, then update UI ──────────────────
-    //     const localIds = new Set(localData.map((s) => s.id));
-    //     const newSchedules = backendData.filter((s) => !localIds.has(s.id));
-
-    //     if (newSchedules.length > 0) {
-    //       await saveNewSchedules(newSchedules);
-    //       const merged = [...localData, ...newSchedules];
-
-    //       if (isMountedRef.current) {
-    //         setSchedules(merged);
-    //         scheduleCache = merged;
-    //       }
-    //     }
-
-    //     if (isMountedRef.current) setError(null);
-    //   } catch (err) {
-    //     clearTimeout(timeoutId);
-
-    //     if (isMountedRef.current) {
-    //       const isTimeout = err instanceof Error && err.name === "AbortError";
-    //       setError(
-    //         isTimeout
-    //           ? "Request timed out — check your connection"
-    //           : "Could not load schedules"
-    //       );
-    //     }
-    //   } finally {
-    //     if (isMountedRef.current) setLoading(false);
-    //   }
-    // };
-
-    // syncSchedules();
-
-    // const syncSchedules = async () => {
-    //   // ── Step 1: Load from SQLite and show immediately ──────────────────────
-    //   const localData = await loadLocalSchedule();
-
-    //   if (isMountedRef.current && localData.length > 0) {
-    //     setSchedules(localData);
-    //     scheduleCache = localData;
-    //   } else {
-    //     // No local data yet — show spinner while waiting for backend
-    //     setLoading(true);
-    //   }
-
-    //   // ── Step 2: Fetch from backend ─────────────────────────────────────────
-    //   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-    //   try {
-    //     const backendData = await fetchData(controller.signal);
-    //     clearTimeout(timeoutId);
-
-    //     // ── Step 3: Save only schedules that don't exist locally ──────────────
-    //     const localIds = new Set(localData.map((s) => s.id));
-    //     const newSchedules = backendData.filter(
-    //       (schedule) => !localIds.has(schedule.id),
-    //     );
-
-    //     // Save each new schedule individually
-    //     for (const schedule of newSchedules) {
-    //       await saveNewSchedules(schedule);
-    //     }
-
-    //     // Merge local + newly downloaded schedules
-    //     const merged = [...localData, ...newSchedules];
-
-    //     if (isMountedRef.current) {
-    //       setSchedules(merged);
-    //       scheduleCache = merged;
-    //       setError(null);
-    //     }
-    //   } catch (err) {
-    //     clearTimeout(timeoutId);
-
-    //     if (isMountedRef.current) {
-    //       const isTimeout = err instanceof Error && err.name === "AbortError";
-
-    //       setError(
-    //         isTimeout
-    //           ? "Request timed out — check your connection"
-    //           : "Could not load schedules",
-    //       );
-    //     }
-    //   } finally {
-    //     if (isMountedRef.current) {
-    //       setLoading(false);
-    //     }
-    //   }
-    // };
 
     const syncSchedules = async () => {
       // Step 1
