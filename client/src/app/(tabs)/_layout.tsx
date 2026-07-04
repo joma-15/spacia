@@ -10,8 +10,8 @@ export default function TabsLayout() {
       >
         <Tabs.Screen name="library" />
         <Tabs.Screen name="payment" />
+        <Tabs.Screen name="streakcomingsoon"/>
         <Tabs.Screen name="comingsoon"/>
-        <Tabs.Screen name="profilecomingsoon"/>
       </Tabs>
   );
 }

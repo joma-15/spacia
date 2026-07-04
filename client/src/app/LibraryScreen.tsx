@@ -32,14 +32,12 @@ import AddFolderModal from "../../components/library/components/AddFolderModal";
 import EmptyState from "../../components/library/components/EmptyState";
 import FolderGrid from "../../components/library/components/FolderGrid";
 import GreetingSection from "../../components/library/components/GreetingSection";
-import PopupNavBanner from "../../components/library/components/PopupNavBanner";
 import SectionHeader from "../../components/library/components/SectionHeader";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 import { THEME } from "../../components/library/theme";
 import { useAddFolder } from "../../context/AddFolderContext";
 
-import { ScheduleNotification } from "@/services/NotificationService";
 
 // The nav bar is a fixed height — we need this to add padding below the scroll
 // content so the last item isn't hidden behind the bar.
@@ -80,11 +78,6 @@ export default function LibraryScreen() {
    * Adjust this route to wherever your scheduling/notification
    * settings screen actually lives.
    */
-  const handleStudyRemindersPress = (): void => {
-    // Ensure no shared modal state leaks across route transitions.
-    setAddModalVisible(false);
-    router.push("/ScheduledSessionsScreen");
-  };
 
   // ── Layout calculation ────────────────────────────────────────────────────
 
@@ -117,7 +110,7 @@ export default function LibraryScreen() {
         {/* ── "My Subjects" heading + folder count ── */}
         <SectionHeader count={filteredFolders.length} />
 
-        {/* ── Folder grid OR empty state, depending on what we have ── */}
+        {/* ── Folder grid OR empty state ── */}
         {filteredFolders.length > 0 ? (
           <FolderGrid folders={filteredFolders} onDelete={deleteFolder} />
         ) : (
@@ -126,17 +119,13 @@ export default function LibraryScreen() {
             onCreatePress={() => setAddModalVisible(true)}
           />
         )}
-
-        {/* ── "Study reminders" nav banner ── */}
-        <PopupNavBanner onPress={handleStudyRemindersPress} />
       </ScrollView>
 
       {/* ── Add folder modal (sits above everything) ── */}
       <AddFolderModal
         visible={addModalVisible}
         onClose={() => setAddModalVisible(false)}
-        // onAdd={addFolder}
-        onAdd={ScheduleNotification}
+        onAdd={addFolder}
       />
     </SafeAreaView>
   );
