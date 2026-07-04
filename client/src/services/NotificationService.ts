@@ -29,16 +29,6 @@ export async function requestNotificationPermission() {
 }
 
 
-export async function sendTestNotification() {
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "🎉 Test Notification",
-      body: "putang ina gumagana na!",
-    },
-    trigger: null,
-  });
-}
-
 import { router } from "expo-router";
 
 Notifications.addNotificationResponseReceivedListener((response) => {
