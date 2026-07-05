@@ -5,7 +5,7 @@
  * entirely to the useFlashCards hook.
  */
 
-import React, { useState } from "react";
+import React, { useCallback, useState, useTransition } from "react";
 import { View, Alert, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
@@ -25,15 +25,18 @@ import LoadingModal from "../../components/flashcards/components/LoadingModal";
 import InitialLoadingModal from "../../components/flashcards/components/InitialLoadingModal";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-import { COLORS } from "../../components/flashcards/constants";
+import { COLORS, TABS } from "../../components/flashcards/constants";
+import { TabType } from "../../components/flashcards/types";
 
 const CardScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const [, startTabTransition] = useTransition();
 
   // ── Modal visibility state (UI-only, not business logic) ──────────────────
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [deleteAllModalVisible, setDeleteAllModalVisible] = useState(false);
+  const [mountedTabs, setMountedTabs] = useState<Set<TabType>>(() => new Set(["all"]));
 
   // ── Get folder id ──────────────────────────────────────────────────────────
   const { folderId } = useLocalSearchParams<{ folderId: string }>();
@@ -46,7 +49,6 @@ const CardScreen: React.FC = () => {
     initialLoading,
     reviewCards,
     understoodCards,
-    displayedCards,
     progress,
     setActiveTab,
     handleUnderstand,
@@ -57,6 +59,25 @@ const CardScreen: React.FC = () => {
     handleDeleteAll,
     fetchAiCards,
   } = useFlashCards(folderId);
+
+  const tabCards: Record<TabType, typeof cards> = {
+    all: cards,
+    review: reviewCards,
+    understood: understoodCards,
+  };
+
+  const handleTabChange = useCallback(
+    (tab: TabType) => {
+      setMountedTabs((prev) => {
+        if (prev.has(tab)) return prev;
+        const next = new Set(prev);
+        next.add(tab);
+        return next;
+      });
+      startTabTransition(() => setActiveTab(tab));
+    },
+    [setActiveTab, startTabTransition],
+  );
 
   // ── AI button ──────────────────────────────────────────────────────────────
   const handleAiGenerate = () => {
@@ -98,16 +119,28 @@ const CardScreen: React.FC = () => {
       />
 
       {/* ── All | Review | Done filter ── */}
-      <TabRow activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabRow activeTab={activeTab} onTabChange={handleTabChange} />
 
       {/* ── Scrollable card list ── */}
-      <CardList
-        cards={displayedCards}
-        onUnderstand={handleUnderstand}
-        onMoveToReview={handleMoveToReview}
-        onDelete={handleDelete}
-        onEdit={handleEdit}
-      />
+      <View style={styles.listArea}>
+        {TABS.map(({ key }) =>
+          mountedTabs.has(key) ? (
+            <View
+              key={key}
+              style={[styles.tabPanel, activeTab !== key && styles.tabPanelHidden]}
+              pointerEvents={activeTab === key ? "auto" : "none"}
+            >
+              <CardList
+                cards={tabCards[key]}
+                onUnderstand={handleUnderstand}
+                onMoveToReview={handleMoveToReview}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+              />
+            </View>
+          ) : null,
+        )}
+      </View>
 
       {/* ── Modals ── */}
       <AddCardModal
@@ -139,5 +172,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
     paddingHorizontal: 16,
+  },
+  listArea: {
+    flex: 1,
+  },
+  tabPanel: {
+    flex: 1,
+  },
+  tabPanelHidden: {
+    display: "none",
   },
 });

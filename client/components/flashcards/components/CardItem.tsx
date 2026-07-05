@@ -4,7 +4,7 @@
  * status badge, and delete/understand/re-review controls.
  */
 
-import React, { useState } from "react";
+import React, { memo, useState } from "react";
 import {
   View,
   Text,
@@ -227,7 +227,7 @@ const CardViewContent: React.FC<CardViewContentProps> = ({
   </>
 );
 
-export default CardItem;
+export default memo(CardItem);
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@
  * Manages CRUD operations, tab filtering, and AI card fetching.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, InteractionManager } from "react-native";
 import { FlashCard, CardStatus, TabType } from "../types";
 import {
@@ -17,6 +17,7 @@ import {
 const BASE_URL = "http://192.168.8.39:5000";
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 15;
+const FETCH_TIMEOUT_MS = 8000;
 
 export function useFlashCards(folderId: string) {
   const [cards, setCards] = useState<FlashCard[]>([]);
@@ -44,50 +45,23 @@ export function useFlashCards(folderId: string) {
     status: (item.status as CardStatus) ?? "review",
   });
 
-  // ── Load existing cards on mount / folder change ───────────────────────────
-  useEffect(() => {
-    if (!folderId) return;
-
-    // Cancel anything still running for a previous folder.
-    abortRef.current?.abort();
-    clearPoll();
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    //show the modal 
-    setInitialLoading(true);
-
-    // The SQLite read is synchronous. Running it immediately on mount blocks
-    // the JS thread mid-navigation-transition, which is what causes the
-    // "tap a folder, screen feels delayed" lag. Deferring it until after the
-    // transition animation finishes makes the navigation feel instant, and
-    // the cards simply pop in a beat later.
-    const task = InteractionManager.runAfterInteractions(() => {
-      loadCachedCards();
-      loadSavedCards(controller.signal);
-    });
-
-    return () => {
-      task.cancel?.();
-      controller.abort();
-      clearPoll();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folderId]);
-
   // ── Derived state ──────────────────────────────────────────────────────────
 
-  const reviewCards = cards.filter((c) => c.status === "review");
-  const understoodCards = cards.filter((c) => c.status === "understood");
+  const reviewCards = useMemo(
+    () => cards.filter((c) => c.status === "review"),
+    [cards],
+  );
+  const understoodCards = useMemo(
+    () => cards.filter((c) => c.status === "understood"),
+    [cards],
+  );
   const progress = cards.length > 0 ? understoodCards.length / cards.length : 0;
 
-  const displayedCards =
-    activeTab === "all"
-      ? cards
-      : activeTab === "review"
-        ? reviewCards
-        : understoodCards;
+  const displayedCards = useMemo(() => {
+    if (activeTab === "all") return cards;
+    if (activeTab === "review") return reviewCards;
+    return understoodCards;
+  }, [activeTab, cards, reviewCards, understoodCards]);
 
   // ── Card mutations ─────────────────────────────────────────────────────────
 
@@ -145,6 +119,88 @@ export function useFlashCards(folderId: string) {
     [],
   );
 
+  /** Remove every card and reset the active tab */
+  // const handleDeleteAll = useCallback(() => {
+  //   setCards([]);
+  //   setActiveTab("all");
+  // }, []);
+
+  const handleDeleteAll = useCallback(async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/flashcards/folder/${folderId}`, {
+        method: "DELETE",
+      }); 
+
+      if (response.ok) {
+        setCards([]); 
+        setActiveTab("all");
+      }
+    } catch (error) {
+      console.log(error)
+    }
+  },[]);
+
+  // ── Loading ─────────────────────────────────────────────────────────────────
+
+  const loadCachedCards = useCallback((): boolean => {
+    try {
+      const cached = getFlashcardsByFolder(folderId);
+
+      const parsedCards: FlashCard[] = cached.map((card: any) => ({
+        id: card.id,
+        question: card.question,
+        answer: card.answer,
+        status: card.status,
+      }));
+
+      setCards(parsedCards);
+      return parsedCards.length > 0;
+    } catch (error) {
+      console.error("Failed to load cached cards:", error);
+      return false;
+    }
+  }, [folderId]);
+
+  /** Silently loads already-saved cards from DB on mount (no AI call) */
+  const loadSavedCards = useCallback(
+    async (signal?: AbortSignal) => {
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => timeoutController.abort(), FETCH_TIMEOUT_MS);
+
+      const onExternalAbort = () => timeoutController.abort();
+      signal?.addEventListener("abort", onExternalAbort);
+
+      try {
+        const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`, {
+          signal: timeoutController.signal,
+        });
+
+        const data = await response.json();
+        if (!response.ok || data.error) return;
+
+        const saved: FlashCard[] = data.map(mapApiCard);
+
+        setCards(saved);
+
+        // Skip the SQLite rewrite entirely if nothing actually changed —
+        // avoids a needless write on every folder open.
+        const idsSignature = saved.map((c) => `${c.id}:${c.status}`).join(",");
+        if (idsSignature !== lastSavedIdsRef.current) {
+          lastSavedIdsRef.current = idsSignature;
+          saveFlashcards(saved.map((card) => ({ ...card, folderId })));
+        }
+      } catch (error) {
+        if ((error as Error)?.name === "AbortError") return;
+        console.error("Error loading saved cards:", error);
+      } finally {
+        clearTimeout(timeoutId);
+        signal?.removeEventListener("abort", onExternalAbort);
+        setInitialLoading(false);
+      }
+    },
+    [folderId],
+  );
+
   const handleAddCard = useCallback(
     async (question: string, answer: string) => {
       try {
@@ -169,80 +225,46 @@ export function useFlashCards(folderId: string) {
         console.error("Add card failed:", error);
       }
     },
-    [folderId],
+    [folderId, loadSavedCards],
   );
 
-  /** Remove every card and reset the active tab */
-  // const handleDeleteAll = useCallback(() => {
-  //   setCards([]);
-  //   setActiveTab("all");
-  // }, []);
-
-  const handleDeleteAll = useCallback(async () => {
-    try {
-      const response = await fetch(`${BASE_URL}/flashcards/folder/${folderId}`, {
-        method: "DELETE",
-      }); 
-
-      if (response.ok) {
-        setCards([]); 
-        setActiveTab("all");
-      }
-    } catch (error) {
-      console.log(error)
+  // ── Load existing cards on mount / folder change ───────────────────────────
+  useEffect(() => {
+    if (!folderId) {
+      setInitialLoading(false);
+      return;
     }
-  },[]);
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
+    // Cancel anything still running for a previous folder.
+    abortRef.current?.abort();
+    clearPoll();
 
-  const loadCachedCards = useCallback(() => {
-    try {
-      const cached = getFlashcardsByFolder(folderId);
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-      const parsedCards: FlashCard[] = cached.map((card: any) => ({
-        id: card.id,
-        question: card.question,
-        answer: card.answer,
-        status: card.status,
-      }));
+    setInitialLoading(true);
 
-      setCards(parsedCards);
-    } catch (error) {
-      console.error("Failed to load cached cards:", error);
-    }
-  }, [folderId]);
-
-  /** Silently loads already-saved cards from DB on mount (no AI call) */
-  const loadSavedCards = useCallback(
-    async (signal?: AbortSignal) => {
-      try {
-        const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`, {
-          signal,
-        });
-
-        const data = await response.json();
-        if (!response.ok || data.error) return;
-
-        const saved: FlashCard[] = data.map(mapApiCard);
-
-        setCards(saved);
-
-        // Skip the SQLite rewrite entirely if nothing actually changed —
-        // avoids a needless write on every folder open.
-        const idsSignature = saved.map((c) => `${c.id}:${c.status}`).join(",");
-        if (idsSignature !== lastSavedIdsRef.current) {
-          lastSavedIdsRef.current = idsSignature;
-          await saveFlashcards(saved.map((card) => ({ ...card, folderId })));
-        }
-      } catch (error) {
-        if ((error as Error)?.name === "AbortError") return; // folder changed/unmounted, ignore
-        console.error("Error loading saved cards:", error);
-      } finally {
+    // The SQLite read is synchronous. Running it immediately on mount blocks
+    // the JS thread mid-navigation-transition, which is what causes the
+    // "tap a folder, screen feels delayed" lag. Deferring it until after the
+    // transition animation finishes makes the navigation feel instant, and
+    // the cards simply pop in a beat later.
+    const task = InteractionManager.runAfterInteractions(() => {
+      const hasCachedCards = loadCachedCards();
+      if (hasCachedCards) {
+        // Cached cards are on screen — don't block the UI on a slow network sync.
         setInitialLoading(false);
       }
-    },
-    [folderId],
-  );
+      void loadSavedCards(controller.signal);
+    });
+
+    return () => {
+      task.cancel?.();
+      controller.abort();
+      clearPoll();
+      setInitialLoading(false);
+    };
+  }, [folderId, clearPoll, loadCachedCards, loadSavedCards]);
 
   /** AI button: generates NEW cards via Groq and merges them in */
   const fetchAiCards = useCallback(async () => {
