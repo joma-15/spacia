@@ -41,8 +41,8 @@ export const NAV_ITEMS: {
   emoji: string;
   isCenter?: boolean;
 }[] = [
-  { id: "comingsoon", label: "Games", emoji: "🎮"           },
   { id: "streakcomingsoon",  label: "Streak",  emoji: "🔥"           },
+   { id: "comingsoon", label: "Games", emoji: "🎮"           },
   { id: "add",     label: "",        emoji: "+", isCenter: true },
   { id: "library",   label: "Library", emoji: "📂"           },
   { id: "payment",   label: "Premium", emoji: "👑"           },

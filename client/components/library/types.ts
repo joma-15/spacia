@@ -20,7 +20,7 @@ export interface Folder {
  * The five tabs in the bottom navigation bar.
  * Each string matches an item id in NAV_ITEMS inside constants.ts
  */
-export type NavTab = "comingsoon" | "streakcomingsoon" | "add" | "library" | "payment";
+export type NavTab = "streakcomingsoon" | "comingsoon" | "add" | "library" | "payment";
 
 
 
