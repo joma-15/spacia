@@ -37,7 +37,7 @@ def folder():
 @folders_bp.route("/folders/<folder_id>", methods=["DELETE"])
 def remove_folder(folder_id):
     try: 
-        delete_folder(folder_id)
+        return delete_folder(folder_id)
     except Exception as e: 
         return jsonify({
             "success": False, 
