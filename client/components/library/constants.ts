@@ -38,14 +38,14 @@ export const ACCENT_COLORS: { label: string; value: string }[] = [
 export const NAV_ITEMS: {
   id: NavTab;
   label: string;
-  emoji: string;
+  icon: string;
   isCenter?: boolean;
 }[] = [
-  { id: "streakcomingsoon",  label: "Streak",  emoji: "🔥"           },
-   { id: "game", label: "Games", emoji: "🎮"           },
-  { id: "add",     label: "",        emoji: "+", isCenter: true },
-  { id: "library",   label: "Library", emoji: "📂"           },
-  { id: "payment",   label: "Premium", emoji: "👑"           },
+  { id: "streakcomingsoon",  label: "Streak",  icon: "fire"           },
+   { id: "game", label: "Games", icon: "controller"           },
+  { id: "add",     label: "",        icon: "+", isCenter: true },
+  { id: "library",   label: "Library", icon: "folder"           },
+  { id: "payment",   label: "Premium", icon: "credit-card-outline"           },
 ];
 
 
