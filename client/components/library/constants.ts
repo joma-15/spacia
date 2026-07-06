@@ -35,15 +35,21 @@ export const ACCENT_COLORS: { label: string; value: string }[] = [
  * Defines every tab in the bottom navigation bar.
  * isCenter → renders the big "+" floating button instead of a normal tab
  */
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+
+type IconName = React.ComponentProps<
+  typeof MaterialCommunityIcons
+>["name"];
+
 export const NAV_ITEMS: {
   id: NavTab;
   label: string;
-  icon: string;
+  icon?: IconName;
   isCenter?: boolean;
 }[] = [
   { id: "streakcomingsoon",  label: "Streak",  icon: "fire"           },
    { id: "game", label: "Games", icon: "controller"           },
-  { id: "add",     label: "",        icon: "+", isCenter: true },
+  { id: "add",     label: "",      isCenter: true },
   { id: "library",   label: "Library", icon: "folder"           },
   { id: "payment",   label: "Premium", icon: "credit-card-outline"           },
 ];
