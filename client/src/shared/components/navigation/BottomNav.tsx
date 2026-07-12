@@ -12,9 +12,9 @@
  */
 
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { NAV_ITEMS } from "../library/constants";
-import { THEME } from "../library/theme";
-import { useAddFolder } from "../../context/AddFolderContext";
+import { NAV_ITEMS } from "@/features/library/constants";
+import { THEME } from "@/features/library/theme";
+import { useAddFolder } from "@/shared/context/AddFolderContext";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 // interface Props {

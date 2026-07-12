@@ -1,6 +1,6 @@
 import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { AddFolderProvider } from "../../context/AddFolderContext";
+import { AddFolderProvider } from "@/shared/context/AddFolderContext";
 
 export default function Layout() {
   return (

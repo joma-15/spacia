@@ -18,8 +18,8 @@ import {
   saveFolders,
   getFolders,
   deleteFolder as deleteFolderCache,
-} from "../../../src/database/folderRepository";
-import { BASE_URL } from "@/config/api";
+} from "@/shared/database/folderRepository";
+import { BASE_URL } from "@/shared/config/api";
 
 export function useLibrary() {
   // ── State ────────────────────────────────────────────────────────────────

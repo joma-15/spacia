@@ -12,9 +12,9 @@ import {
   getFlashcardsByFolder,
   deleteFlashcard,
   updateFlashcardStatus,
-} from "../../../src/database/flashcardRepository";
+} from "@/shared/database/flashcardRepository";
 
-import { BASE_URL } from "@/config/api";
+import { BASE_URL } from "@/shared/config/api";
 
 // const BASE_URL = "http://192.168.8.39:5000";
 const POLL_INTERVAL_MS = 2000;

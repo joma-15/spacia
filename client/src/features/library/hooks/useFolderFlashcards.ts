@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Flashcard } from "../types";
-import { BASE_URL } from "@/config/api";
+import { BASE_URL } from "@/shared/config/api";
 
 // const BASE_URL = "http://192.168.8.39:5000";
 

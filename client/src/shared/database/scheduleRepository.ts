@@ -1,5 +1,5 @@
 import { db } from "./database";
-import { Schedule } from "../../components/ScheduledCards/types";
+import { Schedule } from "@/features/schedules/types";
 
 // Returns all locally stored schedules
 export async function loadLocalSchedule(): Promise<Schedule[]> {

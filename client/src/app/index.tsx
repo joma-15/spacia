@@ -1,7 +1,10 @@
 import { Redirect } from "expo-router";
 import { useEffect } from "react";
-import { initializeDatabase } from "../database/database";
-import { requestNotificationPermission, configureNotifications } from "../services/NotificationService";
+import { initializeDatabase } from "@/shared/database/database";
+import {
+  configureNotifications,
+  requestNotificationPermission,
+} from "@/shared/services/NotificationService";
 
 export default function Index() {
   useEffect(() => {

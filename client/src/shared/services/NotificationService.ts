@@ -35,7 +35,7 @@ Notifications.addNotificationResponseReceivedListener((response) => {
   const data = response.notification.request.content.data;
 
   router.push({
-    pathname: "/FlashcardScreen",
+    pathname: "/CardScreen",
   });
 });
 

@@ -45,6 +45,7 @@ export const NAV_ITEMS: {
   id: NavTab;
   label: string;
   icon?: IconName;
+  emoji?: string;
   isCenter?: boolean;
 }[] = [
   { id: "streakcomingsoon",  label: "Streak",  icon: "fire"           },
