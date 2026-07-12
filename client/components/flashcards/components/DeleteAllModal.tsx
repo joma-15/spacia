@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface Props {
   visible: boolean;
@@ -32,7 +33,13 @@ const DeleteAllModal: React.FC<Props> = ({ visible, cardCount, onClose, onConfir
 
           {/* ── Icon ── */}
           <View style={styles.iconCircle}>
-            <Text style={styles.iconEmoji}>🗑️</Text>
+            {/* <Text style={styles.iconEmoji}>🗑️</Text> */}
+            <MaterialCommunityIcons
+            name="trash-can"
+            size={22}
+            color="white"
+            style={styles.iconEmoji}
+            />
           </View>
 
           <Text style={styles.title}>Delete All Cards?</Text>

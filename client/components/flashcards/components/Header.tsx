@@ -12,6 +12,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { COLORS } from "../constants";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface Props {
   title: string;
@@ -52,7 +53,12 @@ const Header: React.FC<Props> = ({
     <View style={styles.actions}>
       {hasCards && (
         <TouchableOpacity style={styles.deleteChip} onPress={onDeleteAll} activeOpacity={0.75}>
-          <Text style={styles.deleteChipText}>🗑 Clear</Text>
+          <Text style={styles.deleteChipText}><MaterialCommunityIcons
+          name="trash-can"
+          size={15}
+          color="gray"
+          />
+          Clear</Text>
         </TouchableOpacity>
       )}
 
