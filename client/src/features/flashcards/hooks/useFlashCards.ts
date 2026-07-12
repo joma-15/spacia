@@ -32,6 +32,7 @@ export function useFlashCards(folderId: string) {
   const abortRef = useRef<AbortController | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSavedIdsRef = useRef<string>("");
+  const isMountedRef = useRef(false);
 
   const clearPoll = useCallback(() => {
     if (pollRef.current) {
@@ -182,6 +183,7 @@ export function useFlashCards(folderId: string) {
 
         const saved: FlashCard[] = data.map(mapApiCard);
 
+        if (!isMountedRef.current) return;
         setCards(saved);
 
         // Skip the SQLite rewrite entirely if nothing actually changed —
@@ -197,7 +199,9 @@ export function useFlashCards(folderId: string) {
       } finally {
         clearTimeout(timeoutId);
         signal?.removeEventListener("abort", onExternalAbort);
-        setInitialLoading(false);
+        if (isMountedRef.current) {
+          setInitialLoading(false);
+        }
       }
     },
     [folderId],
@@ -232,9 +236,13 @@ export function useFlashCards(folderId: string) {
 
   // ── Load existing cards on mount / folder change ───────────────────────────
   useEffect(() => {
+    isMountedRef.current = true;
+
     if (!folderId) {
       setInitialLoading(false);
-      return;
+      return () => {
+        isMountedRef.current = false;
+      };
     }
 
     // Cancel anything still running for a previous folder.
@@ -252,6 +260,8 @@ export function useFlashCards(folderId: string) {
     // transition animation finishes makes the navigation feel instant, and
     // the cards simply pop in a beat later.
     const task = InteractionManager.runAfterInteractions(() => {
+      if (!isMountedRef.current || controller.signal.aborted) return;
+
       const hasCachedCards = loadCachedCards();
       if (hasCachedCards) {
         // Cached cards are on screen — don't block the UI on a slow network sync.
@@ -261,20 +271,24 @@ export function useFlashCards(folderId: string) {
     });
 
     return () => {
+      isMountedRef.current = false;
       task.cancel?.();
       controller.abort();
       clearPoll();
-      setInitialLoading(false);
     };
   }, [folderId, clearPoll, loadCachedCards, loadSavedCards]);
 
   /** AI button: generates NEW cards via Groq and merges them in */
   const fetchAiCards = useCallback(async () => {
+    if (!folderId || !isMountedRef.current) return;
+
     setLoading(true);
     clearPoll();
 
     try {
       await fetch(`${BASE_URL}/flashcards/${folderId}`);
+
+      if (!isMountedRef.current) return;
 
       let attempts = 0;
 
@@ -287,6 +301,11 @@ export function useFlashCards(folderId: string) {
 
           if (Array.isArray(data) && data.length > 0) {
             const newCards = data.map(mapApiCard);
+
+            if (!isMountedRef.current) {
+              clearPoll();
+              return;
+            }
 
             setCards((prev) => {
               const existingIds = new Set(prev.map((c) => c.id));
@@ -301,19 +320,23 @@ export function useFlashCards(folderId: string) {
 
           if (attempts >= MAX_POLL_ATTEMPTS) {
             clearPoll();
-            setLoading(false);
-            Alert.alert("Timeout", "Generation is taking too long, try again.");
+            if (isMountedRef.current) {
+              setLoading(false);
+              Alert.alert("Timeout", "Generation is taking too long, try again.");
+            }
           }
         } catch (pollError) {
           console.error("Poll error:", pollError);
           clearPoll();
-          setLoading(false);
+          if (isMountedRef.current) setLoading(false);
         }
       }, POLL_INTERVAL_MS);
     } catch (error) {
       console.error("Trigger error:", error);
-      Alert.alert("Error", "Failed to generate flashcards.");
-      setLoading(false);
+      if (isMountedRef.current) {
+        Alert.alert("Error", "Failed to generate flashcards.");
+        setLoading(false);
+      }
     }
   }, [folderId, clearPoll]);
 

@@ -1,46 +1,32 @@
-from flask import Blueprint, request, jsonify
-from services.folder_service import save_folder_to_db, get_folder_data,delete_folder
+"""HTTP controllers for folders."""
+
+from flask import Blueprint, jsonify, request
+from flask.views import MethodView
+
+from services.folder_service import FolderService
+from validation import require_fields, require_json_object
 
 folders_bp = Blueprint("folders", __name__)
-
-@folders_bp.route("/folders", methods=["POST", "GET"])
-def folder(): 
-    if request.method == "POST": 
-        data = request.get_json()
-
-        subject = data["subject"]
-        accent_color = data["accentColor"]
-
-        folder= save_folder_to_db(subject, accent_color)
-
-        return jsonify({
-            "folder": folder.id,
-            "cardCount": 0
-        }), 201
-    
-    elif request.method == "GET": 
-        try:
-            folders = get_folder_data() 
-            print(folders)
-
-            return jsonify({
-                "response": folders,
-                "cardCount": 0
-            })
-        except Exception as e :
-            return jsonify({
-                "success": False, 
-                "error": "cannot fetch data"
-            }), 500 
+folder_service = FolderService()
 
 
-@folders_bp.route("/folders/<folder_id>", methods=["DELETE"])
-def remove_folder(folder_id):
-    try: 
-        return delete_folder(folder_id)
-    except Exception as e: 
-        return jsonify({
-            "success": False, 
-            "error": str(e)
-        }) 
+class FolderCollectionAPI(MethodView):
+    def get(self):
+        folders = [folder.to_dict() for folder in folder_service.list_all()]
+        return jsonify({"response": folders, "cardCount": 0})
 
+    def post(self):
+        data = require_json_object(request.get_json(silent=True))
+        require_fields(data, "subject", "accentColor")
+        folder = folder_service.create(data["subject"], data["accentColor"])
+        return jsonify({"folder": folder.id, "cardCount": 0}), 201
+
+
+class FolderItemAPI(MethodView):
+    def delete(self, folder_id: str):
+        folder_service.delete(folder_id)
+        return jsonify({"message": "Folder deleted successfully."})
+
+
+folders_bp.add_url_rule("/folders", view_func=FolderCollectionAPI.as_view("folder_collection"))
+folders_bp.add_url_rule("/folders/<string:folder_id>", view_func=FolderItemAPI.as_view("folder_item"))

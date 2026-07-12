@@ -1,115 +1,52 @@
-import fitz  # PyMuPDF
-from docx import Document
-import os
+"""Text extraction and chunking for supported study documents."""
+
 import re
+from pathlib import Path
+
+import fitz
+from docx import Document
 
 
-# =========================
-# 1. CLEAN TEXT
-# =========================
-def clean_text(text):
-    # remove extra spaces/newlines
-    text = re.sub(r'\s+', ' ', text)
+class DocumentTextExtractor:
+    """Converts a PDF or DOCX file into chunks suitable for an LLM prompt."""
 
-    # remove common PDF noise
-    noise_patterns = [
-        "Property of STI",
-        "student.feedback@sti.edu",
-    ]
+    NOISE_PATTERNS = ("Property of STI", "student.feedback@sti.edu")
 
-    for pattern in noise_patterns:
-        text = text.replace(pattern, "")
+    def extract_chunks(self, file_path: str, max_chars: int = 1500) -> list[str]:
+        path = Path(file_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"Source document does not exist: {path}")
 
-    return text.strip()
+        text = self._extract_text(path)
+        return self._chunk(self._clean(text), max_chars)
 
+    def _extract_text(self, path: Path) -> str:
+        if path.suffix.lower() == ".pdf":
+            with fitz.open(path) as document:
+                return "\n".join(page.get_text("text") for page in document)
+        if path.suffix.lower() == ".docx":
+            document = Document(path)
+            return "\n".join(paragraph.text for paragraph in document.paragraphs if paragraph.text.strip())
+        raise ValueError("Unsupported file format. Use PDF or DOCX.")
 
-# =========================
-# 2. SMART CHUNKING
-# =========================
-def smart_chunk(text, max_chars=1500):
-    sentences = re.split(r'(?<=[.!?]) +', text)
+    def _clean(self, text: str) -> str:
+        cleaned = re.sub(r"\s+", " ", text)
+        for pattern in self.NOISE_PATTERNS:
+            cleaned = cleaned.replace(pattern, "")
+        return cleaned.strip()
 
-    chunks = []
-    current = ""
+    @staticmethod
+    def _chunk(text: str, max_chars: int) -> list[str]:
+        sentences = re.split(r"(?<=[.!?]) +", text)
+        chunks: list[str] = []
+        current_chunk = ""
 
-    for sentence in sentences:
-        if len(current) + len(sentence) < max_chars:
-            current += sentence + " "
-        else:
-            chunks.append(current.strip())
-            current = sentence + " "
+        for sentence in sentences:
+            if len(current_chunk) + len(sentence) + 1 > max_chars and current_chunk:
+                chunks.append(current_chunk.strip())
+                current_chunk = ""
+            current_chunk += f"{sentence} "
 
-    if current:
-        chunks.append(current.strip())
-
-    return chunks
-
-
-# =========================
-# 3. PDF EXTRACTION (BETTER)
-# =========================
-def extract_text_from_pdf(file_path):
-    doc = fitz.open(file_path)
-    text = ""
-
-    for page in doc:
-        page_text = page.get_text("text")
-        if page_text:
-            text += page_text + "\n"
-
-    return clean_text(text)
-
-
-# =========================
-# 4. DOCX EXTRACTION
-# =========================
-def extract_text_from_docx(file_path):
-    doc = Document(file_path)
-
-    text = [
-        p.text
-        for p in doc.paragraphs
-        if p.text.strip()
-    ]
-
-    return clean_text("\n".join(text))
-
-
-# =========================
-# 5. UNIVERSAL CONVERTER
-# =========================
-def convert_file_to_text(file_path):
-    ext = os.path.splitext(file_path)[1].lower()
-
-    if ext == ".pdf":
-        return extract_text_from_pdf(file_path)
-
-    elif ext == ".docx":
-        return extract_text_from_docx(file_path)
-
-    else:
-        raise ValueError("Unsupported file format")
-
-
-# =========================
-# 6. FULL PIPELINE
-# =========================
-def process_file(file_path):
-    text = convert_file_to_text(file_path)
-    chunks = smart_chunk(text, 1500)
-    return chunks
-
-
-# =========================
-# 7. TEST RUN
-# =========================
-# if __name__ == "__main__":
-#     # file_path = r"D:\download\tite.pdf"
-
-    # print("TOTAL CHUNKS:", len(chunks))
-    # print("\nFIRST CHUNK:\n")
-    # print(chunks[0])
-
-    # for chunk in enumerate(chunks):
-    #     print(f"\n--- CHUNK {chunk} ---\n")
-    #     print(chunk)
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+        return chunks

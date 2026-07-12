@@ -17,3 +17,4 @@ class Config:
     )
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    FLASHCARD_SOURCE_FILE = os.getenv("FLASHCARD_SOURCE_FILE")

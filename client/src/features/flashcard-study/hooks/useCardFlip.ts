@@ -9,7 +9,7 @@
  * Splitting them means each hook stays focused and easy to follow.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Animated, Easing } from "react-native";
 
 export function useCardFlip() {
@@ -28,6 +28,11 @@ export function useCardFlip() {
 
   /** Drives the rotateY animation — 0 = front facing, 180 = back facing */
   const flipAnim = useRef(new Animated.Value(0)).current;
+  const faceSwapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (faceSwapTimeoutRef.current) clearTimeout(faceSwapTimeoutRef.current);
+  }, []);
 
   // ── Interpolated rotation values for each face ─────────────────────────────
 
@@ -60,11 +65,16 @@ export function useCardFlip() {
     // Wait until the card is halfway rotated (90deg) before swapping
     // which face receives touches — this matches when the visible
     // face actually changes from the user's perspective.
-    setTimeout(() => setShowBack(flippingToBack), 210);
+    if (faceSwapTimeoutRef.current) clearTimeout(faceSwapTimeoutRef.current);
+    faceSwapTimeoutRef.current = setTimeout(() => {
+      setShowBack(flippingToBack);
+      faceSwapTimeoutRef.current = null;
+    }, 210);
   };
 
   /** Reset the flip state — called when moving to a new card */
   const resetFlip = (): void => {
+    if (faceSwapTimeoutRef.current) clearTimeout(faceSwapTimeoutRef.current);
     setIsFlipped(false);
     setShowBack(false);
     flipAnim.setValue(0);

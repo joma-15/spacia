@@ -1,128 +1,72 @@
-from groq import Groq
-from dotenv import load_dotenv
-from services.pdf_service import process_file
-from models.flashcard import Flashcard
-from extensions import db
+"""AI-assisted flashcard generation."""
+
 import json
 import os
 
-load_dotenv()
+from groq import Groq
 
-client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
-)
-
-MODEL = "llama-3.1-8b-instant"
+from services.flashcard_services import FlashcardService
+from services.pdf_service import DocumentTextExtractor
 
 
-# ----------------------------
-# PDF Processing
-# ----------------------------
-def get_pdf_chunks(file_path: str):
-    return process_file(file_path)
+class AiFlashcardService:
+    MODEL = "llama-3.1-8b-instant"
 
+    def __init__(
+        self,
+        flashcard_service: FlashcardService,
+        document_extractor: DocumentTextExtractor | None = None,
+        client: Groq | None = None,
+    ):
+        self._flashcard_service = flashcard_service
+        self._document_extractor = document_extractor or DocumentTextExtractor()
+        self._client = client
 
-# ----------------------------
-# AI Generation
-# ----------------------------
-def generate_ai_flashcards(chunks: str):
-    prompt = f"""
-You are a flashcard generator.
+    def generate_from_file(self, folder_id: str, file_path: str) -> list:
+        chunks = self._document_extractor.extract_chunks(file_path)
+        raw_response = self._generate_response("\n\n".join(chunks))
+        cards = self._parse_cards(raw_response)
+        return self._flashcard_service.save_generated_cards(folder_id, cards)
 
-Generate exactly 10 flashcards in VALID JSON format.
+    def _generate_response(self, content: str) -> str:
+        client = self._get_client()
+        response = client.chat.completions.create(
+            model=self.MODEL,
+            messages=[{"role": "user", "content": self._build_prompt(content)}],
+        )
+        print(response)
+        return response.choices[0].message.content or ""
 
-Each flashcard must contain:
-- question: clue-based description (NOT direct question)
-- answer: short correct term
-- status: "review"
-
-Return ONLY a raw JSON array. 
-No markdown, no code fences, no explanation. Just the JSON array.
+    @staticmethod
+    def _build_prompt(content: str) -> str:
+        return f"""Generate exactly 10 flashcards as a raw JSON array.
+Each item must contain a clue-based question, a short answer, and status \"review\".
+Return JSON only—no markdown or explanation.
 
 CONTENT:
-{chunks}
-"""
+{content}"""
 
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    return response.choices[0].message.content
-
-
-# ----------------------------
-# JSON Parsing
-# ----------------------------
-# flashcard_service.py
-def parse_flashcards(raw_response: str):
-    try:
-        # Strip markdown code fences if present
+    @staticmethod
+    def _parse_cards(raw_response: str) -> list[dict]:
         cleaned = raw_response.strip()
         if cleaned.startswith("```"):
-            cleaned = cleaned.split("```")[1]  # get content between fences
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:]          # remove the "json" language tag
-            cleaned = cleaned.strip()
+            cleaned = cleaned.strip("`").removeprefix("json").strip()
 
-        return json.loads(cleaned)
+        try:
+            cards = json.loads(cleaned)
+        except json.JSONDecodeError as error:
+            raise ValueError("AI returned invalid JSON.") from error
 
-    except json.JSONDecodeError as e:
-        print("Raw AI response:", raw_response)  # 👈 see exactly what Groq returned
-        raise ValueError(f"AI returned invalid JSON: {e}")
+        if not isinstance(cards, list) or not cards:
+            raise ValueError("AI response must contain a non-empty JSON array.")
+        if any(not isinstance(card, dict) or not card.get("question") or not card.get("answer") for card in cards):
+            raise ValueError("Each generated card requires a question and answer.")
+        return cards
 
-# ----------------------------
-# Database Saving
-# ----------------------------
-def save_flashcards(cards: list, folder_id: str):
-    try:
-        objects = []
-
-        for card in cards:
-            flashcard = Flashcard(
-                question=card["question"],
-                answer=card["answer"],
-                status=card.get("status", "review"),
-                folder_id=folder_id
-            )
-            objects.append(flashcard)
-
-        db.session.add_all(objects)
-        db.session.commit()
-
-    except Exception as e:
-        db.session.rollback()
-        raise RuntimeError(f"Database error: {str(e)}")
-
-
-# ----------------------------
-# DB Fetch
-# ----------------------------
-def get_flashcards_by_folder(folder_id: str):
-    try:
-        return Flashcard.query.filter_by(folder_id=folder_id).all()
-
-    except Exception as e:
-        print("Fetch error:", e)
-        return []
-
-
-# ----------------------------
-# MAIN PIPELINE
-# ----------------------------
-def generate_flashcards(folder_id : str,file_path: str):
-    try:
-        chunks = get_pdf_chunks(file_path)
-
-        raw_response = generate_ai_flashcards(chunks)
-
-        cards = parse_flashcards(raw_response)
-
-        save_flashcards(cards, folder_id)
-
-        return get_flashcards_by_folder(folder_id)
-
-    except Exception as e:
-        print("Flashcard generation failed:", e)
-        return None
-    
+    def _get_client(self) -> Groq:
+        if self._client is None:
+            api_key = os.getenv("GROQ_API_KEY")
+            if not api_key:
+                raise RuntimeError("GROQ_API_KEY is not configured.")
+            self._client = Groq(api_key=api_key)
+        return self._client

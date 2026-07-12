@@ -5,7 +5,7 @@
  * entirely to the useFlashCards hook.
  */
 
-import React, { useCallback, useState, useTransition } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Alert, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
@@ -30,12 +30,12 @@ import { TabType } from "../types";
 
 const CardScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const [, startTabTransition] = useTransition();
 
   // ── Modal visibility state (UI-only, not business logic) ──────────────────
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [deleteAllModalVisible, setDeleteAllModalVisible] = useState(false);
+  const [tabLoading, setTabLoading] = useState(false);
   const [mountedTabs, setMountedTabs] = useState<Set<TabType>>(() => new Set(["all"]));
 
   // ── Get folder id ──────────────────────────────────────────────────────────
@@ -68,15 +68,29 @@ const CardScreen: React.FC = () => {
 
   const handleTabChange = useCallback(
     (tab: TabType) => {
-      setMountedTabs((prev) => {
-        if (prev.has(tab)) return prev;
-        const next = new Set(prev);
-        next.add(tab);
-        return next;
+      if (tab === activeTab) return;
+
+      if (mountedTabs.has(tab)) {
+        setActiveTab(tab);
+        return;
+      }
+
+      // Let the existing loading modal paint before mounting this tab's list.
+      // This avoids the first visit to a large Review/Done list feeling like a
+      // frozen tab press.
+      setTabLoading(true);
+      requestAnimationFrame(() => {
+        setMountedTabs((prev) => {
+          const next = new Set(prev);
+          next.add(tab);
+          return next;
+        });
+        setActiveTab(tab);
+
+        requestAnimationFrame(() => setTabLoading(false));
       });
-      startTabTransition(() => setActiveTab(tab));
     },
-    [setActiveTab, startTabTransition],
+    [activeTab, mountedTabs, setActiveTab],
   );
 
   // ── AI button ──────────────────────────────────────────────────────────────
@@ -153,7 +167,7 @@ const CardScreen: React.FC = () => {
         onClose={() => setPremiumModalVisible(false)}
         onUpgrade={handleUpgrade}
       />
-      <InitialLoadingModal visible={initialLoading}/>
+      <InitialLoadingModal visible={initialLoading || tabLoading}/>
       <LoadingModal visible={loading} />
       <DeleteAllModal
         visible={deleteAllModalVisible}

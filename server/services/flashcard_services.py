@@ -1,52 +1,70 @@
+"""Business operations for manually managed flashcards."""
+
 from extensions import db
+from errors import NotFoundError
 from models.flashcard import Flashcard
-from flask import jsonify
 
 
-def add_flashcard(question : str, answer : str, status : str, folder_id : str):
-    print("add function was being triggred")
-    try: 
+class FlashcardService:
+    VALID_STATUSES = {"review", "understood"}
+
+    def create(self, folder_id: str, question: str, answer: str, status: str) -> Flashcard:
+        self._validate_status(status)
         flashcard = Flashcard(
-            question=question, 
-            answer=answer, 
+            folder_id=folder_id,
+            question=question.strip(),
+            answer=answer.strip(),
             status=status,
-            folder_id=folder_id 
         )
         db.session.add(flashcard)
         db.session.commit()
+        return flashcard
 
-    except Exception as e: 
-        db.session.rollback()
-        raise RuntimeError("Error:", str(e))
-    
-def delete_flashcard(flashcard_id : str): 
-    print("delete function was being triggred")
-    flashcard = Flashcard.query.get(flashcard_id)
+    def list_for_folder(self, folder_id: str) -> list[Flashcard]:
+        return Flashcard.query.filter_by(folder_id=folder_id).order_by(Flashcard.created_at).all()
 
-    if flashcard is None: 
-        return {"error" : "flashcard not found!"}
-    
-    db.session.delete(flashcard)
-    db.session.commit()
+    def update_status(self, flashcard_id: str, status: str) -> Flashcard:
+        self._validate_status(status)
+        flashcard = self._get_or_raise(flashcard_id)
+        flashcard.status = status
+        db.session.commit()
+        return flashcard
 
-    return {"message" : "flashcard deleted successfully"}, 200
+    def delete(self, flashcard_id: str) -> None:
+        db.session.delete(self._get_or_raise(flashcard_id))
+        db.session.commit()
 
-def delete_all(folder_id : str): 
-    deleted_count = Flashcard.query.filter_by(folder_id=folder_id).delete()
-    print("deleted rows:", deleted_count)
-    db.session.commit()
+    def delete_for_folder(self, folder_id: str) -> int:
+        deleted_count = Flashcard.query.filter_by(folder_id=folder_id).delete()
+        db.session.commit()
+        return deleted_count
 
-    return {"message" : "deleted all successfully"}
+    def save_generated_cards(self, folder_id: str, cards: list[dict]) -> list[Flashcard]:
+        flashcards = [
+            Flashcard(
+                folder_id=folder_id,
+                question=card["question"].strip(),
+                answer=card["answer"].strip(),
+                status=card.get("status", "review"),
+            )
+            for card in cards
+        ]
+        for flashcard in flashcards:
+            self._validate_status(flashcard.status)
 
+        db.session.add_all(flashcards)
+        db.session.commit()
+        return flashcards
 
-def update_flashcard_status(flashcard_id : str, status): 
-   flashcard = Flashcard.query.get(flashcard_id)
+    @staticmethod
+    def _validate_status(status: str) -> None:
+        if status not in FlashcardService.VALID_STATUSES:
+            allowed = ", ".join(sorted(FlashcardService.VALID_STATUSES))
+            raise ValueError(f"Status must be one of: {allowed}.")
 
-   if flashcard is None: 
-       return jsonify({"error" : "flashcard not found"}), 404
-   
-   flashcard.status = status
-   db.session.commit()
-
-   return jsonify({"message" : "updated successfully"})
-
+    @staticmethod
+    def _get_or_raise(flashcard_id: str) -> Flashcard:
+        flashcard = db.session.get(Flashcard, flashcard_id)
+        if flashcard is None:
+            raise NotFoundError("Flashcard")
+        return flashcard

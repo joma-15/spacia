@@ -12,7 +12,7 @@
  * This makes both files much shorter and easier to test.
  */
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Folder } from "../types";
 import {
   saveFolders,
@@ -22,6 +22,7 @@ import {
 import { BASE_URL } from "@/shared/config/api";
 
 export function useLibrary() {
+  const isMountedRef = useRef(false);
   // ── State ────────────────────────────────────────────────────────────────
 
   /** The master list of all subject folders */
@@ -49,7 +50,7 @@ export function useLibrary() {
 
   // ── Folder actions ────────────────────────────────────────────────────────
   //load cache folders
-  const loadCachedFolders = () => {
+  const loadCachedFolders = useCallback(() => {
     try {
       const cachedFolders = getFolders();
 
@@ -60,17 +61,17 @@ export function useLibrary() {
         accentColor: folder.accent_color,
       }));
 
-      setFolders(parsedFolders);
+      if (isMountedRef.current) setFolders(parsedFolders);
 
       console.log("Loaded folders from SQLite");
     } catch (error) {
       console.error("SQLite load error:", error);
     }
-  };
+  }, []);
   //for fetching current folder data to database
-  const fetchFolder = async () => {
+  const fetchFolder = useCallback(async () => {
     try {
-      setLoading(true);
+      if (isMountedRef.current) setLoading(true);
 
       const response = await fetch(`${BASE_URL}/folders`);
 
@@ -80,21 +81,28 @@ export function useLibrary() {
 
       const foldersFromDB = await response.json();
 
+      if (!isMountedRef.current) return;
+
       setFolders(foldersFromDB.response);
 
       saveFolders(foldersFromDB.response);
     } catch (error) {
       console.error(error);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
-  };
+  }, []);
 
   // everytime the screen first open and load
   useEffect(() => {
+    isMountedRef.current = true;
     loadCachedFolders();
-    fetchFolder();
-  }, []);
+    void fetchFolder();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchFolder, loadCachedFolders]);
 
   const addFolder = async (
     subject: string,
@@ -128,7 +136,9 @@ export function useLibrary() {
 
       deleteFolderCache(id);
 
-      setFolders((prev) => prev.filter((folder) => folder.id !== id));
+      if (isMountedRef.current) {
+        setFolders((prev) => prev.filter((folder) => folder.id !== id));
+      }
     } catch (error) {
       console.error(error);
     }

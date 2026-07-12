@@ -37,3 +37,10 @@ class Folder(db.Model):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "subject": self.subject,
+            "accentColor": self.accent_color,
+        }

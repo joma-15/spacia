@@ -43,3 +43,12 @@ class Flashcard(db.Model):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "question": self.question,
+            "answer": self.answer,
+            "folder_id": self.folder_id,
+            "status": self.status,
+        }

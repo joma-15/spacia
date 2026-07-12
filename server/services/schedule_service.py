@@ -1,86 +1,45 @@
-#this is the data logic for showing the set flashcard as a notification 
+"""Business operations for scheduled study reminders."""
 
-from typing import Dict
 from extensions import db
+from errors import NotFoundError
 from models.schedules import Schedule
-from flask import jsonify
-
-def add_data(data: Dict[str, any]): 
-    schedule = Schedule(
-        folder_id=data["folderId"],
-        folder_name=data["folderName"],
-        card_ids=data["cardIds"],
-        schedule_type=data["scheduleType"],
-        custom_days=data["customDays"],
-        time=data["time"],
-        duration_minutes=data["durationMinutes"],
-        interval_minutes=data["intervalMinutes"],
-        shuffle=data["shuffle"],
-        enabled=data["enabled"],
-        created_at=data["createdAt"]
-    )
-
-    db.session.add(schedule)
-    db.session.commit()
-
-    return schedule
 
 
-def get_data():
-    schedule_folders = Schedule.query.all()
+class ScheduleService:
+    def create(self, data: dict) -> Schedule:
+        schedule = Schedule(
+            folder_id=data["folderId"],
+            folder_name=data["folderName"],
+            card_ids=data["cardIds"],
+            schedule_type=data["scheduleType"],
+            custom_days=data.get("customDays", []),
+            time=data["time"],
+            duration_minutes=data["durationMinutes"],
+            interval_minutes=data["intervalMinutes"],
+            shuffle=data.get("shuffle", True),
+            enabled=data.get("enabled", True),
+            created_at=data["createdAt"],
+        )
+        db.session.add(schedule)
+        db.session.commit()
+        return schedule
 
-    return [
-        {
-            "id": s.id,
-            "folderId": s.folder_id,
-            "folderName": s.folder_name,
-            "cardIds": s.card_ids,
-            "scheduleType": s.schedule_type,
-            "customDays": s.custom_days,
-            "time": s.time,
-            "durationMinutes": s.duration_minutes,
-            "intervalMinutes": s.interval_minutes,
-            "shuffle": s.shuffle,
-            "enabled": s.enabled,
-            "createdAt": s.created_at,
-        }
-        for s in schedule_folders
-    ]
+    def list_all(self) -> list[Schedule]:
+        return Schedule.query.order_by(Schedule.created_at.desc()).all()
 
+    def set_enabled(self, schedule_id: str, enabled: bool) -> Schedule:
+        schedule = self._get_or_raise(schedule_id)
+        schedule.enabled = enabled
+        db.session.commit()
+        return schedule
 
-def update_data(schedule_id : str, enabled : bool): 
-    print("getting the app data")
-    schedule = Schedule.query.get(schedule_id)
+    def delete(self, schedule_id: str) -> None:
+        db.session.delete(self._get_or_raise(schedule_id))
+        db.session.commit()
 
-    if schedule is None: 
-        return jsonify({
-            "message": "cant update the toggle", 
-            "success" : False
-        })
-    
-    schedule.enabled = enabled
-    print("before commit")
-    db.session.commit()
-
-    return jsonify({
-        "message" : "update the enabled successfully", 
-        "success": True
-    })
-
-
-def delete_data(schedule_id : str): 
-    schedule = Schedule.query.get(schedule_id)
-
-    if schedule is None: 
-        return jsonify({
-            "message": "schedule does not exist", 
-            "success": False
-        })
-    
-    db.session.delete(schedule)
-    db.session.commit()
-
-    return jsonify({
-        "message" : "schedule deleted successfully",
-        "success" : True
-    })
+    @staticmethod
+    def _get_or_raise(schedule_id: str) -> Schedule:
+        schedule = db.session.get(Schedule, schedule_id)
+        if schedule is None:
+            raise NotFoundError("Schedule")
+        return schedule

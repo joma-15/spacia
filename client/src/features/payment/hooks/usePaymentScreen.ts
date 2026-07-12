@@ -31,6 +31,7 @@ export function usePaymentScreen() {
 
   /** Whether the purchase is currently being processed */
   const [loadingPurchase, setLoadingPurchase] = useState(false);
+  const purchaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Which bottom nav tab is currently active */
   const [activeTab, setActiveTab] = useState<NavTab>("stats");
@@ -72,6 +73,11 @@ export function usePaymentScreen() {
         Animated.timing(shimmer, { toValue: 0, duration: 1800, useNativeDriver: true }),
       ])
     ).start();
+    return () => {
+      if (purchaseTimeoutRef.current) {
+        clearTimeout(purchaseTimeoutRef.current);
+      }
+    };
   }, []);
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -82,7 +88,11 @@ export function usePaymentScreen() {
    */
   const handlePurchase = (): void => {
     setLoadingPurchase(true);
-    setTimeout(() => setLoadingPurchase(false), 2000);
+    if (purchaseTimeoutRef.current) clearTimeout(purchaseTimeoutRef.current);
+    purchaseTimeoutRef.current = setTimeout(() => {
+      setLoadingPurchase(false);
+      purchaseTimeoutRef.current = null;
+    }, 2000);
   };
 
   /**

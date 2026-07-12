@@ -1,95 +1,62 @@
-# routes/pdf_routes.py
-from flask import Blueprint, jsonify, request
-from services.ai_flashcard_service import generate_flashcards, get_flashcards_by_folder
-from services.flashcard_services import add_flashcard, delete_flashcard, update_flashcard_status, delete_all
+"""HTTP controllers for flashcards and AI generation."""
+
+from flask import Blueprint, current_app, jsonify, request
+from flask.views import MethodView
+
+from errors import ApiError
+from services.ai_flashcard_service import AiFlashcardService
+from services.flashcard_services import FlashcardService
+from validation import require_fields, require_json_object
 
 flashcards_bp = Blueprint("flashcards", __name__)
-
-# ── AI Generation (non-blocking) ───────────────────────────────────────────────
-@flashcards_bp.route("/flashcards/<folder_id>", methods=["GET"])
-def get_flashcards(folder_id):
-    try:
-        generate_flashcards(folder_id, r"D:\download\burat.pdf")
-
-        # Return immediately — don't wait for Groq
-        return jsonify({"message": "Flashcard generation started"}), 202
-
-    except Exception as e:
-        print("Route error:", e)
-        return jsonify({"error": str(e)}), 500
+flashcard_service = FlashcardService()
+ai_flashcard_service = AiFlashcardService(flashcard_service)
 
 
-# ── Fetch Saved Cards (no AI) ──────────────────────────────────────────────────
-@flashcards_bp.route("/flashcards/<folder_id>/saved", methods=["GET"])
-def get_saved_flashcards(folder_id):
-    try:
-        flashcards = get_flashcards_by_folder(folder_id)
-        return jsonify([
-            {
-                "id": card.id,
-                "question": card.question,
-                "answer": card.answer,
-                "folder_id": card.folder_id,
-                "status": card.status,
-            }
-            for card in flashcards
-        ])
+class FlashcardGenerationAPI(MethodView):
+    def get(self, folder_id: str):
+        source_file = current_app.config.get("FLASHCARD_SOURCE_FILE")
+        if not source_file:
+            raise ApiError("AI generation requires FLASHCARD_SOURCE_FILE to be configured.", 503)
 
-    except Exception as e:
-        print("Route error:", e)
-        return jsonify({"error": str(e)}), 500
-    
-#saved flashcard that is manually add by the user to the database 
-@flashcards_bp.route("/flashcards/<folder_id>/manualSaved", methods=["POST"])
-def post_flashcard(folder_id : str): 
-    data = request.get_json()
+        flashcards = ai_flashcard_service.generate_from_file(folder_id, source_file)
+        return jsonify({"message": "Flashcards generated.", "data": [card.to_dict() for card in flashcards]})
 
-    question = data["question"]
-    answer = data["answer"]
-    status = data["status"]
 
-    # print(question)
-    # print(answer)
-    # print(folder_id)
-    # print(status)
+class SavedFlashcardsAPI(MethodView):
+    def get(self, folder_id: str):
+        flashcards = flashcard_service.list_for_folder(folder_id)
+        return jsonify([flashcard.to_dict() for flashcard in flashcards])
 
-    add_flashcard(question, answer, status, folder_id)
-    
-    return jsonify({"message": "flashcard created"})
 
-@flashcards_bp.route("/flashcards/<flashcard_id>", methods=["DELETE"])
-def flashcard_delete(flashcard_id : str): 
-    try: 
-        return delete_flashcard(flashcard_id)
-    except Exception as e: 
-        return jsonify({
-            "success": False, 
-            "error": str(e)
-        })
-    
-@flashcards_bp.route("/flashcards/<flashcard_id>", methods=["PATCH"])
-def flashcard_update(flashcard_id : str): 
-    try: 
-        data = request.get_json()
-        status = data["status"]
-        
-        return update_flashcard_status(flashcard_id, status)
-    except Exception as e: 
-        return jsonify({"error" : str(e)})
-    
+class ManualFlashcardAPI(MethodView):
+    def post(self, folder_id: str):
+        data = require_json_object(request.get_json(silent=True))
+        require_fields(data, "question", "answer", "status")
+        flashcard = flashcard_service.create(folder_id, data["question"], data["answer"], data["status"])
+        return jsonify({"message": "Flashcard created.", "data": flashcard.to_dict()}), 201
 
-@flashcards_bp.route("/flashcards/folder/<folder_id>", methods=["DELETE"])
-def delete_all_flashcards(folder_id: str): 
-    try: 
-        delete_all(folder_id)
 
-        return jsonify({
-            "success": True, 
-            "message": "deleted successfully"
-        })
-    
-    except Exception as e: 
-        return jsonify({
-            "message": "cant delete data",
-            "success": False
-        })
+class FlashcardItemAPI(MethodView):
+    def patch(self, flashcard_id: str):
+        data = require_json_object(request.get_json(silent=True))
+        require_fields(data, "status")
+        flashcard = flashcard_service.update_status(flashcard_id, data["status"])
+        return jsonify({"message": "Flashcard updated.", "data": flashcard.to_dict()})
+
+    def delete(self, flashcard_id: str):
+        flashcard_service.delete(flashcard_id)
+        return jsonify({"message": "Flashcard deleted successfully."})
+
+
+class FolderFlashcardsAPI(MethodView):
+    def delete(self, folder_id: str):
+        deleted_count = flashcard_service.delete_for_folder(folder_id)
+        return jsonify({"message": "Flashcards deleted successfully.", "deletedCount": deleted_count})
+
+
+flashcards_bp.add_url_rule("/flashcards/<string:folder_id>", view_func=FlashcardGenerationAPI.as_view("flashcard_generation"))
+flashcards_bp.add_url_rule("/flashcards/<string:folder_id>/saved", view_func=SavedFlashcardsAPI.as_view("saved_flashcards"))
+flashcards_bp.add_url_rule("/flashcards/<string:folder_id>/manualSaved", view_func=ManualFlashcardAPI.as_view("manual_flashcard"))
+flashcards_bp.add_url_rule("/flashcards/<string:flashcard_id>", view_func=FlashcardItemAPI.as_view("flashcard_item"))
+flashcards_bp.add_url_rule("/flashcards/folder/<string:folder_id>", view_func=FolderFlashcardsAPI.as_view("folder_flashcards"))

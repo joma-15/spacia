@@ -27,3 +27,19 @@ class Schedule(db.Model):
     enabled = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(db.BigInteger, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "folderId": self.folder_id,
+            "folderName": self.folder_name,
+            "cardIds": self.card_ids,
+            "scheduleType": self.schedule_type,
+            "customDays": self.custom_days,
+            "time": self.time,
+            "durationMinutes": self.duration_minutes,
+            "intervalMinutes": self.interval_minutes,
+            "shuffle": self.shuffle,
+            "enabled": self.enabled,
+            "createdAt": self.created_at,
+        }
