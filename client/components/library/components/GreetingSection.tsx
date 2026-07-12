@@ -10,6 +10,7 @@
 import React from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { THEME } from "../theme";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface Props {
   searchQuery: string;
@@ -30,7 +31,12 @@ const GreetingSection: React.FC<Props> = ({
 
     {/* ── Search bar ── */}
     <View style={styles.searchBar}>
-      <Text style={styles.searchIcon}>🔍</Text>
+      <MaterialCommunityIcons
+      name="magnify"
+      size={22}
+      color="#6B7280"
+      style={styles.searchIcon}
+      />
 
       <TextInput
         style={styles.searchInput}

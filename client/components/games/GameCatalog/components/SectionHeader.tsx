@@ -10,7 +10,7 @@ interface SectionHeaderProps {
 
 export const SectionHeader: React.FC<SectionHeaderProps> = ({
   title,
-  actionLabel = 'See all →',
+  actionLabel,
   onActionPress,
 }) => {
   return (

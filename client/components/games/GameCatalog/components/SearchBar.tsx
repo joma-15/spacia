@@ -1,6 +1,14 @@
-import React from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-native';
-import { colors } from '../constants/colors';
+import React from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Platform,
+} from "react-native";
+import { colors } from "../constants/colors";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface SearchBarProps {
   value: string;
@@ -11,11 +19,17 @@ interface SearchBarProps {
 export const SearchBar: React.FC<SearchBarProps> = ({
   value,
   onChangeText,
-  placeholder = 'Search games...',
+  placeholder = "Search games...",
 }) => {
   return (
     <View style={styles.searchBar}>
-      <Text style={styles.searchIcon}>🔍</Text>
+      <MaterialCommunityIcons
+        name="magnify"
+        size={22}
+        color="#6B7280"
+        style={styles.searchIcon}
+      />
+
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -26,8 +40,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         autoCorrect={false}
         clearButtonMode="while-editing"
       />
-      {value.length > 0 && Platform.OS === 'android' && (
-        <Pressable onPress={() => onChangeText('')} hitSlop={8}>
+      {value.length > 0 && Platform.OS === "android" && (
+        <Pressable onPress={() => onChangeText("")} hitSlop={8}>
           <Text style={styles.searchClear}>✕</Text>
         </Pressable>
       )}
@@ -37,14 +51,14 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
 const styles = StyleSheet.create({
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.bgSoft,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 4,
+    paddingVertical: Platform.OS === "ios" ? 12 : 4,
     marginTop: 16,
   },
   searchIcon: {

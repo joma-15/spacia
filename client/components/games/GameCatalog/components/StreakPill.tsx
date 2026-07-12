@@ -1,16 +1,22 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '../constants/colors';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface StreakPillProps {
-  emoji?: string;
   label: string;
 }
 
-export const StreakPill: React.FC<StreakPillProps> = ({ emoji = '🎮', label }) => {
+export const StreakPill: React.FC<StreakPillProps> = ({ label }) => {
   return (
     <View style={styles.streakPill}>
-      <Text style={styles.streakEmoji}>{emoji}</Text>
+      {/* <Text style={styles.streakEmoji}>{emoji}</Text> */}
+      <MaterialCommunityIcons
+      name="gamepad"
+      size={22}
+      color={colors.streakText}
+      style={styles.streakEmoji}
+      />
       <Text style={styles.streakText}>{label}</Text>
     </View>
   );

@@ -11,7 +11,7 @@ interface ScreenHeaderProps {
 export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   greeting,
   title,
-  onSettingsPress,
+  // onSettingsPress,
 }) => {
   return (
     <View style={styles.headerRow}>
@@ -19,9 +19,9 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
         <Text style={styles.eyebrow}>{greeting}</Text>
         <Text style={styles.heading}>{title}</Text>
       </View>
-      <Pressable style={styles.settingsButton} onPress={onSettingsPress} hitSlop={8}>
+      {/* <Pressable style={styles.settingsButton} onPress={onSettingsPress} hitSlop={8}>
         <Text style={styles.settingsIcon}>⚙️</Text>
-      </Pressable>
+      </Pressable> */}
     </View>
   );
 };
