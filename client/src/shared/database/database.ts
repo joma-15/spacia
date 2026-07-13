@@ -4,6 +4,10 @@ import * as SQLite from "expo-sqlite";
 
 export const db = SQLite.openDatabaseSync("spacia.db");
 
+/**
+ * Create the offline-cache tables once. `IF NOT EXISTS` makes this safe to run
+ * on every app launch; it does not erase existing users' cached data.
+ */
 export function initializeDatabase() {
   db.execSync(`
     CREATE TABLE IF NOT EXISTS folders (
@@ -21,6 +25,8 @@ export function initializeDatabase() {
       FOREIGN KEY (folder_id) REFERENCES folders(id)
     );
 
+    -- Folder views query cards by folder_id repeatedly, so this index avoids a
+    -- full flashcard-table scan as a user's deck grows.
     CREATE INDEX IF NOT EXISTS idx_flashcards_folder
       ON flashcards(folder_id);
 

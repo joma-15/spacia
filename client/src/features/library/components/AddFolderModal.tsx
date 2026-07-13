@@ -28,6 +28,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ACCENT_COLORS } from "../constants";
 import { THEME } from "../theme";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface Props {
   visible: boolean;
@@ -118,7 +119,12 @@ const AddFolderModal: React.FC<Props> = ({ visible, onClose, onAdd }) => {
             { backgroundColor: selectedColor + "22", borderColor: selectedColor + "55" },
           ]}>
             <Text style={[styles.previewText, { color: selectedColor }]}>
-              📂 {subject || "Subject Name"}
+              <MaterialCommunityIcons
+              name="folder-open"
+              color="yellow"
+              size={22}
+              />
+               {subject || "Subject Name"}
             </Text>
           </View>
 

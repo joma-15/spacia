@@ -8,18 +8,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, InteractionManager } from "react-native";
 import { FlashCard, CardStatus, TabType } from "../types";
 import {
-  saveFlashcards,
+  replaceFlashcardsForFolder,
   getFlashcardsByFolder,
   deleteFlashcard,
   updateFlashcardStatus,
 } from "@/shared/database/flashcardRepository";
-
+import * as FileSystem from "expo-file-system/legacy";
 import { BASE_URL } from "@/shared/config/api";
 
 // const BASE_URL = "http://192.168.8.39:5000";
-const POLL_INTERVAL_MS = 2000;
-const MAX_POLL_ATTEMPTS = 15;
 const FETCH_TIMEOUT_MS = 8000;
+
+export interface TextbookUpload {
+  /** Expo's file picker supplies a local URI, display name, and optional MIME type. */
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+  size?: number;
+}
 
 export function useFlashCards(folderId: string) {
   const [cards, setCards] = useState<FlashCard[]>([]);
@@ -27,8 +33,8 @@ export function useFlashCards(folderId: string) {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
 
-  // Tracks the in-flight request/poll so we can cancel stale work
-  // (folder switched, screen unmounted) instead of letting it clobber state.
+  // Tracks in-flight work so a response for an old folder cannot overwrite the
+  // state after the user navigates to a different folder.
   const abortRef = useRef<AbortController | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSavedIdsRef = useRef<string>("");
@@ -146,6 +152,8 @@ export function useFlashCards(folderId: string) {
   // ── Loading ─────────────────────────────────────────────────────────────────
 
   const loadCachedCards = useCallback((): boolean => {
+    // Cache is deliberately a fallback. Rendering it before the server caused
+    // stale totals to flash while the current folder data was still loading.
     try {
       const cached = getFlashcardsByFolder(folderId);
 
@@ -164,9 +172,9 @@ export function useFlashCards(folderId: string) {
     }
   }, [folderId]);
 
-  /** Silently loads already-saved cards from DB on mount (no AI call) */
+  /** Loads the server copy first; local cards are an offline fallback. */
   const loadSavedCards = useCallback(
-    async (signal?: AbortSignal) => {
+    async (signal?: AbortSignal, loadCacheOnFailure = false) => {
       const timeoutController = new AbortController();
       const timeoutId = setTimeout(() => timeoutController.abort(), FETCH_TIMEOUT_MS);
 
@@ -179,7 +187,9 @@ export function useFlashCards(folderId: string) {
         });
 
         const data = await response.json();
-        if (!response.ok || data.error) return;
+        if (!response.ok || data.error) {
+          throw new Error("Failed to load saved flashcards from the server.");
+        }
 
         const saved: FlashCard[] = data.map(mapApiCard);
 
@@ -191,11 +201,14 @@ export function useFlashCards(folderId: string) {
         const idsSignature = saved.map((c) => `${c.id}:${c.status}`).join(",");
         if (idsSignature !== lastSavedIdsRef.current) {
           lastSavedIdsRef.current = idsSignature;
-          saveFlashcards(saved.map((card) => ({ ...card, folderId })));
+          replaceFlashcardsForFolder(folderId, saved.map((card) => ({ ...card, folderId })));
         }
       } catch (error) {
         if ((error as Error)?.name === "AbortError") return;
         console.error("Error loading saved cards:", error);
+        if (loadCacheOnFailure && isMountedRef.current) {
+          loadCachedCards();
+        }
       } finally {
         clearTimeout(timeoutId);
         signal?.removeEventListener("abort", onExternalAbort);
@@ -204,7 +217,7 @@ export function useFlashCards(folderId: string) {
         }
       }
     },
-    [folderId],
+    [folderId, loadCachedCards],
   );
 
   const handleAddCard = useCallback(
@@ -254,20 +267,16 @@ export function useFlashCards(folderId: string) {
 
     setInitialLoading(true);
 
-    // The SQLite read is synchronous. Running it immediately on mount blocks
-    // the JS thread mid-navigation-transition, which is what causes the
-    // "tap a folder, screen feels delayed" lag. Deferring it until after the
-    // transition animation finishes makes the navigation feel instant, and
-    // the cards simply pop in a beat later.
+    // Wait until the navigation transition ends before starting the sync.
     const task = InteractionManager.runAfterInteractions(() => {
       if (!isMountedRef.current || controller.signal.aborted) return;
 
-      const hasCachedCards = loadCachedCards();
-      if (hasCachedCards) {
+      const shouldShowCacheBeforeServer = false;
+      if (shouldShowCacheBeforeServer) {
         // Cached cards are on screen — don't block the UI on a slow network sync.
         setInitialLoading(false);
       }
-      void loadSavedCards(controller.signal);
+      void loadSavedCards(controller.signal, true);
     });
 
     return () => {
@@ -278,67 +287,97 @@ export function useFlashCards(folderId: string) {
     };
   }, [folderId, clearPoll, loadCachedCards, loadSavedCards]);
 
-  /** AI button: generates NEW cards via Groq and merges them in */
-  const fetchAiCards = useCallback(async () => {
-    if (!folderId || !isMountedRef.current) return;
+  /** Uploads a textbook and generates cards from that file. */
+  // const fetchAiCards = useCallback(async (file: TextbookUpload): Promise<boolean> => {
+  //   if (!folderId || !isMountedRef.current) return false;
 
-    setLoading(true);
-    clearPoll();
+  //   setLoading(true);
+  //   clearPoll();
 
-    try {
-      await fetch(`${BASE_URL}/flashcards/${folderId}`);
+  //   try {
+  //     const fsFile = new FileSystemFile(file.uri);
+  //     const response = await fsFile.upload(
+  //       `${BASE_URL}/flashcards/${folderId}`,
+  //       {
+  //         fieldName: "file",
+  //         httpMethod: "POST",
+  //         uploadType: UploadType.MULTIPART,
+  //       }
+  //     );
 
-      if (!isMountedRef.current) return;
+  //     let data: any = null;
+  //     try {
+  //       data = JSON.parse(response.body);
+  //     } catch (e) {
+  //       console.error("Failed to parse response body:", e);
+  //     }
 
-      let attempts = 0;
+  //     if (response.status < 200 || response.status >= 300) {
+  //       throw new Error(data?.error ?? "Failed to generate flashcards.");
+  //     }
 
-      pollRef.current = setInterval(async () => {
-        attempts++;
+  //     if (isMountedRef.current) {
+  //       await loadSavedCards();
+  //     }
+  //     return true;
+  //   } catch (error) {
+  //     console.error("Trigger error:", error);
+  //     if (isMountedRef.current) {
+  //       Alert.alert("Generation failed", (error as Error).message);
+  //     }
+  //     return false;
+  //   } finally {
+  //     if (isMountedRef.current) setLoading(false);
+  //   }
+  // }, [folderId, clearPoll, loadSavedCards]);
 
-        try {
-          const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`);
-          const data = await response.json();
+ const fetchAiCards = useCallback(async (file: TextbookUpload): Promise<boolean> => {
+  if (!folderId || !isMountedRef.current) return false;
 
-          if (Array.isArray(data) && data.length > 0) {
-            const newCards = data.map(mapApiCard);
+  setLoading(true);
+  clearPoll();
 
-            if (!isMountedRef.current) {
-              clearPoll();
-              return;
-            }
-
-            setCards((prev) => {
-              const existingIds = new Set(prev.map((c) => c.id));
-              const fresh = newCards.filter((c) => !existingIds.has(c.id));
-              return fresh.length > 0 ? [...fresh, ...prev] : prev;
-            });
-
-            clearPoll();
-            setLoading(false);
-            return;
-          }
-
-          if (attempts >= MAX_POLL_ATTEMPTS) {
-            clearPoll();
-            if (isMountedRef.current) {
-              setLoading(false);
-              Alert.alert("Timeout", "Generation is taking too long, try again.");
-            }
-          }
-        } catch (pollError) {
-          console.error("Poll error:", pollError);
-          clearPoll();
-          if (isMountedRef.current) setLoading(false);
-        }
-      }, POLL_INTERVAL_MS);
-    } catch (error) {
-      console.error("Trigger error:", error);
-      if (isMountedRef.current) {
-        Alert.alert("Error", "Failed to generate flashcards.");
-        setLoading(false);
+  try {
+    const uploadResult = await FileSystem.uploadAsync(
+      `${BASE_URL}/flashcards/${folderId}`,
+      file.uri,
+      {
+        fieldName: "file",
+        httpMethod: "POST",
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        mimeType: file.mimeType ?? "application/pdf",
+        parameters: {
+          // any extra form fields your Flask route expects, e.g.:
+          // filename: file.name,
+        },
       }
+    );
+
+    let data: any = null;
+    try {
+      data = JSON.parse(uploadResult.body);
+    } catch (e) {
+      console.error("Failed to parse response body:", e);
     }
-  }, [folderId, clearPoll]);
+
+    if (uploadResult.status < 200 || uploadResult.status >= 300) {
+      throw new Error(data?.error ?? "Failed to generate flashcards.");
+    }
+
+    if (isMountedRef.current) {
+      await loadSavedCards();
+    }
+    return true;
+  } catch (error) {
+    console.error("Trigger error:", error);
+    if (isMountedRef.current) {
+      Alert.alert("Generation failed", (error as Error).message);
+    }
+    return false;
+  } finally {
+    if (isMountedRef.current) setLoading(false);
+  }
+}, [folderId, clearPoll, loadSavedCards]);
 
   return {
     // state

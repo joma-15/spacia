@@ -23,6 +23,7 @@ import DeleteAllModal from "../components/DeleteAllModal";
 import PremiumModal from "../components/PremiumModal";
 import LoadingModal from "../components/LoadingModal";
 import InitialLoadingModal from "../components/InitialLoadingModal";
+import TextbookUploadModal from "../components/TextbookUploadModal";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 import { COLORS, TABS } from "../constants";
@@ -34,6 +35,7 @@ const CardScreen: React.FC = () => {
   // ── Modal visibility state (UI-only, not business logic) ──────────────────
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
+  const [textbookUploadVisible, setTextbookUploadVisible] = useState(false);
   const [deleteAllModalVisible, setDeleteAllModalVisible] = useState(false);
   const [tabLoading, setTabLoading] = useState(false);
   const [mountedTabs, setMountedTabs] = useState<Set<TabType>>(() => new Set(["all"]));
@@ -95,7 +97,7 @@ const CardScreen: React.FC = () => {
 
   // ── AI button ──────────────────────────────────────────────────────────────
   const handleAiGenerate = () => {
-    fetchAiCards();
+    setTextbookUploadVisible(true);
     // setPremiumModalVisible(true); // ← uncomment to gate behind paywall
   };
 
@@ -166,6 +168,11 @@ const CardScreen: React.FC = () => {
         visible={premiumModalVisible}
         onClose={() => setPremiumModalVisible(false)}
         onUpgrade={handleUpgrade}
+      />
+      <TextbookUploadModal
+        visible={textbookUploadVisible}
+        onClose={() => setTextbookUploadVisible(false)}
+        onGenerate={fetchAiCards}
       />
       <InitialLoadingModal visible={initialLoading || tabLoading}/>
       <LoadingModal visible={loading} />

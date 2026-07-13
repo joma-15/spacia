@@ -2,6 +2,7 @@
 
 from flask import Flask, jsonify
 from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from config import Config
 from errors import ApiError
@@ -47,6 +48,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         db.session.rollback()
         app.logger.exception("Database operation failed")
         return jsonify({"success": False, "error": "A database error occurred."}), 500
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_upload_too_large(error: RequestEntityTooLarge):
+        return jsonify({"success": False, "error": "The textbook must be 20 MB or smaller."}), 413
 
     return app
 

@@ -13,6 +13,7 @@ class DocumentTextExtractor:
     NOISE_PATTERNS = ("Property of STI", "student.feedback@sti.edu")
 
     def extract_chunks(self, file_path: str, max_chars: int = 1500) -> list[str]:
+        """Read a supported file, normalize its text, then split it for the LLM prompt."""
         path = Path(file_path)
         if not path.is_file():
             raise FileNotFoundError(f"Source document does not exist: {path}")
@@ -21,6 +22,7 @@ class DocumentTextExtractor:
         return self._chunk(self._clean(text), max_chars)
 
     def _extract_text(self, path: Path) -> str:
+        """Use the parser that matches the extension; unsupported input fails early."""
         if path.suffix.lower() == ".pdf":
             with fitz.open(path) as document:
                 return "\n".join(page.get_text("text") for page in document)
@@ -30,6 +32,7 @@ class DocumentTextExtractor:
         raise ValueError("Unsupported file format. Use PDF or DOCX.")
 
     def _clean(self, text: str) -> str:
+        """Remove repeated whitespace and known document boilerplate before generation."""
         cleaned = re.sub(r"\s+", " ", text)
         for pattern in self.NOISE_PATTERNS:
             cleaned = cleaned.replace(pattern, "")
@@ -37,6 +40,7 @@ class DocumentTextExtractor:
 
     @staticmethod
     def _chunk(text: str, max_chars: int) -> list[str]:
+        """Prefer sentence boundaries so chunks remain readable while limiting prompt size."""
         sentences = re.split(r"(?<=[.!?]) +", text)
         chunks: list[str] = []
         current_chunk = ""

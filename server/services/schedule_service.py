@@ -6,7 +6,9 @@ from models.schedules import Schedule
 
 
 class ScheduleService:
+    """Owns schedule persistence and converts API-shaped data to model fields."""
     def create(self, data: dict) -> Schedule:
+        """Map camelCase JSON from the app to the snake_case SQLAlchemy model once."""
         schedule = Schedule(
             folder_id=data["folderId"],
             folder_name=data["folderName"],
@@ -28,6 +30,7 @@ class ScheduleService:
         return Schedule.query.order_by(Schedule.created_at.desc()).all()
 
     def set_enabled(self, schedule_id: str, enabled: bool) -> Schedule:
+        """Toggle a schedule without allowing unrelated fields to be changed."""
         schedule = self._get_or_raise(schedule_id)
         schedule.enabled = enabled
         db.session.commit()
@@ -39,6 +42,7 @@ class ScheduleService:
 
     @staticmethod
     def _get_or_raise(schedule_id: str) -> Schedule:
+        """Return one schedule or raise the shared 404 error."""
         schedule = db.session.get(Schedule, schedule_id)
         if schedule is None:
             raise NotFoundError("Schedule")

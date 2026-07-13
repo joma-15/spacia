@@ -39,7 +39,7 @@ class AiFlashcardService:
 
     @staticmethod
     def _build_prompt(content: str) -> str:
-        return f"""Generate exactly 10 flashcards as a raw JSON array.
+        return f"""Generate exactly 10 flashcards in English as a raw JSON array.
 Each item must contain a clue-based question, a short answer, and status \"review\".
 Return JSON only—no markdown or explanation.
 

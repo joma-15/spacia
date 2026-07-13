@@ -1,10 +1,12 @@
 import os
+from pathlib import Path
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class Config:
+    BASE_DIR = Path(__file__).resolve().parent
     DB_USER = os.getenv("DB_USER")
     DB_PASSWORD = quote_plus(os.getenv("DB_PASSWORD", ""))
     DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -17,4 +19,5 @@ class Config:
     )
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    FLASHCARD_SOURCE_FILE = os.getenv("FLASHCARD_SOURCE_FILE")
+    UPLOAD_FOLDER = BASE_DIR / "uploads"
+    MAX_CONTENT_LENGTH = 20 * 1024 * 1024  # 20 MB

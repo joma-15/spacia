@@ -9,6 +9,7 @@ import { FlatList, View, Text, StyleSheet } from "react-native";
 import CardItem from "./CardItem";
 import { FlashCard } from "../types";
 import { COLORS } from "../constants";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface Props {
   cards: FlashCard[];
@@ -22,7 +23,14 @@ const ListFooter = () => <View style={styles.footerSpacer} />;
 
 const EmptyState = () => (
   <View style={styles.emptyState}>
-    <Text style={styles.emptyIcon}>📭</Text>
+    <Text style={styles.emptyIcon}>
+      <MaterialCommunityIcons
+        name="mailbox-outline"
+        size={90}
+        color={COLORS.textMuted}
+        style={styles.emptyIcon}
+      />
+    </Text>
     <Text style={styles.emptyText}>No cards here yet.</Text>
     <Text style={styles.emptySubText}>Tap ＋ to create one.</Text>
   </View>
@@ -73,7 +81,7 @@ const styles = StyleSheet.create({
   list: { paddingBottom: 20, gap: 10, flexGrow: 1 },
   footerSpacer: { height: 100 },
   emptyState: { alignItems: "center", paddingVertical: 60 },
-  emptyIcon: { fontSize: 38, marginBottom: 10 },
+  emptyIcon: { marginBottom: 18 },
   emptyText: { color: COLORS.text, fontSize: 15, fontWeight: "600" },
   emptySubText: { color: COLORS.textMuted, fontSize: 12, marginTop: 3 },
 });

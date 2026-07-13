@@ -17,6 +17,7 @@ import React from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { THEME } from "../theme";
 import type { Folder } from "../types";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface Props {
   folder: Folder;
@@ -36,14 +37,14 @@ const FolderCard: React.FC<Props> = ({ folder, onDelete, onPress }) => {
    * We ask first so the user can't accidentally wipe a folder.
    */
   const handleDeletePress = (): void => {
-    Alert.alert(
-      "Delete Folder",
-      `Remove "${subject}"?`,
-      [
-        { text: "Cancel",  style: "cancel"      },
-        { text: "Delete",  style: "destructive", onPress: () => onDelete(folder.id) },
-      ]
-    );
+    Alert.alert("Delete Folder", `Remove "${subject}"?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => onDelete(folder.id),
+      },
+    ]);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -66,11 +67,23 @@ const FolderCard: React.FC<Props> = ({ folder, onDelete, onPress }) => {
       {/* ── Folder icon: a colored "tab" sitting on top of the folder body ── */}
       <View style={styles.iconWrap}>
         <View style={[styles.folderTab, { backgroundColor: accentColor }]} />
-        <View style={[
-          styles.folderBody,
-          { backgroundColor: accentColor + "28", borderColor: accentColor + "55", borderWidth: 1 },
-        ]}>
-          <Text style={[styles.folderEmoji, { color: accentColor }]}>📂</Text>
+        <View
+          style={[
+            styles.folderBody,
+            {
+              backgroundColor: accentColor + "28",
+              borderColor: accentColor + "55",
+              borderWidth: 1,
+            },
+          ]}
+        >
+          <Text style={[styles.folderEmoji, { color: accentColor }]}>
+            <MaterialCommunityIcons
+              name="folder-open"
+              size={25}
+              color="yellow"
+            />
+          </Text>
         </View>
       </View>
 
@@ -78,10 +91,15 @@ const FolderCard: React.FC<Props> = ({ folder, onDelete, onPress }) => {
       <Text style={styles.title}>{subject}</Text>
 
       {/* ── Card count badge ── */}
-      <View style={[
-        styles.countBadge,
-        { backgroundColor: accentColor + "22", borderColor: accentColor + "55" },
-      ]}>
+      <View
+        style={[
+          styles.countBadge,
+          {
+            backgroundColor: accentColor + "22",
+            borderColor: accentColor + "55",
+          },
+        ]}
+      >
         <Text style={[styles.countText, { color: accentColor }]}>
           {cardCount} cards
         </Text>
@@ -108,21 +126,36 @@ const styles = StyleSheet.create({
 
   iconWrap: { marginTop: 6, marginBottom: 14, alignSelf: "flex-start" },
   folderTab: {
-    width: 28, height: 8,
-    borderTopLeftRadius: 5, borderTopRightRadius: 5,
-    marginBottom: -1, opacity: 0.85,
+    width: 28,
+    height: 8,
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
+    marginBottom: -1,
+    opacity: 0.85,
   },
   folderBody: {
-    width: 62, height: 48, borderRadius: 8, borderTopLeftRadius: 0,
-    justifyContent: "center", alignItems: "center",
+    width: 62,
+    height: 48,
+    borderRadius: 8,
+    borderTopLeftRadius: 0,
+    justifyContent: "center",
+    alignItems: "center",
   },
   folderEmoji: { fontSize: 22 },
 
-  title: { fontSize: 15, fontWeight: "700", color: THEME.textWhite, marginBottom: 6 },
+  title: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: THEME.textWhite,
+    marginBottom: 6,
+  },
 
   countBadge: {
-    alignSelf: "flex-start", borderRadius: THEME.radiusFull,
-    paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1,
+    alignSelf: "flex-start",
+    borderRadius: THEME.radiusFull,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderWidth: 1,
   },
   countText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.2 },
 });
