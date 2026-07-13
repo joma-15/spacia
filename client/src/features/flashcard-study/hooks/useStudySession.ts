@@ -22,28 +22,30 @@ export function useStudySession({ cards, onComplete, resetFlip }: Params) {
 
   // ── State ────────────────────────────────────────────────────────────────
 
-  /** Index of the card currently being shown */
+  /** Index of the card currently being shown (starts at 0 for the first card) */
   const [index, setIndex] = useState(0);
 
-  /** How many cards the user marked "Review" this session */
+  /** How many cards the user marked "Review" (hard cards) during this study session */
   const [reviewCount, setReviewCount] = useState(0);
 
-  /** How many cards the user marked "Understood" this session */
+  /** How many cards the user marked "Understood" (easy cards) during this study session */
   const [understoodCount, setUnderstoodCount] = useState(0);
 
   // ── Derived values ────────────────────────────────────────────────────────
 
+  // We compute these automatically based on the current index and state changes.
   const currentCard = cards[index];
   const isLastCard  = index === cards.length - 1;
 
-  /** Percentage of the deck completed so far, used for the progress bar */
+  /** Percentage of the deck completed so far, used to draw the progress bar indicator */
   const progressPercent = ((index + 1) / cards.length) * 100;
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
   /**
-   * Move to the next card, or — if this was the last card —
-   * show a summary alert and call onComplete.
+   * Moves the user to the next card, or — if this was the last card in the deck —
+   * displays a congratulatory modal pop-up showing their scores, and executes 
+   * the 'onComplete' function.
    */
   const goToNextCard = (): void => {
     if (isLastCard) {
@@ -54,26 +56,29 @@ export function useStudySession({ cards, onComplete, resetFlip }: Params) {
       );
       return;
     }
+    // Move index up by 1, and reset the 3D flip card animation back to the front side
     setIndex((prev) => prev + 1);
     resetFlip();
   };
 
   /**
-   * Mark the current card as needing review, then advance.
-   * Guarded so this can't fire before the user has seen the answer.
+   * Mark the current card as needing review (hard), then advance.
+   * Safety check: prevents the user from clicking the button before they have flipped 
+   * the card to read the answer!
    */
   const markForReview = (isFlipped: boolean): void => {
-    if (!isFlipped) return;
+    if (!isFlipped) return; // Cannot score an unflipped card
     setReviewCount((count) => count + 1);
     goToNextCard();
   };
 
   /**
-   * Mark the current card as understood, then advance.
-   * Guarded so this can't fire before the user has seen the answer.
+   * Mark the current card as understood (easy), then advance.
+   * Safety check: prevents the user from clicking the button before they have flipped 
+   * the card to read the answer!
    */
   const markAsUnderstood = (isFlipped: boolean): void => {
-    if (!isFlipped) return;
+    if (!isFlipped) return; // Cannot score an unflipped card
     setUnderstoodCount((count) => count + 1);
     goToNextCard();
   };

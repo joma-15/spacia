@@ -68,19 +68,35 @@ const CardScreen: React.FC = () => {
     understood: understoodCards,
   };
 
+  /**
+   * Handles user switching tabs (between 'All', 'Review', and 'Understood' cards).
+   * 
+   * Performance Trick: "Lazy Tab Mounting"
+   * Rendering lists of 100+ cards can be heavy. To prevent the screen from freezing 
+   * when the app first launches, we only render the 'All' tab's list of cards. 
+   * The 'Review' and 'Understood' lists are only rendered/created in the UI ("mounted")
+   * the first time the user actually clicks on their respective tab.
+   * 
+   * Visual Optimization (requestAnimationFrame):
+   * We use requestAnimationFrame to delay mounting the tab's list until the next screen redraw. 
+   * This lets the app paint the "Loading..." indicator first, preventing the tab button press 
+   * from feeling stuck/unresponsive.
+   */
   const handleTabChange = useCallback(
     (tab: TabType) => {
+      // Do nothing if clicking the tab that is already selected
       if (tab === activeTab) return;
 
+      // If we have already visited/loaded this tab in the past, switch to it instantly
       if (mountedTabs.has(tab)) {
         setActiveTab(tab);
         return;
       }
 
-      // Let the existing loading modal paint before mounting this tab's list.
-      // This avoids the first visit to a large Review/Done list feeling like a
-      // frozen tab press.
+      // If we are opening the tab for the first time, show loading indicator
       setTabLoading(true);
+      
+      // Delay mounting of the cards list to the next animation frame to keep UI responsive
       requestAnimationFrame(() => {
         setMountedTabs((prev) => {
           const next = new Set(prev);
@@ -89,6 +105,7 @@ const CardScreen: React.FC = () => {
         });
         setActiveTab(tab);
 
+        // Once the list is loaded, hide the loading indicator on the next animation frame
         requestAnimationFrame(() => setTabLoading(false));
       });
     },

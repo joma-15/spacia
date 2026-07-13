@@ -30,19 +30,26 @@ export function useCardFlip() {
   const flipAnim = useRef(new Animated.Value(0)).current;
   const faceSwapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Cleanup: clear pending timers if component unmounts to prevent memory leaks/state updates on unmounted components
   useEffect(() => () => {
     if (faceSwapTimeoutRef.current) clearTimeout(faceSwapTimeoutRef.current);
   }, []);
 
   // ── Interpolated rotation values for each face ─────────────────────────────
 
-  /** Front face rotates from 0deg → 180deg as the card flips */
+  /**
+   * Rotation Math Map (Interpolation):
+   * "Interpolate" maps our animation value range (from 0 to 180) to actual 3D angle degrees 
+   * (like "0deg" to "180deg") that React Native can use to rotate components.
+   * 
+   * Front face rotates from 0deg → 180deg as the card flips.
+   */
   const frontInterpolate = flipAnim.interpolate({
     inputRange:  [0, 180],
     outputRange: ["0deg", "180deg"],
   });
 
-  /** Back face rotates from 180deg → 360deg, staying opposite the front */
+  /** Back face rotates from 180deg → 360deg, staying opposite the front face */
   const backInterpolate = flipAnim.interpolate({
     inputRange:  [0, 180],
     outputRange: ["180deg", "360deg"],
@@ -50,21 +57,25 @@ export function useCardFlip() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  /** Flip the card to show whichever face isn't currently showing */
+  /** 
+   * Flip the card to show whichever face isn't currently showing.
+   * Runs a 3D rotate transition that spins the card like a coin.
+   */
   const flipCard = (): void => {
     const flippingToBack = !isFlipped;
     setIsFlipped(flippingToBack);
 
+    // Starts the smooth rotation animation
     Animated.timing(flipAnim, {
       toValue:  flippingToBack ? 180 : 0,
-      duration: 420,
-      easing:   Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      duration: 420,                      // 420 milliseconds duration
+      easing:   Easing.out(Easing.cubic),  // Starts fast and slows down towards the end
+      useNativeDriver: true,               // Runs on hardware accelerator for extra smoothness
     }).start();
 
-    // Wait until the card is halfway rotated (90deg) before swapping
-    // which face receives touches — this matches when the visible
-    // face actually changes from the user's perspective.
+    // Wait until the card is halfway rotated (90 degrees, i.e., at 210ms) before swapping
+    // which side is visible and clickable. This makes sure users can't accidentally 
+    // click the hidden side of the card before the spin completes.
     if (faceSwapTimeoutRef.current) clearTimeout(faceSwapTimeoutRef.current);
     faceSwapTimeoutRef.current = setTimeout(() => {
       setShowBack(flippingToBack);
@@ -72,12 +83,12 @@ export function useCardFlip() {
     }, 210);
   };
 
-  /** Reset the flip state — called when moving to a new card */
+  /** Reset the flip state back to the front — called when moving to a new card */
   const resetFlip = (): void => {
     if (faceSwapTimeoutRef.current) clearTimeout(faceSwapTimeoutRef.current);
     setIsFlipped(false);
     setShowBack(false);
-    flipAnim.setValue(0);
+    flipAnim.setValue(0); // Instantly resets angle back to 0 without animation
   };
 
   return {

@@ -1,7 +1,12 @@
 import { db } from "./database";
 
+/**
+ * Saves a list of flashcards into the local offline SQLite database.
+ * Uses "INSERT OR REPLACE" (often called "upsert") which creates a new row 
+ * or updates the existing one if the card ID already exists. 
+ * This prevents duplicate ID errors when syncing new changes from the backend server.
+ */
 export function saveFlashcards(cards: any[]) {
-  /** Upsert lets the cache accept new server data without duplicate primary keys. */
   for (const card of cards) {
     db.runSync(
       `
@@ -26,12 +31,15 @@ export function saveFlashcards(cards: any[]) {
   }
 }
 
-/** Make the local cache for one folder match the server exactly. */
+/**
+ * Replaces all local flashcards in a folder with a fresh list from the server.
+ * This is used to make sure our local database matches the server exactly:
+ * 1. Deletes all local flashcards for this folder.
+ * 2. Saves the new list of cards.
+ * Doing a delete first ensures that any cards we deleted on other devices do not 
+ * keep showing up locally.
+ */
 export function replaceFlashcardsForFolder(folderId: string, cards: any[]) {
-  /**
-   * A server refresh is authoritative. Delete first so local rows removed on
-   * another device cannot briefly reappear in this folder's count or list.
-   */
   db.runSync(
     `
     DELETE FROM flashcards
@@ -43,10 +51,13 @@ export function replaceFlashcardsForFolder(folderId: string, cards: any[]) {
   saveFlashcards(cards);
 }
 
+/**
+ * Reads all flashcards saved in a specific folder from local SQLite.
+ * This acts as a fast offline read fallback when the user has no internet.
+ */
 export function getFlashcardsByFolder(
   folderId: string
 ) {
-  /** Read-only offline fallback used when the server refresh cannot complete. */
   return db.getAllSync(
     `
     SELECT *
@@ -57,10 +68,12 @@ export function getFlashcardsByFolder(
   );
 }
 
+/**
+ * Removes a single card from local SQLite database cache.
+ */
 export function deleteFlashcard(
   cardId: string
 ) {
-  /** Keep the local cache in sync after a successful server deletion. */
   db.runSync(
     `
     DELETE FROM flashcards
@@ -70,11 +83,13 @@ export function deleteFlashcard(
   );
 }
 
+/**
+ * Updates the study status ('review' or 'understood') of a card locally.
+ */
 export function updateFlashcardStatus(
   id: string,
   status: string
 ) {
-  /** Persist the status only after the backend accepted the same change. */
   db.runSync(
     `
     UPDATE flashcards
