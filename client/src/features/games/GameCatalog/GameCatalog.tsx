@@ -21,7 +21,7 @@ interface GameCatalogProps {
 }
 
 // The scrollable body of the gaming home screen: header, streak pill,
-// search, and the list of playable game categories.
+// search, and the grid of playable game categories.
 export const GameCatalog: React.FC<GameCatalogProps> = ({
   onSelectGame,
   onSettingsPress,
@@ -59,10 +59,12 @@ export const GameCatalog: React.FC<GameCatalogProps> = ({
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 20, // must match HORIZONTAL_PADDING in GameCard.tsx
     paddingBottom: 32,
   },
   cardList: {
-    gap: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
 });
