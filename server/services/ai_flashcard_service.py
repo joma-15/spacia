@@ -33,15 +33,30 @@ class AiFlashcardService:
         response = client.chat.completions.create(
             model=self.MODEL,
             messages=[{"role": "user", "content": self._build_prompt(content)}],
+            response_format={"type": "json_object"},
         )
         print(response)
         return response.choices[0].message.content or ""
 
     @staticmethod
     def _build_prompt(content: str) -> str:
-        return f"""Generate exactly 10 flashcards in English as a raw JSON array.
-Each item must contain a clue-based question, a short answer, and status \"review\".
-Return JSON only—no markdown or explanation.
+        return f"""You are a professional study helper. Generate exactly 10 flashcards in English based on the provided content.
+Return the output as a valid JSON object containing a "flashcards" key, which points to an array of flashcards.
+Each flashcard in the array must be an object with exactly three keys:
+- "question": a clue-based question
+- "answer": a short answer
+- "status": the string "review"
+
+JSON Schema:
+{{
+  "flashcards": [
+    {{
+      "question": "question text",
+      "answer": "answer text",
+      "status": "review"
+    }}
+  ]
+}}
 
 CONTENT:
 {content}"""
@@ -53,15 +68,42 @@ CONTENT:
             cleaned = cleaned.strip("`").removeprefix("json").strip()
 
         try:
-            cards = json.loads(cleaned)
+            data = json.loads(cleaned)
         except json.JSONDecodeError as error:
             raise ValueError("AI returned invalid JSON.") from error
 
+        if not isinstance(data, dict) or "flashcards" not in data:
+            raise ValueError("AI response must contain a JSON object with a 'flashcards' key.")
+
+        cards = data["flashcards"]
         if not isinstance(cards, list) or not cards:
-            raise ValueError("AI response must contain a non-empty JSON array.")
-        if any(not isinstance(card, dict) or not card.get("question") or not card.get("answer") for card in cards):
+            raise ValueError("AI response must contain a non-empty 'flashcards' array.")
+
+        normalized_cards = []
+        for card in cards:
+            if not isinstance(card, dict):
+                continue
+            
+            # Extract keys defensively, fallback to common alternatives
+            question = card.get("question") or card.get("clue") or card.get("front") or card.get("text")
+            answer = card.get("answer") or card.get("short_answer") or card.get("back") or card.get("definition")
+            status = card.get("status") or "review"
+
+            if not question or not answer:
+                # If a specific card is incomplete, skip it rather than failing the whole upload,
+                # or raise error if we have too few cards. Here we raise if it is entirely empty.
+                continue
+
+            normalized_cards.append({
+                "question": str(question).strip(),
+                "answer": str(answer).strip(),
+                "status": str(status).strip()
+            })
+
+        if not normalized_cards:
             raise ValueError("Each generated card requires a question and answer.")
-        return cards
+
+        return normalized_cards
 
     def _get_client(self) -> Groq:
         if self._client is None:
