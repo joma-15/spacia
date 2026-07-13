@@ -29,16 +29,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ACCENT_COLORS } from "../constants";
 import { THEME } from "../theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 interface Props {
   visible: boolean;
   onClose: () => void;
   /** Called with the finished subject name and chosen color when user taps "Create" */
-  onAdd: (subject: string, accentColor: string) => void;
+  onAdd: (subject: string, accentColor: string) => Promise<void>;
 }
 
 const AddFolderModal: React.FC<Props> = ({ visible, onClose, onAdd }) => {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   // ── Local form state ──────────────────────────────────────────────────────
   const [subject, setSubject] = useState<string>("");
@@ -47,13 +49,15 @@ const AddFolderModal: React.FC<Props> = ({ visible, onClose, onAdd }) => {
   // ── Handlers ─────────────────────────────────────────────────────────────
 
   /** Validate then pass data up to the parent and close */
-  const handleConfirm = (): void => {
+  const handleConfirm = async () => {
     if (!subject.trim()) {
       Alert.alert("Validation", "Please enter a subject name.");
       return;
     }
-    onAdd(subject.trim(), selectedColor);
+    await onAdd(subject.trim(), selectedColor);
     resetAndClose();
+
+    router.replace("/(tabs)/library");
   };
 
   /** Reset form fields and close the modal */

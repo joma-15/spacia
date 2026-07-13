@@ -28,7 +28,7 @@ class FolderCollectionAPI(MethodView):
         require_fields(data, "subject", "accentColor")
         
         # Save new folder to database
-        folder = folder_service.create(data["subject"], data["accentColor"])
+        folder = folder_service.create(data["subject"], data["accentColor"], data.get("id"))
         return jsonify({"folder": folder.id, "cardCount": 0}), 201
 
 

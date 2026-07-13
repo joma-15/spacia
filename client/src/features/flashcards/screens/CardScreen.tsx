@@ -5,8 +5,8 @@
  * entirely to the useFlashCards hook.
  */
 
-import React, { useCallback, useState } from "react";
-import { View, Alert, StyleSheet } from "react-native";
+import React, { useCallback, useState, useRef, useEffect } from "react";
+import { View, Alert, StyleSheet, ScrollView, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 
@@ -31,14 +31,14 @@ import { TabType } from "../types";
 
 const CardScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const pageWidth = screenWidth - 32;
 
   // ── Modal visibility state (UI-only, not business logic) ──────────────────
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [textbookUploadVisible, setTextbookUploadVisible] = useState(false);
   const [deleteAllModalVisible, setDeleteAllModalVisible] = useState(false);
-  const [tabLoading, setTabLoading] = useState(false);
-  const [mountedTabs, setMountedTabs] = useState<Set<TabType>>(() => new Set(["all"]));
 
   // ── Get folder id ──────────────────────────────────────────────────────────
   const { folderId } = useLocalSearchParams<{ folderId: string }>();
@@ -62,54 +62,39 @@ const CardScreen: React.FC = () => {
     fetchAiCards,
   } = useFlashCards(folderId);
 
-  const tabCards: Record<TabType, typeof cards> = {
-    all: cards,
-    review: reviewCards,
-    understood: understoodCards,
-  };
+  const scrollViewRef = useRef<ScrollView>(null);
 
   /**
    * Handles user switching tabs (between 'All', 'Review', and 'Understood' cards).
-   * 
-   * Performance Trick: "Lazy Tab Mounting"
-   * Rendering lists of 100+ cards can be heavy. To prevent the screen from freezing 
-   * when the app first launches, we only render the 'All' tab's list of cards. 
-   * The 'Review' and 'Understood' lists are only rendered/created in the UI ("mounted")
-   * the first time the user actually clicks on their respective tab.
-   * 
-   * Visual Optimization (requestAnimationFrame):
-   * We use requestAnimationFrame to delay mounting the tab's list until the next screen redraw. 
-   * This lets the app paint the "Loading..." indicator first, preventing the tab button press 
-   * from feeling stuck/unresponsive.
+   * Programmatically scrolls the paging ScrollView to the selected tab.
    */
   const handleTabChange = useCallback(
     (tab: TabType) => {
-      // Do nothing if clicking the tab that is already selected
       if (tab === activeTab) return;
+      setActiveTab(tab);
 
-      // If we have already visited/loaded this tab in the past, switch to it instantly
-      if (mountedTabs.has(tab)) {
-        setActiveTab(tab);
-        return;
+      const tabIndex = TABS.findIndex((t) => t.key === tab);
+      if (tabIndex !== -1 && scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ x: tabIndex * pageWidth, animated: true });
       }
-
-      // If we are opening the tab for the first time, show loading indicator
-      setTabLoading(true);
-      
-      // Delay mounting of the cards list to the next animation frame to keep UI responsive
-      requestAnimationFrame(() => {
-        setMountedTabs((prev) => {
-          const next = new Set(prev);
-          next.add(tab);
-          return next;
-        });
-        setActiveTab(tab);
-
-        // Once the list is loaded, hide the loading indicator on the next animation frame
-        requestAnimationFrame(() => setTabLoading(false));
-      });
     },
-    [activeTab, mountedTabs, setActiveTab],
+    [activeTab, pageWidth, setActiveTab],
+  );
+
+  /**
+   * Handles scroll end (swipes) and updates the active tab state accordingly.
+   */
+  const handleScrollEnd = useCallback(
+    (e: any) => {
+      const x = e.nativeEvent.contentOffset.x;
+      const index = Math.round(x / pageWidth);
+      const tabKeys: TabType[] = ["all", "review", "understood"];
+      const tab = tabKeys[index];
+      if (tab && tab !== activeTab) {
+        setActiveTab(tab);
+      }
+    },
+    [activeTab, pageWidth, setActiveTab],
   );
 
   // ── AI button ──────────────────────────────────────────────────────────────
@@ -154,25 +139,45 @@ const CardScreen: React.FC = () => {
       {/* ── All | Review | Done filter ── */}
       <TabRow activeTab={activeTab} onTabChange={handleTabChange} />
 
-      {/* ── Scrollable card list ── */}
+      {/* ── Scrollable card list with horizontal paging ── */}
       <View style={styles.listArea}>
-        {TABS.map(({ key }) =>
-          mountedTabs.has(key) ? (
-            <View
-              key={key}
-              style={[styles.tabPanel, activeTab !== key && styles.tabPanelHidden]}
-              pointerEvents={activeTab === key ? "auto" : "none"}
-            >
-              <CardList
-                cards={tabCards[key]}
-                onUnderstand={handleUnderstand}
-                onMoveToReview={handleMoveToReview}
-                onDelete={handleDelete}
-                onEdit={handleEdit}
-              />
-            </View>
-          ) : null,
-        )}
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleScrollEnd}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContainer}
+        >
+          <View style={{ width: pageWidth }}>
+            <CardList
+              cards={cards}
+              onUnderstand={handleUnderstand}
+              onMoveToReview={handleMoveToReview}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+            />
+          </View>
+          <View style={{ width: pageWidth }}>
+            <CardList
+              cards={reviewCards}
+              onUnderstand={handleUnderstand}
+              onMoveToReview={handleMoveToReview}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+            />
+          </View>
+          <View style={{ width: pageWidth }}>
+            <CardList
+              cards={understoodCards}
+              onUnderstand={handleUnderstand}
+              onMoveToReview={handleMoveToReview}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+            />
+          </View>
+        </ScrollView>
       </View>
 
       {/* ── Modals ── */}
@@ -191,7 +196,7 @@ const CardScreen: React.FC = () => {
         onClose={() => setTextbookUploadVisible(false)}
         onGenerate={fetchAiCards}
       />
-      <InitialLoadingModal visible={initialLoading || tabLoading}/>
+      <InitialLoadingModal visible={initialLoading} />
       <LoadingModal visible={loading} />
       <DeleteAllModal
         visible={deleteAllModalVisible}

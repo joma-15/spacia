@@ -6,7 +6,7 @@ import { db } from "./database";
  * or updates the existing one if the card ID already exists. 
  * This prevents duplicate ID errors when syncing new changes from the backend server.
  */
-export function saveFlashcards(cards: any[]) {
+export function saveFlashcards(cards: any[], syncStatus: string = 'synced') {
   for (const card of cards) {
     db.runSync(
       `
@@ -16,16 +16,18 @@ export function saveFlashcards(cards: any[]) {
         folder_id,
         question,
         answer,
-        status
+        status,
+        sync_status
       )
-      VALUES (?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?)
       `,
       [
         card.id,
-        card.folderId,
+        card.folderId || card.folder_id,
         card.question,
         card.answer,
-        card.status
+        card.status,
+        syncStatus
       ]
     );
   }
@@ -33,54 +35,69 @@ export function saveFlashcards(cards: any[]) {
 
 /**
  * Replaces all local flashcards in a folder with a fresh list from the server.
- * This is used to make sure our local database matches the server exactly:
- * 1. Deletes all local flashcards for this folder.
- * 2. Saves the new list of cards.
- * Doing a delete first ensures that any cards we deleted on other devices do not 
- * keep showing up locally.
+ * This only deletes synced cards, preserving any pending offline-created cards!
  */
-export function replaceFlashcardsForFolder(folderId: string, cards: any[]) {
+export function replaceFlashcardsForFolder(folderId: string, cards: any[], syncStatus: string = 'synced') {
   db.runSync(
     `
     DELETE FROM flashcards
-    WHERE folder_id = ?
+    WHERE folder_id = ? AND sync_status = 'synced'
     `,
     [folderId],
   );
 
-  saveFlashcards(cards);
+  saveFlashcards(cards, syncStatus);
 }
 
 /**
- * Reads all flashcards saved in a specific folder from local SQLite.
- * This acts as a fast offline read fallback when the user has no internet.
+ * Reads all active flashcards saved in a specific folder from local SQLite (excluding pending deletes).
  */
-export function getFlashcardsByFolder(
-  folderId: string
-) {
+export function getFlashcardsByFolder(folderId: string) {
   return db.getAllSync(
     `
     SELECT *
     FROM flashcards
-    WHERE folder_id = ?
+    WHERE folder_id = ? AND sync_status != 'pending_delete'
     `,
     [folderId]
   );
 }
 
 /**
- * Removes a single card from local SQLite database cache.
+ * Returns all flashcards matching a specific sync status (e.g. 'pending_create' or 'pending_delete').
  */
-export function deleteFlashcard(
-  cardId: string
-) {
-  db.runSync(
-    `
-    DELETE FROM flashcards
-    WHERE id = ?
-    `,
-    [cardId]
-  );
+export function getFlashcardsBySyncStatus(status: string) {
+  return db.getAllSync(`
+    SELECT *
+    FROM flashcards
+    WHERE sync_status = ?
+  `, [status]);
+}
+
+/**
+ * Removes a single card from local SQLite database cache.
+ * If it is pending creation, we delete it directly. Otherwise, we flag it as pending delete.
+ */
+export function deleteFlashcard(cardId: string) {
+  const row = db.getFirstSync(`SELECT sync_status FROM flashcards WHERE id = ?`, [cardId]) as any;
+  if (row && row.sync_status === 'pending_create') {
+    db.runSync(
+      `
+      DELETE FROM flashcards
+      WHERE id = ?
+      `,
+      [cardId]
+    );
+  } else {
+    db.runSync(
+      `
+      UPDATE flashcards
+      SET sync_status = 'pending_delete'
+      WHERE id = ?
+      `,
+      [cardId]
+    );
+  }
 }
 
 /**
@@ -98,4 +115,24 @@ export function updateFlashcardStatus(
     `,
     [status, id]
   );
+}
+
+/**
+ * Returns a map of { [folderId]: cardCount } for every folder,
+ * counting only cards that are NOT pending deletion.
+ * Uses a single GROUP BY query — O(1) regardless of folder count.
+ */
+export function getCardCountsPerFolder(): Record<string, number> {
+  const rows = db.getAllSync(`
+    SELECT folder_id, COUNT(*) AS count
+    FROM flashcards
+    WHERE sync_status != 'pending_delete'
+    GROUP BY folder_id
+  `) as { folder_id: string; count: number }[];
+
+  const map: Record<string, number> = {};
+  for (const row of rows) {
+    map[row.folder_id] = row.count;
+  }
+  return map;
 }

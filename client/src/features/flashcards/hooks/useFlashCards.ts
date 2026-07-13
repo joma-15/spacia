@@ -12,7 +12,10 @@ import {
   getFlashcardsByFolder,
   deleteFlashcard,
   updateFlashcardStatus,
+  saveFlashcards,
+  getFlashcardsBySyncStatus,
 } from "@/shared/database/flashcardRepository";
+import { uuidv4 } from "@/shared/database/database";
 import * as FileSystem from "expo-file-system/legacy";
 import { BASE_URL } from "@/shared/config/api";
 
@@ -54,6 +57,55 @@ export function useFlashCards(folderId: string) {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
+    }
+  }, []);
+
+  const syncPendingFlashcards = useCallback(async (fId: string) => {
+    try {
+      // 1. Process pending creations
+      const pendingCreates = getFlashcardsBySyncStatus("pending_create") as any[];
+      const folderPendingCreates = pendingCreates.filter(c => c.folder_id === fId);
+      for (const card of folderPendingCreates) {
+        const response = await fetch(
+          `${BASE_URL}/flashcards/${fId}/manualSaved`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: card.id,
+              question: card.question,
+              answer: card.answer,
+              status: card.status || "review",
+              folderIdd: fId,
+            }),
+          },
+        );
+        if (response.ok) {
+          saveFlashcards([
+            {
+              id: card.id,
+              folderId: fId,
+              question: card.question,
+              answer: card.answer,
+              status: card.status || "review",
+            }
+          ], "synced");
+        }
+      }
+
+      // 2. Process pending deletions
+      const pendingDeletes = getFlashcardsBySyncStatus("pending_delete") as any[];
+      const folderPendingDeletes = pendingDeletes.filter(c => c.folder_id === fId);
+      for (const card of folderPendingDeletes) {
+        const response = await fetch(`${BASE_URL}/flashcards/${card.id}`, {
+          method: "DELETE",
+        });
+        if (response.ok) {
+          deleteFlashcard(card.id);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to sync flashcards with server:", error);
     }
   }, []);
 
@@ -104,6 +156,9 @@ export function useFlashCards(folderId: string) {
       prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c)),
     );
 
+    // Save changes to local database cache for offline availability immediately
+    updateFlashcardStatus(id, newStatus);
+
     try {
       // Send changes to the backend
       const response = await fetch(`${BASE_URL}/flashcards/${id}`, {
@@ -113,12 +168,8 @@ export function useFlashCards(folderId: string) {
       });
 
       if (!response.ok) throw new Error("Failed to update backend");
-
-      // Save changes to local database cache for offline availability
-      updateFlashcardStatus(id, newStatus);
     } catch (error) {
       console.error("Status update failed:", error);
-      // NOTE: In a production app, we would revert the screen state here if the network failed!
     }
   }, []);
 
@@ -133,19 +184,15 @@ export function useFlashCards(folderId: string) {
   );
 
   const handleDelete = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(`${BASE_URL}/flashcards/${id}`, {
-        method: "DELETE",
-      });
+    // Eagerly update UI state
+    setCards((prev) => prev.filter((c) => c.id !== id));
 
-      if (response.ok) {
-        deleteFlashcard(id);
-        setCards((prev) => prev.filter((c) => c.id !== id));
-      }
-    } catch (error) {
-      console.error("Delete failed:", error);
-    }
-  }, []);
+    // Eagerly update SQLite cache
+    deleteFlashcard(id);
+
+    // Perform sync in background
+    void syncPendingFlashcards(folderId);
+  }, [folderId, syncPendingFlashcards]);
 
   /** Update question/answer for an existing card */
   const handleEdit = useCallback(
@@ -202,10 +249,6 @@ export function useFlashCards(folderId: string) {
     }
   }, [folderId]);
 
-  /** 
-   * Fetches the official cards list from the backend server.
-   * If the fetch request fails (e.g. no internet), it falls back to the local database cache.
-   */
   const loadSavedCards = useCallback(
     async (signal?: AbortSignal, loadCacheOnFailure = false) => {
       // Create a timeout controller to cancel the request if it takes longer than 8 seconds (FETCH_TIMEOUT_MS)
@@ -229,16 +272,15 @@ export function useFlashCards(folderId: string) {
         const saved: FlashCard[] = data.map(mapApiCard);
 
         if (!isMountedRef.current) return;
-        setCards(saved);
 
-        // Smart cache saving: compare the signatures of loaded cards.
-        // We only overwrite the local SQLite database if the cards list actually changed,
-        // which saves mobile CPU battery and read/write cycles.
-        const idsSignature = saved.map((c) => `${c.id}:${c.status}`).join(",");
-        if (idsSignature !== lastSavedIdsRef.current) {
-          lastSavedIdsRef.current = idsSignature;
-          replaceFlashcardsForFolder(folderId, saved.map((card) => ({ ...card, folderId })));
-        }
+        // Save server cards to cache (only replacing synced cards)
+        replaceFlashcardsForFolder(folderId, saved.map((card) => ({ ...card, folderId })), "synced");
+
+        // Run background sync for pending creations/deletes
+        void syncPendingFlashcards(folderId);
+
+        // Load merged list from SQLite cache (synced + pending)
+        loadCachedCards();
       } catch (error) {
         // If we canceled the request on purpose, don't show any error messages.
         if ((error as Error)?.name === "AbortError") return;
@@ -257,34 +299,40 @@ export function useFlashCards(folderId: string) {
         }
       }
     },
-    [folderId, loadCachedCards],
+    [folderId, loadCachedCards, syncPendingFlashcards],
   );
 
   const handleAddCard = useCallback(
     async (question: string, answer: string) => {
-      try {
-        const response = await fetch(
-          `${BASE_URL}/flashcards/${folderId}/manualSaved`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              question,
-              answer,
-              status: "review",
-              folderIdd: folderId,
-            }),
-          },
-        );
+      const newId = uuidv4();
+      const newCard: FlashCard = {
+        id: newId,
+        question: question.trim(),
+        answer: answer.trim(),
+        status: "review",
+      };
 
-        if (response.ok) {
-          await loadSavedCards();
-        }
-      } catch (error) {
-        console.error("Add card failed:", error);
-      }
+      // Eagerly update screen state
+      setCards((prev) => [...prev, newCard]);
+
+      // Eagerly save to SQLite cache as pending
+      saveFlashcards(
+        [
+          {
+            id: newId,
+            folderId,
+            question: question.trim(),
+            answer: answer.trim(),
+            status: "review",
+          },
+        ],
+        "pending_create"
+      );
+
+      // Perform background sync (non-blocking)
+      void syncPendingFlashcards(folderId);
     },
-    [folderId, loadSavedCards],
+    [folderId, syncPendingFlashcards],
   );
 
   // ── Load existing cards on mount / folder change ───────────────────────────

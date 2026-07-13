@@ -13,7 +13,7 @@ class FlashcardService:
     # We only allow flashcards to have one of these two study states
     VALID_STATUSES = {"review", "understood"}
 
-    def create(self, folder_id: str, question: str, answer: str, status: str) -> Flashcard:
+    def create(self, folder_id: str, question: str, answer: str, status: str, flashcard_id: str | None = None) -> Flashcard:
         """
         Creates a new flashcard manually:
         1. Validates that the status state is valid (either 'review' or 'understood').
@@ -22,6 +22,7 @@ class FlashcardService:
         """
         self._validate_status(status)
         flashcard = Flashcard(
+            id=flashcard_id,
             folder_id=folder_id,
             question=question.strip(),
             answer=answer.strip(),

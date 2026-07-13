@@ -18,7 +18,8 @@ export function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS folders (
       id TEXT PRIMARY KEY,           -- Unique identifier for the folder
       subject TEXT NOT NULL,         -- The name of the subject
-      accent_color TEXT NOT NULL     -- Color code used in the UI theme
+      accent_color TEXT NOT NULL,    -- Color code used in the UI theme
+      sync_status TEXT NOT NULL DEFAULT 'synced'
     );
 
     -- 2. Flashcards Table: Stores individual study cards
@@ -28,6 +29,7 @@ export function initializeDatabase() {
       question TEXT NOT NULL,        -- The question/front text
       answer TEXT NOT NULL,          -- The answer/back text
       status TEXT CHECK (status IN ('review', 'understood')), -- Status check (only allow review or understood)
+      sync_status TEXT NOT NULL DEFAULT 'synced',
       FOREIGN KEY (folder_id) REFERENCES folders(id) -- Connects to folders table
     );
 
@@ -57,4 +59,28 @@ export function initializeDatabase() {
       sync_status TEXT NOT NULL DEFAULT 'pending_create' -- Offline sync status (e.g. pending save to backend)
     );
   `);
+
+  // Run migrations to add sync_status to existing tables
+  try {
+    db.execSync("ALTER TABLE folders ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'synced';");
+  } catch (e) {
+    // Column already exists or table doesn't exist yet
+  }
+
+  try {
+    db.execSync("ALTER TABLE flashcards ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'synced';");
+  } catch (e) {
+    // Column already exists
+  }
 }
+
+export function uuidv4() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Run database initialization synchronously on module import to prevent race conditions with screen mounts
+initializeDatabase();

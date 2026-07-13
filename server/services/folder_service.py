@@ -11,8 +11,9 @@ class FolderService:
     # TODO: replace this temporary owner with the authenticated user identity.
     DEFAULT_USER_ID = "66b851ba-e806-4eae-b109-ef676b9ca64b"
 
-    def create(self, subject: str, accent_color: str) -> Folder:
+    def create(self, subject: str, accent_color: str, folder_id: str | None = None) -> Folder:
         folder = Folder(
+            id=folder_id,
             subject=subject.strip(),
             accent_color=accent_color,
             user_id=self.DEFAULT_USER_ID,

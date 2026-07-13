@@ -90,7 +90,13 @@ class ManualFlashcardAPI(MethodView):
         # Ensure all required fields exist
         require_fields(data, "question", "answer", "status")
         
-        flashcard = flashcard_service.create(folder_id, data["question"], data["answer"], data["status"])
+        flashcard = flashcard_service.create(
+            folder_id, 
+            data["question"], 
+            data["answer"], 
+            data["status"],
+            data.get("id")
+        )
         return jsonify({"message": "Flashcard created.", "data": flashcard.to_dict()}), 201
 
 

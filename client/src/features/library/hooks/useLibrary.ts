@@ -13,13 +13,17 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import type { Folder } from "../types";
 import {
   saveFolders,
   getFolders,
   deleteFolder as deleteFolderCache,
+  getFoldersBySyncStatus,
 } from "@/shared/database/folderRepository";
+import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
 import { BASE_URL } from "@/shared/config/api";
+import { uuidv4 } from "@/shared/database/database";
 
 export function useLibrary() {
   const isMountedRef = useRef(false);
@@ -54,20 +58,66 @@ export function useLibrary() {
     try {
       const cachedFolders = getFolders();
 
+      // Single GROUP BY query — gets all folder card counts in one shot (offline-safe)
+      const cardCounts = getCardCountsPerFolder();
+
       const parsedFolders: Folder[] = cachedFolders.map((folder: any) => ({
-        cardCount: 0,
         id: folder.id,
         subject: folder.subject,
         accentColor: folder.accent_color,
+        cardCount: cardCounts[folder.id] ?? 0,
       }));
 
       if (isMountedRef.current) setFolders(parsedFolders);
-
-      console.log("Loaded folders from SQLite");
     } catch (error) {
       console.error("SQLite load error:", error);
     }
   }, []);
+
+  // background sync helper
+  const syncPendingFolders = useCallback(async () => {
+    try {
+      // 1. Process pending creations
+      const pendingCreates = getFoldersBySyncStatus("pending_create") as any[];
+      for (const folder of pendingCreates) {
+        const response = await fetch(`${BASE_URL}/folders`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: folder.id,
+            subject: folder.subject,
+            accentColor: folder.accent_color || folder.accentColor,
+          }),
+        });
+        if (response.ok) {
+          saveFolders(
+            [
+              {
+                id: folder.id,
+                subject: folder.subject,
+                accentColor: folder.accent_color || folder.accentColor,
+              },
+            ],
+            "synced"
+          );
+        }
+      }
+
+      // 2. Process pending deletions
+      const pendingDeletes = getFoldersBySyncStatus("pending_delete") as any[];
+      for (const folder of pendingDeletes) {
+        const response = await fetch(`${BASE_URL}/folders/${folder.id}`, {
+          method: "DELETE",
+        });
+        if (response.ok) {
+          deleteFolderCache(folder.id);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to sync folders with server:", error);
+    }
+  }, []);
+
   //for fetching current folder data to database
   const fetchFolder = useCallback(async () => {
     try {
@@ -83,65 +133,74 @@ export function useLibrary() {
 
       if (!isMountedRef.current) return;
 
-      setFolders(foldersFromDB.response);
+      // Save server folders to cache
+      saveFolders(foldersFromDB.response, "synced");
 
-      saveFolders(foldersFromDB.response);
+      // Run background sync for pending actions
+      void syncPendingFolders();
+
+      // Read final list from SQLite (which merges fetched server folders + any pending folder creations)
+      loadCachedFolders();
     } catch (error) {
-      console.error(error);
+      console.error("fetchFolder failed, using cached:", error);
+      loadCachedFolders();
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [loadCachedFolders, syncPendingFolders]);
 
-  // everytime the screen first open and load
+  // ── Mount: set up ref and kick off server fetch ──────────────────────────
   useEffect(() => {
     isMountedRef.current = true;
-    loadCachedFolders();
     void fetchFolder();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [fetchFolder, loadCachedFolders]);
+  }, [fetchFolder]);
+
+  // ── Focus: re-read SQLite counts every time the screen is entered ─────────
+  // This fires on initial mount AND every time the user navigates back here
+  // (e.g. returning from a folder after adding/deleting cards).
+  // SQLite is always up-to-date because cards are written there immediately,
+  // so this is instant and works fully offline.
+  useFocusEffect(
+    useCallback(() => {
+      loadCachedFolders();
+    }, [loadCachedFolders])
+  );
 
   const addFolder = async (
     subject: string,
     accentColor: string,
   ): Promise<void> => {
-    try {
-      const response = await fetch(`${BASE_URL}/folders`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          subject,
-          accentColor,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to create folder");
-      }
-      await fetchFolder();
-    } catch (error) {
-      console.error("Failed to create folder ", error);
-    }
+    const newId = uuidv4();
+    const newFolder: Folder = {
+      id: newId,
+      subject: subject.trim(),
+      accentColor,
+      cardCount: 0,
+    };
+
+    // Eagerly update UI state
+    setFolders((prev) => [newFolder, ...prev]);
+
+    // Eagerly save to SQLite cache as pending
+    saveFolders([newFolder], "pending_create");
+
+    // Perform background sync (non-blocking)
+    void syncPendingFolders();
   };
 
   const deleteFolder = async (id: string) => {
-    try {
-      await fetch(`${BASE_URL}/folders/${id}`, {
-        method: "DELETE",
-      });
+    // Eagerly update UI state
+    setFolders((prev) => prev.filter((folder) => folder.id !== id));
 
-      deleteFolderCache(id);
+    // Eagerly delete/mark pending deletion in SQLite cache
+    deleteFolderCache(id);
 
-      if (isMountedRef.current) {
-        setFolders((prev) => prev.filter((folder) => folder.id !== id));
-      }
-    } catch (error) {
-      console.error(error);
-    }
+    // Perform background sync (non-blocking)
+    void syncPendingFolders();
   };
 
   /** Clear the search bar text */

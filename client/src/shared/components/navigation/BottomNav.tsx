@@ -6,12 +6,14 @@
  * Features:
  *  - Regular tabs with an emoji icon + label + active dot indicator
  *  - A special "center" tab rendered as a large floating "+" button
+ *  - Smooth spring-scale on active icon + dot fade-in per tab
  *
  * It does NOT decide where to navigate — it just tells the parent
  * which tab was tapped via onTabPress / onAddPress callbacks.
  */
 
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { NAV_ITEMS } from "@/features/library/constants";
 import { THEME } from "@/features/library/theme";
 import { useAddFolder } from "@/shared/context/AddFolderContext";
@@ -27,6 +29,61 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 //   /** Called when the user taps the center "+" button */
 //   onAddPress: () => void;
 // }
+
+/** Animated tab item — handles its own scale + dot-fade per tab */
+const AnimatedTabItem = ({
+  item,
+  isActive,
+  onPress,
+}: {
+  item: (typeof NAV_ITEMS)[number];
+  isActive: boolean;
+  onPress: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(isActive ? 1 : 0.88)).current;
+  const dotOpacity = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: isActive ? 1 : 0.88,
+        useNativeDriver: true,
+        speed: 24,
+        bounciness: 4,
+      }),
+      Animated.timing(dotOpacity, {
+        toValue: isActive ? 1 : 0,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isActive]);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={styles.tab}
+      activeOpacity={0.7}
+    >
+      {/* Icon — springs up when active */}
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <MaterialCommunityIcons
+          name={item.icon}
+          size={24}
+          color={isActive ? THEME.primary : THEME.textDim}
+        />
+      </Animated.View>
+
+      {/* Label — green + bold when active */}
+      <Text style={[styles.label, isActive && styles.labelActive]}>
+        {item.label}
+      </Text>
+
+      {/* Small green dot below active tab — fades in smoothly */}
+      <Animated.View style={[styles.activeDot, { opacity: dotOpacity }]} />
+    </TouchableOpacity>
+  );
+};
 
 const BottomNav = ({ state, navigation, insets }: any) => {
   const { setAddModalVisible } = useAddFolder();
@@ -53,31 +110,16 @@ const BottomNav = ({ state, navigation, insets }: any) => {
             );
           }
 
-          // ── Normal tab ──
+          // ── Normal animated tab ──
           const isActive = state.routes[state.index].name === item.id;
 
           return (
-            <TouchableOpacity
+            <AnimatedTabItem
               key={item.id}
+              item={item}
+              isActive={isActive}
               onPress={() => navigation.navigate(item.id)}
-              style={styles.tab}
-              activeOpacity={0.7}
-            >
-              {/* Emoji icon — brighter when active */}
-              <MaterialCommunityIcons
-                name={item.icon}
-                size={24}
-                color={isActive ? THEME.primary : THEME.textDim}
-              />
-
-              {/* Label — green + bold when active */}
-              <Text style={[styles.label, isActive && styles.labelActive]}>
-                {item.label}
-              </Text>
-
-              {/* Small green dot below active tab */}
-              {isActive && <View style={styles.activeDot} />}
-            </TouchableOpacity>
+            />
           );
         })}
       </View>
