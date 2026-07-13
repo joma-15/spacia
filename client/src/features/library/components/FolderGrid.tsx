@@ -18,21 +18,23 @@ import type { Folder } from "../types";
 interface Props {
   folders: Folder[];
   onDelete: (id: string) => void;
+  onRename: (id: string, newSubject: string) => void;
 }
 
-const FolderGrid: React.FC<Props> = ({ folders, onDelete }) => (
+const FolderGrid: React.FC<Props> = ({ folders, onDelete, onRename }) => (
   <View style={styles.grid}>
     {folders.map((folder) => (
       <FolderCard
         key={folder.id}
         folder={folder}
         onDelete={onDelete}
+        onRename={onRename}
         onPress={() =>
           // Navigate to the cards screen for this folder,
           // passing the folder id and name as URL params
           router.push({
             pathname: "/CardScreen",
-            params: { folderId: folder.id},
+            params: { folderId: folder.id, folderName: folder.subject },
           })
         }
       />

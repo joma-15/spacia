@@ -19,6 +19,7 @@ import {
   saveFolders,
   getFolders,
   deleteFolder as deleteFolderCache,
+  updateFolder as updateFolderCache,
   getFoldersBySyncStatus,
 } from "@/shared/database/folderRepository";
 import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
@@ -203,6 +204,29 @@ export function useLibrary() {
     void syncPendingFolders();
   };
 
+  /** Delete every folder at once */
+  const deleteAllFolders = async () => {
+    // Eagerly clear UI
+    const ids = folders.map((f) => f.id);
+    setFolders([]);
+    // Mark each as deleted in SQLite
+    ids.forEach((id) => deleteFolderCache(id));
+    // Background sync
+    void syncPendingFolders();
+  };
+
+  /** Rename a folder subject */
+  const renameFolder = (id: string, newSubject: string) => {
+    // Eagerly update UI
+    setFolders((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, subject: newSubject } : f))
+    );
+    // Update in SQLite
+    updateFolderCache(id, newSubject);
+    // Background sync
+    void syncPendingFolders();
+  };
+
   /** Clear the search bar text */
   const clearSearch = (): void => setSearchQuery("");
 
@@ -221,5 +245,7 @@ export function useLibrary() {
     clearSearch,
     addFolder,
     deleteFolder,
+    deleteAllFolders,
+    renameFolder,
   };
 }

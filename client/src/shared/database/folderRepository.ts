@@ -51,6 +51,17 @@ export function getFoldersBySyncStatus(status: string) {
 }
 
 /**
+ * Updates the subject name of a folder in the local database.
+ * Marks the folder as 'pending_update' so the background sync will push the change to the server.
+ */
+export function updateFolder(folderId: string, newSubject: string) {
+  db.runSync(
+    `UPDATE folders SET subject = ?, sync_status = 'pending_update' WHERE id = ?`,
+    [newSubject, folderId]
+  );
+}
+
+/**
  * Deletes a subject folder from local database by its ID.
  * If it is pending creation, we delete it directly. Otherwise, we flag it as pending delete.
  */

@@ -40,8 +40,8 @@ const CardScreen: React.FC = () => {
   const [textbookUploadVisible, setTextbookUploadVisible] = useState(false);
   const [deleteAllModalVisible, setDeleteAllModalVisible] = useState(false);
 
-  // ── Get folder id ──────────────────────────────────────────────────────────
-  const { folderId } = useLocalSearchParams<{ folderId: string }>();
+  // ── Get folder id and name from URL params ──────────────────────────────
+  const { folderId, folderName } = useLocalSearchParams<{ folderId: string; folderName: string }>();
 
   // ── All card state and actions (single hook call) ──────────────────────────
   const {
@@ -120,7 +120,7 @@ const CardScreen: React.FC = () => {
 
       {/* ── Top bar ── */}
       <Header
-        title="Physics Cards"
+        title={folderName ?? "Flashcards"}
         subtitle="My Subjects"
         hasCards={cards.length > 0}
         onAiGenerate={handleAiGenerate}

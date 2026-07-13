@@ -16,6 +16,7 @@
 
 import { router } from "expo-router";
 import {
+  Alert,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -47,9 +48,6 @@ export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
 
   // ── Business logic (state + actions) from the hook ────────────────────────
-  // Note: popupEnabled/setPopupEnabled removed from this destructure since
-  // the banner is now a nav button, not a toggle. The hook can still expose
-  // them for other screens if needed — they're just unused here now.
   const {
     searchQuery,
     filteredFolders,
@@ -57,6 +55,8 @@ export default function LibraryScreen() {
     clearSearch,
     addFolder,
     deleteFolder,
+    deleteAllFolders,
+    renameFolder,
     loading,
   } = useLibrary();
 
@@ -78,6 +78,22 @@ export default function LibraryScreen() {
    * Adjust this route to wherever your scheduling/notification
    * settings screen actually lives.
    */
+
+  // ── Delete All confirmation ───────────────────────────────────────────────
+  const handleDeleteAll = () => {
+    Alert.alert(
+      "Delete All Folders",
+      "This will permanently remove all your subject folders and cannot be undone. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete All",
+          style: "destructive",
+          onPress: () => deleteAllFolders(),
+        },
+      ]
+    );
+  };
 
   // ── Layout calculation ────────────────────────────────────────────────────
 
@@ -107,12 +123,16 @@ export default function LibraryScreen() {
           onSearchClear={clearSearch}
         />
 
-        {/* ── "My Subjects" heading + folder count ── */}
-        <SectionHeader count={filteredFolders.length} />
+        {/* ── "My Subjects" heading + folder count + Delete All ── */}
+        <SectionHeader count={filteredFolders.length} onDeleteAll={handleDeleteAll} />
 
         {/* ── Folder grid OR empty state ── */}
         {filteredFolders.length > 0 ? (
-          <FolderGrid folders={filteredFolders} onDelete={deleteFolder} />
+          <FolderGrid
+            folders={filteredFolders}
+            onDelete={deleteFolder}
+            onRename={renameFolder}
+          />
         ) : (
           <EmptyState
             searchQuery={searchQuery}
