@@ -10,9 +10,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../GameCatalog/constants/colors';
 
-// Placeholder screen for the "WordRush" game.
-// Replace this with the real game UI + logic.
-const WordRush: React.FC = () => {
+// Placeholder screen for the "SpaceBlast" game.
+const SpaceBlast: React.FC = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -38,15 +37,15 @@ const WordRush: React.FC = () => {
           />
         </Pressable>
 
-        <Text style={styles.headerTitle}>Word Rush</Text>
+        <Text style={styles.headerTitle}>Space Blast</Text>
 
-        {/* Spacer to keep the title centered */}
+        {/* Spacer to keep title centered */}
         <View style={styles.backButton} />
       </View>
 
       {/* Content */}
       <View style={styles.content}>
-        <Text style={styles.title}>Word Rush</Text>
+        <Text style={styles.title}>Space Blast</Text>
         <Text style={styles.subtitle}>
           Game logic goes here.
         </Text>
@@ -55,7 +54,7 @@ const WordRush: React.FC = () => {
   );
 };
 
-export default WordRush;
+export default SpaceBlast;
 
 const styles = StyleSheet.create({
   screen: {

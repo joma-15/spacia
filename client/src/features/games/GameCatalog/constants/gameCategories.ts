@@ -9,20 +9,20 @@ export const GAME_CATEGORIES: GameCategory[] = [
     title: 'Space blast',
     image: require(`${BASE_PATH}/drei.jpg`),
     tint: '#5B8DEF',
-    route: 'Space Blast',
+    route: '/games/SpaceBlast'
   },
   {
     id: '2',
-    title: 'Luis The Destroyer',
+    title: 'WordRush',
     image: require(`${BASE_PATH}/luis.jpg`),
     tint: '#34D399',
-    route: 'WordRush',
+    route: '/games/WordRush',
   },
   {
     id: '3',
-    title: 'Lb Jed',
+    title: 'MemoryMatch',
     image: require(`${BASE_PATH}/jed.jpg`),
     tint: '#E86A92',
-    route: 'MemoryMatch',
+    route: '/games/MemoryMatch',
   },
 ];
