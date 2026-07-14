@@ -219,6 +219,12 @@ const styles = StyleSheet.create({
   listArea: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+  },
   tabPanel: {
     flex: 1,
   },

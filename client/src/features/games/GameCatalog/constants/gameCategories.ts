@@ -25,4 +25,11 @@ export const GAME_CATEGORIES: GameCategory[] = [
     tint: '#E86A92',
     route: '/games/MemoryMatch',
   },
+  {
+    id: '4', 
+    title: 'Drei', 
+    image: require(`${BASE_PATH}/burat.jpg`), 
+    tint: '#E86A92',
+    route: '/games/MemoryMatch',
+  },
 ];

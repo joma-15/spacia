@@ -4,19 +4,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GameCatalog } from '../GameCatalog';
 import { GameCategory } from '../GameCatalog/types';
 import { colors } from '../GameCatalog/constants/colors';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 
 // Top-level screen: owns safe-area padding + navigation wiring,
 // delegates all UI/state to GameCatalog.
 const GamingScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
 
   const handleSelectGame = (category: GameCategory) => {
-    // navigation.navigate(category.route, { id: category.id });
-    console.log('Navigate to:', category.route);
-    // router.push(category.route);
-    router.push('/games/SelectionWizard');
+    console.log('Navigate to SelectionWizard with target game route:', category.route);
+    router.push({
+      pathname: '/games/SelectionWizard' as any,
+      params: { gameRoute: category.route as any }
+    });
   };
 
   return (

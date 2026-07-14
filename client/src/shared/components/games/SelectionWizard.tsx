@@ -10,21 +10,14 @@ import {
   View,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useSelectionWizard } from "./hooks/useSelectionWizard";
+import { Folder, useSelectionWizard } from "./hooks/useSelectionWizard";
 
 /* -------------------------------------------------------------------------- */
 /*                                   Types                                    */
 /* -------------------------------------------------------------------------- */
-
-interface Folder {
-  id: string;
-  subject: string;
-  cardCount: number;
-  accentColor: string;
-}
 
 interface FolderItemProps {
   item: Folder;
@@ -125,12 +118,11 @@ const FolderItem = React.memo(
 
 export default function SelectionWizard() {
   const insets = useSafeAreaInsets();
+  const { gameRoute } = useLocalSearchParams<{ gameRoute: string }>();
 
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { folders, loading } = useSelectionWizard();
-
-  console.log(folders);
+  const { folders, loading, refreshing, fetchFolders } = useSelectionWizard();
 
   const filteredFolders = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -145,8 +137,19 @@ export default function SelectionWizard() {
   }, []);
 
   const handleSelectFolder = useCallback((folder: Folder) => {
-    console.log("Selected folder:", folder);
-  }, []);
+    if (gameRoute) {
+      router.push({
+        pathname: gameRoute as any,
+        params: { folderId: folder.id, folderName: folder.subject }
+      });
+    } else {
+      console.warn("No gameRoute provided to SelectionWizard");
+    }
+  }, [gameRoute]);
+
+  const handleRefresh = useCallback(() => {
+    fetchFolders(true);
+  }, [fetchFolders]);
 
   const renderFolder = useCallback(
     ({ item }: { item: Folder }) => (
@@ -243,6 +246,8 @@ export default function SelectionWizard() {
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
         contentContainerStyle={[
           styles.listContent,
           {
