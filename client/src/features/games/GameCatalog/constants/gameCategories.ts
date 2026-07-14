@@ -6,10 +6,10 @@ const BASE_PATH = '../../../../../assets/images'
 export const GAME_CATEGORIES: GameCategory[] = [
   {
     id: '1',
-    title: 'Drei Immortal',
+    title: 'Space blast',
     image: require(`${BASE_PATH}/drei.jpg`),
     tint: '#5B8DEF',
-    route: 'QuizBattle',
+    route: 'Space Blast',
   },
   {
     id: '2',

@@ -54,25 +54,3 @@ export const NAV_ITEMS: {
   { id: "library",   label: "Library", icon: "folder"           },
   { id: "payment",   label: "Premium", icon: "credit-card-outline"           },
 ];
-
-
-import type { DayOfWeek } from "./types";
-
-export const DAYS_OF_WEEK: DayOfWeek[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-export const DURATION_PRESETS: { label: string; minutes: number }[] = [
-  { label: "15 min", minutes: 15 },
-  { label: "30 min", minutes: 30 },
-  { label: "1 hour", minutes: 60 },
-  { label: "2 hours", minutes: 120 },
-];
-
-export const INTERVAL_PRESETS: { label: string; minutes: number }[] = [
-  { label: "5 min", minutes: 5 },
-  { label: "10 min", minutes: 10 },
-  { label: "15 min", minutes: 15 },
-  { label: "30 min", minutes: 30 },
-  { label: "1 hour", minutes: 60 },
-];
-
-export const WIZARD_STEPS = ["Folder", "Cards", "Schedule", "Review"] as const;

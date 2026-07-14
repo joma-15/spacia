@@ -13,6 +13,7 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { THEME } from "../theme";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface Props {
   /** What the user has typed in the search bar (empty string if not searching) */
@@ -36,7 +37,13 @@ const EmptyState: React.FC<Props> = ({ searchQuery, onCreatePress }) => {
   // ── No folders at all ──────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      <Text style={styles.icon}>📂</Text>
+      <Text style={styles.icon}>
+        <MaterialCommunityIcons
+        name="folder-open"
+        color="yellow"
+        size={100}
+        />
+      </Text>
       <Text style={styles.title}>No subjects yet.</Text>
       <Text style={styles.subtitle}>Tap ＋ below to create your first folder.</Text>
 
