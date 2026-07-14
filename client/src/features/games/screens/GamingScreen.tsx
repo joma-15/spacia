@@ -15,7 +15,8 @@ const GamingScreen: React.FC = () => {
   const handleSelectGame = (category: GameCategory) => {
     // navigation.navigate(category.route, { id: category.id });
     console.log('Navigate to:', category.route);
-    router.push(category.route);
+    // router.push(category.route);
+    router.push('/games/SelectionWizard');
   };
 
   return (
