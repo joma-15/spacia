@@ -7,6 +7,7 @@ import {
 } from "@/shared/services/NotificationService";
 
 export default function Index() {
+
   useEffect(() => {
     initializeDatabase();
     configureNotifications();

@@ -20,7 +20,7 @@ class FolderCollectionAPI(MethodView):
     def get(self):
         # Fetch folders from database and convert them to dictionary format
         folders = [folder.to_dict() for folder in folder_service.list_all()]
-        return jsonify({"response": folders, "cardCount": 0})
+        return jsonify({"response": folders})
 
     def post(self):
         # Extract folder settings from JSON request

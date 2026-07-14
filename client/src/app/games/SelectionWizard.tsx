@@ -1,3 +1,3 @@
-import SelectionWizard from "@/shared/components/navigation/SelectionWizard";
+import SelectionWizard from "@/shared/components/games/SelectionWizard";
 
 export default SelectionWizard;

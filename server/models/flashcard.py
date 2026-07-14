@@ -16,6 +16,11 @@ class Flashcard(db.Model):
         default=lambda: str(uuid.uuid4())
     )
 
+    folder = db.relationship(
+        "Folder",
+         back_populates="flashcards"
+    )
+
     # Links this card to a folder (ForeignKey). If a folder is deleted, its cards must be cleaned up.
     folder_id = db.Column(
         db.String(36), 

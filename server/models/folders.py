@@ -5,6 +5,12 @@ from sqlalchemy.sql import func
 class Folder(db.Model): 
     __tablename__="folders"
 
+    flashcards = db.relationship(
+        "Flashcard",
+        back_populates="folder",
+        cascade="all, delete-orphan"
+    )
+
     id = db.Column(
         db.String(36), 
         primary_key=True, 
@@ -43,4 +49,5 @@ class Folder(db.Model):
             "id": self.id,
             "subject": self.subject,
             "accentColor": self.accent_color,
+            "cardCount": len(self.flashcards),
         }
