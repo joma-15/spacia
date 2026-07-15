@@ -1,8 +1,7 @@
 /**
  * EmptyDeckState.tsx
  * ─────────────────────────────────────────────
- * Shown instead of the whole screen when the deck has zero cards.
- * Prevents the app from crashing trying to render a card that doesn't exist.
+ * Shown instead of the whole screen when the folder has zero cards.
  */
 
 import React from "react";
@@ -18,7 +17,7 @@ const EmptyDeckState: React.FC = () => {
       styles.screen,
       { paddingTop: insets.top, paddingBottom: insets.bottom },
     ]}>
-      <Text style={styles.text}>No cards in this deck yet.</Text>
+      <Text style={styles.text}>No cards in this folder yet.</Text>
     </View>
   );
 };
@@ -26,7 +25,7 @@ const EmptyDeckState: React.FC = () => {
 export default EmptyDeckState;
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.screenBg },
+  screen: { flex: 1, backgroundColor: COLORS.screenBg, justifyContent: "center" },
   text: {
     color: COLORS.textMuted,
     fontSize: 16,

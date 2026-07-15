@@ -2,19 +2,10 @@
  * FlipCard.tsx
  * ─────────────────────────────────────────────
  * The main 3D-flipping flashcard.
- *
- * HOW THE FLIP WORKS:
- * Both faces (front = question, back = answer) are stacked on top
- * of each other using `position: absolute`. We rotate each face
- * on the Y-axis so that as the front rotates away from the viewer,
- * the back rotates into view — like a real card flipping over.
- *
- * `backfaceVisibility: hidden` is the key trick that hides a face
- * once it's rotated past 90 degrees, so you never see "through" the card.
  */
 
 import React from "react";
-import { Animated, Pressable, StyleSheet, Text } from "react-native";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { COLORS } from "../colors";
 import type { Flashcard } from "../types";
 
@@ -48,8 +39,6 @@ const FlipCard: React.FC<Props> = ({
         styles.face,
         { transform: [{ rotateY: frontInterpolate }] },
       ]}
-      // Disable touches on this face once it has rotated to the back,
-      // so taps go to the correct (visible) face only.
       pointerEvents={showBack ? "none" : "auto"}
     >
       <Text style={styles.label}>QUESTION</Text>
@@ -91,8 +80,6 @@ const styles = StyleSheet.create({
   },
   face: {
     position: "absolute",
-    // Hides this face once rotated past 90deg — this is what makes
-    // the flip look like a real card instead of a transparent pane.
     backfaceVisibility: "hidden",
   },
   backFace: {

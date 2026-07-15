@@ -2,9 +2,6 @@
  * ActionButtons.tsx
  * ─────────────────────────────────────────────
  * The "🔁 Review" and "✓ Understood" buttons at the bottom of the screen.
- *
- * Both buttons are disabled until the user has flipped the card —
- * this stops people from grading a card they haven't actually read.
  */
 
 import React from "react";

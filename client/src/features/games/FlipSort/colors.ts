@@ -1,16 +1,13 @@
 /**
  * colors.ts
  * ─────────────────────────────────────────────
- * Every color token used in the flashcard study screen.
- *
- * Change a value here and it updates everywhere automatically —
- * no hunting through multiple component files.
+ * Every color token used in the Flip & Sort screen.
  */
 
 export const COLORS = {
   // ── Backgrounds ───────────────────────────────────────────────────────────
   screenBg:    "#0E1F17",  // full screen background
-  exitButtonBg: "#1B2F24", // circular ✕ button background
+  exitButtonBg: "#1B2F24", // circular button background
   trackBg:     "#1B2F24",  // progress bar empty track
 
   // ── Card faces ────────────────────────────────────────────────────────────
@@ -20,7 +17,7 @@ export const COLORS = {
   cardBackBorder:  "#1F7A4B",
 
   // ── Text ──────────────────────────────────────────────────────────────────
-  textPrimary: "#F4F7F4",  // main card text, exit icon
+  textPrimary: "#F4F7F4",  // main card text, back button
   textMuted:   "#8FA396",  // progress counter, empty state
   textDim:     "#5E7468",  // labels, tap hints
 

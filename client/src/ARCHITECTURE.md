@@ -8,8 +8,8 @@ src/
   features/            Feature-owned screens, components, hooks, types, and constants
     library/
     flashcards/
-    flashcard-study/
     games/
+      FlipSort/
     payment/
     coming-soon/
     schedules/

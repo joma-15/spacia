@@ -2,8 +2,6 @@
  * ProgressBar.tsx
  * ─────────────────────────────────────────────
  * A thin horizontal bar showing how far through the deck the user is.
- *
- * Pure display component — receives a 0-100 percentage and renders it.
  */
 
 import React from "react";

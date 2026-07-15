@@ -5,6 +5,13 @@ const BASE_PATH = '../../../../../assets/images'
 // Sample data — swap `image` for your own assets (require(...) or {uri:...})
 export const GAME_CATEGORIES: GameCategory[] = [
   {
+    id: 'flip-sort',
+    title: 'Flip & Sort',
+    image: require(`${BASE_PATH}/burat.jpg`),
+    tint: '#3ED598',
+    route: '/games/FlipSort' as any,
+  },
+  {
     id: '1',
     title: 'Space blast',
     image: require(`${BASE_PATH}/drei.jpg`),
@@ -22,13 +29,6 @@ export const GAME_CATEGORIES: GameCategory[] = [
     id: '3',
     title: 'MemoryMatch',
     image: require(`${BASE_PATH}/jed.jpg`),
-    tint: '#E86A92',
-    route: '/games/MemoryMatch',
-  },
-  {
-    id: '4', 
-    title: 'Drei', 
-    image: require(`${BASE_PATH}/burat.jpg`), 
     tint: '#E86A92',
     route: '/games/MemoryMatch',
   },
