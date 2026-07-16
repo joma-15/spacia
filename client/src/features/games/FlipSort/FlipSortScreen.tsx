@@ -80,6 +80,7 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
     markForReview,
     markAsUnderstood,
     skipCard,
+    goToPreviousCard,
     totalCards,
   } = useFlipSortSession({
     cards,
@@ -117,14 +118,18 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
       <ProgressBar percent={progressPercent} />
 
       <View style={styles.cardContainer}>
-        <FlipCard
-          card={currentCard}
-          showBack={showBack}
-          frontInterpolate={frontInterpolate}
-          backInterpolate={backInterpolate}
-          onFlip={flipCard}
-          onSwipe={skipCard}
-        />
+        {currentCard ? (
+          <FlipCard
+            card={currentCard}
+            showBack={showBack}
+            frontInterpolate={frontInterpolate}
+            backInterpolate={backInterpolate}
+            onFlip={flipCard}
+            onSwipe={(direction) =>
+              direction === "left" ? goToPreviousCard() : skipCard()
+            }
+          />
+        ) : null}
       </View>
 
       <ActionButtons

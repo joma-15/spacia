@@ -91,6 +91,16 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
     goToNextCard();
   };
 
+  /**
+   * Swipe-left: goes back to the previous card. Does not undo any
+   * review/understood count already recorded — it only moves the index.
+   * Clamped so it can never go below the first card.
+   */
+  const goToPreviousCard = (): void => {
+    setIndex((prev) => Math.max(prev -1,0)); 
+    resetFlip();
+  }
+
   return {
     index,
     currentCard,
@@ -101,5 +111,6 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
     markForReview,
     markAsUnderstood,
     skipCard,
+    goToPreviousCard,
   };
 }

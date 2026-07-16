@@ -1,8 +1,8 @@
 /**
  * FlipCard.tsx
  * ─────────────────────────────────────────────
- * The main 3D-flipping flashcard. Also swipeable in any direction
- * (left or right) to skip to the next card — works whether the
+ * The main 3D-flipping flashcard. Swipe right to skip forward,
+ * swipe left to go back to the previous card — works whether the
  * answer is showing or not.
  */
 
@@ -35,8 +35,8 @@ interface Props {
   backInterpolate: Animated.AnimatedInterpolation<string>;
   /** Called when the card is tapped anywhere */
   onFlip: () => void;
-  /** Called when the card is swiped past the threshold, in either direction */
-  onSwipe: () => void;
+  /** Called when the card is swiped past the threshold. "right" = skip forward, "left" = go back */
+  onSwipe: (direction: "left" | "right") => void;
 }
 
 const FlipCard: React.FC<Props> = ({
@@ -54,7 +54,6 @@ const FlipCard: React.FC<Props> = ({
   // card is still animating off-screen (avoids double-advance races).
   const isAnimatingOutRef = useRef(false);
 
-  // Snap the card back to center whenever a new card comes in
   // Snap the card back to center whenever a new card comes in
   useEffect(() => {
     if (!card) return;
@@ -115,7 +114,7 @@ const FlipCard: React.FC<Props> = ({
         const pastThreshold = Math.abs(gesture.dx) > SWIPE_THRESHOLD;
 
         if (pastThreshold) {
-          isAnimatingOutRef.current = true; // ← add this line
+          isAnimatingOutRef.current = true;
           const direction = gesture.dx > 0 ? 1 : -1;
           Animated.timing(position, {
             toValue: { x: direction * SCREEN_WIDTH * 1.2, y: gesture.dy },
@@ -124,7 +123,7 @@ const FlipCard: React.FC<Props> = ({
             useNativeDriver: false,
           }).start(() => {
             position.setValue({ x: 0, y: 0 });
-            onSwipe();
+            onSwipe(direction > 0 ? "right" : "left");
           });
         } else {
           Animated.spring(position, {
@@ -142,10 +141,17 @@ const FlipCard: React.FC<Props> = ({
     outputRange: ["-10deg", "0deg", "10deg"],
   });
 
-  // Fades a "SKIP" badge in as the card is dragged in either direction
+  // Fades a "BACK" badge in while dragging left
+  const backBadgeOpacity = position.x.interpolate({
+    inputRange: [-140, -40, 0],
+    outputRange: [1, 0, 0],
+    extrapolate: "clamp",
+  });
+
+  // Fades a "SKIP" badge in while dragging right
   const skipBadgeOpacity = position.x.interpolate({
-    inputRange: [-140, -40, 0, 40, 140],
-    outputRange: [1, 0, 0, 0, 1],
+    inputRange: [0, 40, 140],
+    outputRange: [0, 0, 1],
     extrapolate: "clamp",
   });
 
@@ -182,7 +188,7 @@ const FlipCard: React.FC<Props> = ({
         >
           <Text style={styles.label}>QUESTION</Text>
           <Text style={styles.cardText}>{card.question}</Text>
-          <Text style={styles.tapHint}>Tap to reveal · Swipe to skip</Text>
+          <Text style={styles.tapHint}>Tap to reveal · Swipe to navigate</Text>
         </Animated.View>
 
         {/* ── BACK FACE: the answer ── */}
@@ -198,7 +204,7 @@ const FlipCard: React.FC<Props> = ({
           <Text style={[styles.label, styles.labelBack]}>ANSWER</Text>
           <Text style={styles.cardText}>{card.answer}</Text>
           <Text style={styles.tapHint}>
-            Tap to see question · Swipe to skip
+            Tap to see question · Swipe to navigate
           </Text>
         </Animated.View>
       </Pressable>
@@ -213,7 +219,7 @@ const FlipCard: React.FC<Props> = ({
         >
           ‹
         </Animated.Text>
-        <Text style={styles.swipeHintText}>swipe</Text>
+        <Text style={styles.swipeHintText}>back · skip</Text>
         <Animated.Text
           style={[
             styles.chevron,
@@ -224,7 +230,19 @@ const FlipCard: React.FC<Props> = ({
         </Animated.Text>
       </View>
 
-      {/* "SKIP" badge — fades in while dragging */}
+      {/* "BACK" badge — fades in while dragging left */}
+      <Animated.View
+        style={[
+          styles.skipBadge,
+          styles.backBadge,
+          { opacity: backBadgeOpacity },
+        ]}
+        pointerEvents="none"
+      >
+        <Text style={styles.skipBadgeText}>BACK</Text>
+      </Animated.View>
+
+      {/* "SKIP" badge — fades in while dragging right */}
       <Animated.View
         style={[styles.skipBadge, { opacity: skipBadgeOpacity }]}
         pointerEvents="none"
@@ -309,6 +327,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 12,
+  },
+  backBadge: {
+    // shares skipBadge's position/padding — customize here if you
+    // want BACK to look visually distinct from SKIP
   },
   skipBadgeText: {
     color: "#fff",
