@@ -33,10 +33,11 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
   // ── Derived values ────────────────────────────────────────────────────────
 
   const currentCard = cards[index];
-  const isLastCard  = index === cards.length - 1;
+  const isLastCard = index === cards.length - 1;
 
   /** Percentage of the deck completed so far */
-  const progressPercent = cards.length > 0 ? ((index + 1) / cards.length) * 100 : 0;
+  const progressPercent =
+    cards.length > 0 ? ((index + 1) / cards.length) * 100 : 0;
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
       Alert.alert(
         "Flip & Sort complete 🎉",
         `Understood: ${understoodCount}  •  To review: ${reviewCount}`,
-        [{ text: "OK", onPress: onComplete }]
+        [{ text: "OK", onPress: onComplete }],
       );
       return;
     }
@@ -65,6 +66,13 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
     goToNextCard();
   };
 
+  /**
+   * Swipe-to-skip: advances to the next card without recording a
+   * review/understood outcome. Works regardless of flip state.
+   */
+  const skipCard = (): void => {
+    goToNextCard();
+  };
   return {
     index,
     currentCard,
@@ -72,6 +80,7 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
     understoodCount,
     progressPercent,
     totalCards: cards.length,
+    skipCard,
     markForReview,
     markAsUnderstood,
   };
