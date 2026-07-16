@@ -35,8 +35,10 @@ interface Props {
   backInterpolate: Animated.AnimatedInterpolation<string>;
   /** Called when the card is tapped anywhere */
   onFlip: () => void;
-  /** Called when the card is swiped past the threshold. "right" = skip forward, "left" = go back */
+  /** Called when the card is swiped past the threshold. "right" = forward, "left" = back */
   onSwipe: (direction: "left" | "right") => void;
+  /** True if this is the first card in the deck (disables swiping left) */
+  isFirstCard: boolean;
 }
 
 const FlipCard: React.FC<Props> = ({
@@ -46,6 +48,7 @@ const FlipCard: React.FC<Props> = ({
   backInterpolate,
   onFlip,
   onSwipe,
+  isFirstCard,
 }) => {
   // Drives the swipe gesture — horizontal drag, vertical drift, rotation
   const position = useRef(new Animated.ValueXY()).current;
@@ -114,8 +117,20 @@ const FlipCard: React.FC<Props> = ({
         const pastThreshold = Math.abs(gesture.dx) > SWIPE_THRESHOLD;
 
         if (pastThreshold) {
-          isAnimatingOutRef.current = true;
           const direction = gesture.dx > 0 ? 1 : -1;
+          const isInvalidLeft = direction < 0 && isFirstCard;
+
+          if (isInvalidLeft) {
+            // Spring back to center instead of animating out
+            Animated.spring(position, {
+              toValue: { x: 0, y: 0 },
+              friction: 6,
+              useNativeDriver: false,
+            }).start();
+            return;
+          }
+
+          isAnimatingOutRef.current = true;
           Animated.timing(position, {
             toValue: { x: direction * SCREEN_WIDTH * 1.2, y: gesture.dy },
             duration: SWIPE_OUT_DURATION,
@@ -123,6 +138,7 @@ const FlipCard: React.FC<Props> = ({
             useNativeDriver: false,
           }).start(() => {
             position.setValue({ x: 0, y: 0 });
+            isAnimatingOutRef.current = false; // Reset to avoid freezing
             onSwipe(direction > 0 ? "right" : "left");
           });
         } else {
@@ -141,6 +157,12 @@ const FlipCard: React.FC<Props> = ({
     outputRange: ["-10deg", "0deg", "10deg"],
   });
 
+  const scale = position.x.interpolate({
+    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
+    outputRange: [0.95, 1, 0.95],
+    extrapolate: "clamp",
+  });
+
   // Fades a "BACK" badge in while dragging left
   const backBadgeOpacity = position.x.interpolate({
     inputRange: [-140, -40, 0],
@@ -148,8 +170,8 @@ const FlipCard: React.FC<Props> = ({
     extrapolate: "clamp",
   });
 
-  // Fades a "SKIP" badge in while dragging right
-  const skipBadgeOpacity = position.x.interpolate({
+  // Fades a "FORWARD" badge in while dragging right
+  const forwardBadgeOpacity = position.x.interpolate({
     inputRange: [0, 40, 140],
     outputRange: [0, 0, 1],
     extrapolate: "clamp",
@@ -171,6 +193,7 @@ const FlipCard: React.FC<Props> = ({
             { translateX: position.x },
             { translateY: position.y },
             { rotate },
+            { scale },
           ],
         },
       ]}
@@ -188,7 +211,7 @@ const FlipCard: React.FC<Props> = ({
         >
           <Text style={styles.label}>QUESTION</Text>
           <Text style={styles.cardText}>{card.question}</Text>
-          <Text style={styles.tapHint}>Tap to reveal · Swipe to navigate</Text>
+          <Text style={styles.tapHint}>Tap to reveal answer · Swipe to navigate</Text>
         </Animated.View>
 
         {/* ── BACK FACE: the answer ── */}
@@ -219,7 +242,7 @@ const FlipCard: React.FC<Props> = ({
         >
           ‹
         </Animated.Text>
-        <Text style={styles.swipeHintText}>back · skip</Text>
+        <Text style={styles.swipeHintText}>back · forward</Text>
         <Animated.Text
           style={[
             styles.chevron,
@@ -233,21 +256,25 @@ const FlipCard: React.FC<Props> = ({
       {/* "BACK" badge — fades in while dragging left */}
       <Animated.View
         style={[
-          styles.skipBadge,
+          styles.badge,
           styles.backBadge,
           { opacity: backBadgeOpacity },
         ]}
         pointerEvents="none"
       >
-        <Text style={styles.skipBadgeText}>BACK</Text>
+        <Text style={styles.backBadgeText}>BACK</Text>
       </Animated.View>
 
-      {/* "SKIP" badge — fades in while dragging right */}
+      {/* "FORWARD" badge — fades in while dragging right */}
       <Animated.View
-        style={[styles.skipBadge, { opacity: skipBadgeOpacity }]}
+        style={[
+          styles.badge,
+          styles.forwardBadge,
+          { opacity: forwardBadgeOpacity },
+        ]}
         pointerEvents="none"
       >
-        <Text style={styles.skipBadgeText}>SKIP</Text>
+        <Text style={styles.forwardBadgeText}>FORWARD</Text>
       </Animated.View>
     </Animated.View>
   );
@@ -319,23 +346,38 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: "uppercase",
   },
-  skipBadge: {
+  badge: {
     position: "absolute",
-    top: "42%",
+    top: "40%",
     alignSelf: "center",
-    backgroundColor: "rgba(0,0,0,0.65)",
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 6,
   },
   backBadge: {
-    // shares skipBadge's position/padding — customize here if you
-    // want BACK to look visually distinct from SKIP
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
   },
-  skipBadgeText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "800",
+  backBadgeText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
+  forwardBadge: {
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  forwardBadgeText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "900",
     letterSpacing: 2,
   },
 });

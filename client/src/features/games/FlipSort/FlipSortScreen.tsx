@@ -128,6 +128,7 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
             onSwipe={(direction) =>
               direction === "left" ? goToPreviousCard() : skipCard()
             }
+            isFirstCard={index === 0}
           />
         ) : null}
       </View>
