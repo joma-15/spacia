@@ -6,7 +6,7 @@
  * and completion alerts.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert } from "react-native";
 import type { Flashcard } from "../types";
 
@@ -30,10 +30,16 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
   /** How many cards the user marked "Understood" (easy cards) */
   const [understoodCount, setUnderstoodCount] = useState(0);
 
+  /**
+   * Guards against the completion alert firing more than once when
+   * goToNextCard() is triggered in quick succession on the last card
+   * (e.g. a fast double-swipe before React re-renders).
+   */
+  const hasCompletedRef = useRef(false);
+
   // ── Derived values ────────────────────────────────────────────────────────
 
   const currentCard = cards[index];
-  const isLastCard = index === cards.length - 1;
 
   /** Percentage of the deck completed so far */
   const progressPercent =
@@ -42,15 +48,26 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const goToNextCard = (): void => {
-    if (isLastCard) {
-      Alert.alert(
-        "Flip & Sort complete 🎉",
-        `Understood: ${understoodCount}  •  To review: ${reviewCount}`,
-        [{ text: "OK", onPress: onComplete }],
-      );
-      return;
-    }
-    setIndex((prev) => prev + 1);
+    // Functional update: always reads the *latest* committed index,
+    // so two rapid calls (e.g. two fast swipes) can never both think
+    // they're "not yet at the last card" and overshoot the array.
+    setIndex((prev) => {
+      const next = prev + 1;
+
+      if (next >= cards.length) {
+        if (!hasCompletedRef.current) {
+          hasCompletedRef.current = true;
+          Alert.alert(
+            "Flip & Sort complete 🎉",
+            `Understood: ${understoodCount}  •  To review: ${reviewCount}`,
+            [{ text: "OK", onPress: onComplete }]
+          );
+        }
+        return prev; // never advance past the last card
+      }
+
+      return next;
+    });
     resetFlip();
   };
 
@@ -73,6 +90,7 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
   const skipCard = (): void => {
     goToNextCard();
   };
+
   return {
     index,
     currentCard,
@@ -80,8 +98,8 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
     understoodCount,
     progressPercent,
     totalCards: cards.length,
-    skipCard,
     markForReview,
     markAsUnderstood,
+    skipCard,
   };
 }

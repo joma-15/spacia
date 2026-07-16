@@ -50,10 +50,17 @@ const FlipCard: React.FC<Props> = ({
   // Drives the swipe gesture — horizontal drag, vertical drift, rotation
   const position = useRef(new Animated.ValueXY()).current;
 
+  // Prevents a new swipe gesture from starting while the previous
+  // card is still animating off-screen (avoids double-advance races).
+  const isAnimatingOutRef = useRef(false);
+
+  // Snap the card back to center whenever a new card comes in
   // Snap the card back to center whenever a new card comes in
   useEffect(() => {
+    if (!card) return;
     position.setValue({ x: 0, y: 0 });
-  }, [card.id, position]);
+    isAnimatingOutRef.current = false;
+  }, [card?.id, position]);
 
   // Idle "shimmy" animation so the user notices the card is swipeable,
   // even before they interact with it.
@@ -81,7 +88,7 @@ const FlipCard: React.FC<Props> = ({
           useNativeDriver: true,
         }),
         Animated.delay(2200),
-      ])
+      ]),
     );
     loop.start();
     return () => loop.stop();
@@ -91,17 +98,24 @@ const FlipCard: React.FC<Props> = ({
     PanResponder.create({
       // Only claim the gesture once it's clearly a horizontal drag,
       // so a plain tap still reaches the flip Pressable underneath.
+      // Also blocked while the previous card is still animating out.
       onMoveShouldSetPanResponder: (_evt, gesture) =>
-        Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+        !isAnimatingOutRef.current &&
+        Math.abs(gesture.dx) > 8 &&
+        Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
 
-      onPanResponderMove: Animated.event([null, { dx: position.x, dy: position.y }], {
-        useNativeDriver: false,
-      }),
+      onPanResponderMove: Animated.event(
+        [null, { dx: position.x, dy: position.y }],
+        {
+          useNativeDriver: false,
+        },
+      ),
 
       onPanResponderRelease: (_evt, gesture) => {
         const pastThreshold = Math.abs(gesture.dx) > SWIPE_THRESHOLD;
 
         if (pastThreshold) {
+          isAnimatingOutRef.current = true; // ← add this line
           const direction = gesture.dx > 0 ? 1 : -1;
           Animated.timing(position, {
             toValue: { x: direction * SCREEN_WIDTH * 1.2, y: gesture.dy },
@@ -120,7 +134,7 @@ const FlipCard: React.FC<Props> = ({
           }).start();
         }
       },
-    })
+    }),
   ).current;
 
   const rotate = position.x.interpolate({
@@ -139,6 +153,8 @@ const FlipCard: React.FC<Props> = ({
     inputRange: [-1, 0, 1],
     outputRange: [-10, 0, 10],
   });
+
+  if (!card) return null;
 
   return (
     <Animated.View
@@ -181,20 +197,28 @@ const FlipCard: React.FC<Props> = ({
         >
           <Text style={[styles.label, styles.labelBack]}>ANSWER</Text>
           <Text style={styles.cardText}>{card.answer}</Text>
-          <Text style={styles.tapHint}>Tap to see question · Swipe to skip</Text>
+          <Text style={styles.tapHint}>
+            Tap to see question · Swipe to skip
+          </Text>
         </Animated.View>
       </Pressable>
 
       {/* Swipe affordance — sits above both faces, ignores touches */}
       <View style={styles.swipeHintRow} pointerEvents="none">
         <Animated.Text
-          style={[styles.chevron, { transform: [{ translateX: hintTranslate }] }]}
+          style={[
+            styles.chevron,
+            { transform: [{ translateX: hintTranslate }] },
+          ]}
         >
           ‹
         </Animated.Text>
         <Text style={styles.swipeHintText}>swipe</Text>
         <Animated.Text
-          style={[styles.chevron, { transform: [{ translateX: hintTranslate }] }]}
+          style={[
+            styles.chevron,
+            { transform: [{ translateX: hintTranslate }] },
+          ]}
         >
           ›
         </Animated.Text>
