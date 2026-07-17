@@ -4,7 +4,7 @@
     "slug": "client",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo (2).png",
     "scheme": "client",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -36,10 +36,9 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
-          }
+          "image": "./assets/images/splash.png",
+          "imageWidth": 220,
+          "resizeMode": "contain"
         }
       ],
       "expo-sqlite",
