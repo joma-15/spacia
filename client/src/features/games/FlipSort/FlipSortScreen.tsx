@@ -19,6 +19,7 @@ import FlipSortHeader from "./components/FlipSortHeader";
 import ProgressBar from "./components/ProgressBar";
 import FlipCard from "./components/FlipCard";
 import ActionButtons from "./components/ActionButtons";
+import { BASE_URL } from "@/shared/config/api";
 
 interface GameContentProps {
   folderId: string;
@@ -49,16 +50,54 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
   }, [folderId]);
 
   // Callback to update status immediately in SQLite and state
-  const onUpdateCardStatus = useCallback((cardId: string, newStatus: 'review' | 'understood') => {
+  // const onUpdateCardStatus = useCallback((cardId: string, newStatus: 'review' | 'understood') => {
+  //   try {
+  //     updateFlashcardStatus(cardId, newStatus);
+  //     setCards((prev) =>
+  //       prev.map((c) => (c.id === cardId ? { ...c, status: newStatus } : c))
+  //     );
+  //   } catch (e) {
+  //     console.error("Failed to update flashcard status:", e);
+  //   }
+  // }, []);
+
+const onUpdateCardStatus = useCallback(
+  async (cardId: string, newStatus: "review" | "understood") => {
     try {
+      // Update local SQLite
       updateFlashcardStatus(cardId, newStatus);
+
+      // Update React state
       setCards((prev) =>
-        prev.map((c) => (c.id === cardId ? { ...c, status: newStatus } : c))
+        prev.map((card) =>
+          card.id === cardId
+            ? { ...card, status: newStatus }
+            : card
+        )
       );
-    } catch (e) {
-      console.error("Failed to update flashcard status:", e);
+
+      // Sync to backend
+      const response = await fetch(`${BASE_URL}/flashcards/${cardId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update flashcard");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to update flashcard status:", error);
     }
-  }, []);
+  },
+  []
+);
 
   // Hook 1: Visual flip animation state
   const {
