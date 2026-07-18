@@ -1,28 +1,26 @@
 {
   "expo": {
-    "name": "client",
-    "slug": "client",
+    "name": "Spacia",
+    "slug": "spacia",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo (2).png",
-    "scheme": "client",
+    "icon": "./assets/images/icon.png",
+    "scheme": "spacia",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#E6F4FE"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.marcelhahaha.client"
+      "package": "com.jhonmarcel.spacia"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
@@ -35,9 +33,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#123F1F",
           "image": "./assets/images/splash.png",
-          "imageWidth": 220,
+          "imageWidth": 260,
           "resizeMode": "contain"
         }
       ],
@@ -51,8 +49,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "bc68761f-777e-453c-8a83-9dd2fa8ffe36"
+        "projectId": "3a9855ca-d4fd-4747-a13a-dcf59e2c60e0"
       }
-    }
+    },
+    "owner": "marcelhahaha"
   }
 }
