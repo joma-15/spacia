@@ -6,12 +6,13 @@
  * and rendering components like custom header, progress bar, 3D card, and actions.
  */
 
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { View, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { COLORS } from "./colors";
-import { getFlashcardsByFolder } from "@/shared/database/flashcardRepository";
+import { getFlashcardsByFolder, updateFlashcardStatus } from "@/shared/database/flashcardRepository";
+import type { Flashcard } from "./types";
 import { useCardFlip } from "./hooks/useCardFlip";
 import { useFlipSortSession } from "./hooks/useFlipSortSession";
 import FlipSortHeader from "./components/FlipSortHeader";
@@ -28,20 +29,36 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Load cards for this folder from database
-  const cards = useMemo(() => {
+  // Load cards for this folder from database as state
+  const [cards, setCards] = useState<Flashcard[]>([]);
+
+  useEffect(() => {
     try {
       const dbCards = getFlashcardsByFolder(folderId) as any[];
-      return dbCards.map((c) => ({
+      const mapped = dbCards.map((c) => ({
         id: String(c.id),
         question: c.question,
         answer: c.answer,
+        status: c.status,
       }));
+      setCards(mapped);
     } catch (e) {
       console.error("Failed to load cards for Flip & Sort:", e);
-      return [];
+      setCards([]);
     }
   }, [folderId]);
+
+  // Callback to update status immediately in SQLite and state
+  const onUpdateCardStatus = useCallback((cardId: string, newStatus: 'review' | 'understood') => {
+    try {
+      updateFlashcardStatus(cardId, newStatus);
+      setCards((prev) =>
+        prev.map((c) => (c.id === cardId ? { ...c, status: newStatus } : c))
+      );
+    } catch (e) {
+      console.error("Failed to update flashcard status:", e);
+    }
+  }, []);
 
   // Hook 1: Visual flip animation state
   const {
@@ -84,6 +101,7 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
     totalCards,
   } = useFlipSortSession({
     cards,
+    onUpdateCardStatus,
     resetFlip,
     onComplete: handleBackPress, // Navigate back on complete
   });
@@ -126,7 +144,7 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
             backInterpolate={backInterpolate}
             onFlip={flipCard}
             onSwipe={(direction) =>
-              direction === "left" ? goToPreviousCard() : skipCard()
+              direction === "down" ? goToPreviousCard() : skipCard()
             }
             isFirstCard={index === 0}
           />
@@ -138,6 +156,7 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
         onReviewPress={() => markForReview(isFlipped)}
         onUnderstoodPress={() => markAsUnderstood(isFlipped)}
         bottomInset={insets.bottom}
+        status={currentCard?.status}
       />
     </View>
   );

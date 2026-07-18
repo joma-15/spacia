@@ -12,23 +12,18 @@ import type { Flashcard } from "../types";
 
 interface Params {
   cards: Flashcard[];
+  onUpdateCardStatus: (cardId: string, status: "review" | "understood") => void;
   /** Called after the deck-complete alert is dismissed */
   onComplete?: () => void;
   /** Reset the flip animation — passed in from useCardFlip */
   resetFlip: () => void;
 }
 
-export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
+export function useFlipSortSession({ cards, onUpdateCardStatus, onComplete, resetFlip }: Params) {
   // ── State ────────────────────────────────────────────────────────────────
 
   /** Index of the card currently being shown (starts at 0) */
   const [index, setIndex] = useState(0);
-
-  /** How many cards the user marked "Review" (hard cards) */
-  const [reviewCount, setReviewCount] = useState(0);
-
-  /** How many cards the user marked "Understood" (easy cards) */
-  const [understoodCount, setUnderstoodCount] = useState(0);
 
   /**
    * Guards against the completion alert firing more than once when
@@ -45,9 +40,13 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
   const progressPercent =
     cards.length > 0 ? ((index + 1) / cards.length) * 100 : 0;
 
+  // Dynamic counts derived from the cards state
+  const reviewCount = cards.filter((c) => c.status === "review").length;
+  const understoodCount = cards.filter((c) => c.status === "understood").length;
+
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  const goToNextCard = (): void => {
+  const goToNextCard = (lastCardStatusChange?: { id: string; status: "review" | "understood" }): void => {
     // Functional update: always reads the *latest* committed index,
     // so two rapid calls (e.g. two fast swipes) can never both think
     // they're "not yet at the last card" and overshoot the array.
@@ -57,9 +56,22 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
       if (next >= cards.length) {
         if (!hasCompletedRef.current) {
           hasCompletedRef.current = true;
+
+          // Compute final counts dynamically including the status change of the last card
+          let uCount = 0;
+          let rCount = 0;
+          for (const c of cards) {
+            const status =
+              lastCardStatusChange && c.id === lastCardStatusChange.id
+                ? lastCardStatusChange.status
+                : c.status;
+            if (status === "understood") uCount++;
+            if (status === "review") rCount++;
+          }
+
           Alert.alert(
             "Flip & Sort complete 🎉",
-            `Understood: ${understoodCount}  •  To review: ${reviewCount}`,
+            `Understood: ${uCount}  •  To review: ${rCount}`,
             [{ text: "OK", onPress: onComplete }]
           );
         }
@@ -73,14 +85,18 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
 
   const markForReview = (isFlipped: boolean): void => {
     if (!isFlipped) return; // Cannot score an unflipped card
-    setReviewCount((count) => count + 1);
-    goToNextCard();
+    if (currentCard) {
+      onUpdateCardStatus(currentCard.id, "review");
+      goToNextCard({ id: currentCard.id, status: "review" });
+    }
   };
 
   const markAsUnderstood = (isFlipped: boolean): void => {
     if (!isFlipped) return; // Cannot score an unflipped card
-    setUnderstoodCount((count) => count + 1);
-    goToNextCard();
+    if (currentCard) {
+      onUpdateCardStatus(currentCard.id, "understood");
+      goToNextCard({ id: currentCard.id, status: "understood" });
+    }
   };
 
   /**
@@ -92,14 +108,21 @@ export function useFlipSortSession({ cards, onComplete, resetFlip }: Params) {
   };
 
   /**
-   * Swipe-left: goes back to the previous card. Does not undo any
+   * Swipe-left/down: goes back to the previous card. Does not undo any
    * review/understood count already recorded — it only moves the index.
    * Clamped so it can never go below the first card.
    */
   const goToPreviousCard = (): void => {
-    setIndex((prev) => Math.max(prev -1,0)); 
+    setIndex((prev) => {
+      const next = Math.max(prev - 1, 0);
+      // Reset completion status when navigating back from the final card
+      if (next < cards.length - 1) {
+        hasCompletedRef.current = false;
+      }
+      return next;
+    });
     resetFlip();
-  }
+  };
 
   return {
     index,

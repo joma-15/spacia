@@ -1,9 +1,8 @@
 /**
  * FlipCard.tsx
  * ─────────────────────────────────────────────
- * The main 3D-flipping flashcard. Swipe right to skip forward,
- * swipe left to go back to the previous card — works whether the
- * answer is showing or not.
+ * The main 3D-flipping flashcard. Swipe up to move to the next card,
+ * swipe down to return to the previous card.
  */
 
 import React, { useEffect, useRef } from "react";
@@ -21,8 +20,8 @@ import { COLORS } from "../colors";
 import type { Flashcard } from "../types";
 
 const CARD_HEIGHT = 320;
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const SWIPE_THRESHOLD = CARD_HEIGHT * 0.25;
 const SWIPE_OUT_DURATION = 220;
 
 interface Props {
@@ -35,9 +34,9 @@ interface Props {
   backInterpolate: Animated.AnimatedInterpolation<string>;
   /** Called when the card is tapped anywhere */
   onFlip: () => void;
-  /** Called when the card is swiped past the threshold. "right" = forward, "left" = back */
-  onSwipe: (direction: "left" | "right") => void;
-  /** True if this is the first card in the deck (disables swiping left) */
+  /** Called when the card is swiped past the threshold. "up" = forward, "down" = back */
+  onSwipe: (direction: "up" | "down") => void;
+  /** True if this is the first card in the deck (disables swiping down) */
   isFirstCard: boolean;
 }
 
@@ -50,7 +49,7 @@ const FlipCard: React.FC<Props> = ({
   onSwipe,
   isFirstCard,
 }) => {
-  // Drives the swipe gesture — horizontal drag, vertical drift, rotation
+  // Drives the swipe gesture — vertical drag
   const position = useRef(new Animated.ValueXY()).current;
 
   // Prevents a new swipe gesture from starting while the previous
@@ -64,67 +63,36 @@ const FlipCard: React.FC<Props> = ({
     isAnimatingOutRef.current = false;
   }, [card?.id, position]);
 
-  // Idle "shimmy" animation so the user notices the card is swipeable,
-  // even before they interact with it.
-  const hintShimmy = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.delay(600),
-        Animated.timing(hintShimmy, {
-          toValue: 1,
-          duration: 500,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(hintShimmy, {
-          toValue: -1,
-          duration: 700,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(hintShimmy, {
-          toValue: 0,
-          duration: 400,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.delay(2200),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [hintShimmy]);
-
   const panResponder = useRef(
     PanResponder.create({
-      // Only claim the gesture once it's clearly a horizontal drag,
+      // Only claim the gesture once it's clearly a vertical drag,
       // so a plain tap still reaches the flip Pressable underneath.
       // Also blocked while the previous card is still animating out.
       onMoveShouldSetPanResponder: (_evt, gesture) =>
         !isAnimatingOutRef.current &&
-        Math.abs(gesture.dx) > 8 &&
-        Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+        Math.abs(gesture.dy) > 8 &&
+        Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.5,
 
       onPanResponderMove: Animated.event(
-        [null, { dx: position.x, dy: position.y }],
+        [null, { dy: position.y }],
         {
           useNativeDriver: false,
         },
       ),
 
       onPanResponderRelease: (_evt, gesture) => {
-        const pastThreshold = Math.abs(gesture.dx) > SWIPE_THRESHOLD;
+        const pastThreshold = Math.abs(gesture.dy) > SWIPE_THRESHOLD || Math.abs(gesture.vy) > 0.5;
 
         if (pastThreshold) {
-          const direction = gesture.dx > 0 ? 1 : -1;
-          const isInvalidLeft = direction < 0 && isFirstCard;
+          const direction = gesture.dy < 0 ? -1 : 1; // -1 = up (next), 1 = down (previous)
+          const isInvalidDown = direction > 0 && isFirstCard;
 
-          if (isInvalidLeft) {
-            // Spring back to center instead of animating out
-            Animated.spring(position, {
+          if (isInvalidDown) {
+            // Smoothly animate back to center with ease-out timing (no bounce)
+            Animated.timing(position, {
               toValue: { x: 0, y: 0 },
-              friction: 6,
+              duration: 200,
+              easing: Easing.out(Easing.cubic),
               useNativeDriver: false,
             }).start();
             return;
@@ -132,19 +100,21 @@ const FlipCard: React.FC<Props> = ({
 
           isAnimatingOutRef.current = true;
           Animated.timing(position, {
-            toValue: { x: direction * SCREEN_WIDTH * 1.2, y: gesture.dy },
+            toValue: { x: 0, y: direction * SCREEN_HEIGHT * 1.2 },
             duration: SWIPE_OUT_DURATION,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: false,
           }).start(() => {
             position.setValue({ x: 0, y: 0 });
             isAnimatingOutRef.current = false; // Reset to avoid freezing
-            onSwipe(direction > 0 ? "right" : "left");
+            onSwipe(direction < 0 ? "up" : "down");
           });
         } else {
-          Animated.spring(position, {
+          // Smoothly animate back to center with ease-out timing (no bounce)
+          Animated.timing(position, {
             toValue: { x: 0, y: 0 },
-            friction: 6,
+            duration: 200,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: false,
           }).start();
         }
@@ -152,34 +122,18 @@ const FlipCard: React.FC<Props> = ({
     }),
   ).current;
 
-  const rotate = position.x.interpolate({
-    inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
-    outputRange: ["-10deg", "0deg", "10deg"],
-  });
-
-  const scale = position.x.interpolate({
-    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
-    outputRange: [0.95, 1, 0.95],
-    extrapolate: "clamp",
-  });
-
-  // Fades a "BACK" badge in while dragging left
-  const backBadgeOpacity = position.x.interpolate({
-    inputRange: [-140, -40, 0],
-    outputRange: [1, 0, 0],
-    extrapolate: "clamp",
-  });
-
-  // Fades a "FORWARD" badge in while dragging right
-  const forwardBadgeOpacity = position.x.interpolate({
+  // Fades a "BACK" badge in while dragging down (dy > 0)
+  const backBadgeOpacity = position.y.interpolate({
     inputRange: [0, 40, 140],
     outputRange: [0, 0, 1],
     extrapolate: "clamp",
   });
 
-  const hintTranslate = hintShimmy.interpolate({
-    inputRange: [-1, 0, 1],
-    outputRange: [-10, 0, 10],
+  // Fades a "NEXT" badge in while dragging up (dy < 0)
+  const nextBadgeOpacity = position.y.interpolate({
+    inputRange: [-140, -40, 0],
+    outputRange: [1, 0, 0],
+    extrapolate: "clamp",
   });
 
   if (!card) return null;
@@ -190,10 +144,7 @@ const FlipCard: React.FC<Props> = ({
         styles.container,
         {
           transform: [
-            { translateX: position.x },
             { translateY: position.y },
-            { rotate },
-            { scale },
           ],
         },
       ]}
@@ -209,9 +160,26 @@ const FlipCard: React.FC<Props> = ({
           ]}
           pointerEvents={showBack ? "none" : "auto"}
         >
+          {card.status ? (
+            <View
+              style={[
+                styles.statusPill,
+                card.status === "understood" ? styles.understoodPill : styles.reviewPill,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  card.status === "understood" ? styles.understoodPillText : styles.reviewPillText,
+                ]}
+              >
+                {card.status === "understood" ? "✓ Understood" : "🔁 Review"}
+              </Text>
+            </View>
+          ) : null}
           <Text style={styles.label}>QUESTION</Text>
           <Text style={styles.cardText}>{card.question}</Text>
-          <Text style={styles.tapHint}>Tap to reveal answer · Swipe to navigate</Text>
+          <Text style={styles.tapHint}>Tap to reveal answer · Swipe up/down to navigate</Text>
         </Animated.View>
 
         {/* ── BACK FACE: the answer ── */}
@@ -224,36 +192,37 @@ const FlipCard: React.FC<Props> = ({
           ]}
           pointerEvents={showBack ? "auto" : "none"}
         >
+          {card.status ? (
+            <View
+              style={[
+                styles.statusPill,
+                card.status === "understood" ? styles.understoodPill : styles.reviewPill,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  card.status === "understood" ? styles.understoodPillText : styles.reviewPillText,
+                ]}
+              >
+                {card.status === "understood" ? "✓ Understood" : "🔁 Review"}
+              </Text>
+            </View>
+          ) : null}
           <Text style={[styles.label, styles.labelBack]}>ANSWER</Text>
           <Text style={styles.cardText}>{card.answer}</Text>
           <Text style={styles.tapHint}>
-            Tap to see question · Swipe to navigate
+            Tap to see question · Swipe up/down to navigate
           </Text>
         </Animated.View>
       </Pressable>
 
       {/* Swipe affordance — sits above both faces, ignores touches */}
       <View style={styles.swipeHintRow} pointerEvents="none">
-        <Animated.Text
-          style={[
-            styles.chevron,
-            { transform: [{ translateX: hintTranslate }] },
-          ]}
-        >
-          ‹
-        </Animated.Text>
-        <Text style={styles.swipeHintText}>back · forward</Text>
-        <Animated.Text
-          style={[
-            styles.chevron,
-            { transform: [{ translateX: hintTranslate }] },
-          ]}
-        >
-          ›
-        </Animated.Text>
+        <Text style={styles.swipeHintText}>Swipe up for next • down for back</Text>
       </View>
 
-      {/* "BACK" badge — fades in while dragging left */}
+      {/* "BACK" badge — fades in while dragging down */}
       <Animated.View
         style={[
           styles.badge,
@@ -265,16 +234,16 @@ const FlipCard: React.FC<Props> = ({
         <Text style={styles.backBadgeText}>BACK</Text>
       </Animated.View>
 
-      {/* "FORWARD" badge — fades in while dragging right */}
+      {/* "NEXT" badge — fades in while dragging up */}
       <Animated.View
         style={[
           styles.badge,
           styles.forwardBadge,
-          { opacity: forwardBadgeOpacity },
+          { opacity: nextBadgeOpacity },
         ]}
         pointerEvents="none"
       >
-        <Text style={styles.forwardBadgeText}>FORWARD</Text>
+        <Text style={styles.forwardBadgeText}>NEXT</Text>
       </Animated.View>
     </Animated.View>
   );
@@ -333,12 +302,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  chevron: {
-    color: COLORS.textDim,
-    fontSize: 18,
-    fontWeight: "700",
-    marginHorizontal: 6,
-  },
   swipeHintText: {
     color: COLORS.textDim,
     fontSize: 11,
@@ -379,5 +342,32 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900",
     letterSpacing: 2,
+  },
+  statusPill: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  understoodPill: {
+    backgroundColor: COLORS.understoodBg,
+    borderColor: COLORS.understoodBorder,
+  },
+  reviewPill: {
+    backgroundColor: COLORS.reviewBg,
+    borderColor: COLORS.reviewBorder,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  understoodPillText: {
+    color: COLORS.understoodText,
+  },
+  reviewPillText: {
+    color: COLORS.reviewText,
   },
 });
