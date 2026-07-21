@@ -41,13 +41,17 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
         question: c.question,
         answer: c.answer,
         status: c.status,
-      }));
+      })).
+      filter((card) => card.status === 'review');
+      
       setCards(mapped);
     } catch (e) {
       console.error("Failed to load cards for Flip & Sort:", e);
       setCards([]);
     }
   }, [folderId]);
+
+
 
   // Callback to update status immediately in SQLite and state
   // const onUpdateCardStatus = useCallback((cardId: string, newStatus: 'review' | 'understood') => {
