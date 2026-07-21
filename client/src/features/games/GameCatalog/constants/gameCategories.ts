@@ -7,7 +7,7 @@ export const GAME_CATEGORIES: GameCategory[] = [
   {
     id: 'flip-sort',
     title: 'Flip & Sort',
-    image: require(`${BASE_PATH}/burat.jpg`),
+    image: require(`${BASE_PATH}/flip-sort.png`),
     tint: '#3ED598',
     route: '/games/FlipSort' as any,
   },

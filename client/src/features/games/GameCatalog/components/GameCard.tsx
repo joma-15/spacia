@@ -5,7 +5,7 @@ import { GameCardProps } from '../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const HORIZONTAL_PADDING = 20; // must match GameCatalog's scrollContent paddingHorizontal
-const GAP = 14;
+const GAP = 10; // was 14 — slightly smaller gap gives each card a bit more width
 const NUM_COLUMNS = 3;
 
 export const CARD_WIDTH =
@@ -59,12 +59,14 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     transform: [{ scale: 0.97 }],
   },
+
   cardImageWrap: {
     width: '100%',
-    aspectRatio: 3 / 4,
+    aspectRatio: 4 / 3, // was 16/9 — slightly taller image area
     backgroundColor: colors.bgSoft,
-    position: 'relative',
+    overflow: 'hidden',
   },
+
   cardImage: {
     width: '100%',
     height: '100%',
@@ -84,13 +86,13 @@ const styles = StyleSheet.create({
     right: 5,
   },
   cardBody: {
-    paddingVertical: 6,
-    paddingHorizontal: 6,
+    paddingVertical: 8, // was 6
+    paddingHorizontal: 8, // was 6
     alignItems: 'center',
   },
   cardTitle: {
     color: colors.textPrimary,
-    fontSize: 11,
+    fontSize: 12, // was 11
     fontWeight: '700',
     textAlign: 'center',
   },
