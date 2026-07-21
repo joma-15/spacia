@@ -21,6 +21,38 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * THEME — all colors/radii/shadows in one place, edit here to re-skin.
+ * ═══════════════════════════════════════════════════════════════════════ */
+const THEME = {
+  bg: '#0F1F17',
+  bgCard: '#162B1E',
+  bgElevated: '#1C3527',
+
+  primary: '#3DDC84',
+  primaryDim: '#2AAF63',
+  primaryGlow: 'rgba(61,220,132,0.25)',
+
+  correct: '#3DDC84',
+  correctGlow: 'rgba(61,220,132,0.35)',
+  wrong: '#E05C7A',
+  wrongGlow: 'rgba(224,92,122,0.35)',
+
+  textWhite: '#F0FFF6',
+  textMid: '#A8C5B0',
+  textMuted: '#5A7A65',
+
+  border: '#243D2C',
+  borderBright: '#2E5438',
+
+  panelBg: 'rgba(15,31,23,0.78)',
+  panelBorder: 'rgba(61,220,132,0.35)',
+
+  radiusSm: 10,
+  radiusMd: 14,
+  radiusFull: 999,
+} as const;
+
 /* ----------------------------- Types ----------------------------- */
 
 export interface StudySet {
@@ -29,9 +61,16 @@ export interface StudySet {
   subtitle?: string;
 }
 
+export interface Answer {
+  id: string;
+  text: string;
+  correct: boolean;
+}
+
 export interface Question {
   id: string;
   text: string;
+  answers: Answer[];
 }
 
 interface SpaceBackgroundProps {
@@ -39,7 +78,6 @@ interface SpaceBackgroundProps {
   shootingStars?: boolean;
   backgroundColor?: string;
   style?: ViewStyle;
-  objectCount?: number;
   shipSize?: number;
 
   onBack?: () => void;
@@ -48,8 +86,8 @@ interface SpaceBackgroundProps {
   currentStudySetId?: string;
   onSelectStudySet?: (set: StudySet) => void;
 
-  /** Static question shown in the card near the bottom. */
   question?: Question;
+  onAnswer?: (correct: boolean, answerId: string) => void;
 
   maxBullets?: number;
   fireCooldownMs?: number;
@@ -70,8 +108,17 @@ interface StarConfig {
 interface SpaceObject {
   id: number;
   x: number;
-  y: number;
   size: number;
+  minY: number;
+  maxY: number;
+  anim: Animated.Value;
+  stop: () => void;
+  label: string;
+  isCorrect: boolean;
+  // Which horizontal lane this object owns. Lanes are fixed, non-overlapping
+  // columns — as long as at most one object occupies a lane at a time,
+  // objects can never visually stack on top of each other.
+  laneIndex: number;
 }
 
 interface Bullet {
@@ -85,10 +132,20 @@ const BULLET_SPEED = 700;
 const HEADER_HEIGHT = 56;
 const QUESTION_CARD_HEIGHT = 92;
 const QUESTION_CARD_MARGIN = 12;
-// Extra vertical gap kept between the ship and the question card below it,
-// and used to clamp asteroid spawn positions so they never dip into the ship.
-const SHIP_QUESTION_GAP = 20;
-const MAX_ASTEROID_SIZE = 50; // 30 + 20 (upper bound from randomObject's size formula)
+
+const SHIP_QUESTION_GAP = 8;
+
+// Answer objects are circles this size (diameter, in px).
+const ANSWER_OBJECT_SIZE = 78;
+
+// Fall speed range in ms — edit these two numbers to change speed.
+const FALL_MIN_DURATION = 5000;
+const FALL_MAX_DURATION = 9000;
+
+// How far above the very top of the screen an answer spawns, so it falls
+// in from fully off-screen instead of popping in inside the play area.
+// Bigger number = spawns higher up / takes longer to become visible.
+const SPAWN_ABOVE_SCREEN = 60;
 
 const DUMMY_STUDY_SETS: StudySet[] = [
   { id: '1', name: 'Biology 101', subtitle: '42 cards' },
@@ -100,6 +157,12 @@ const DUMMY_STUDY_SETS: StudySet[] = [
 const DUMMY_QUESTION: Question = {
   id: 'q1',
   text: 'What is the powerhouse of the cell?',
+  answers: [
+    { id: 'a1', text: 'Mitochondria', correct: true },
+    { id: 'a2', text: 'Nucleus', correct: false },
+    { id: 'a3', text: 'Ribosome', correct: false },
+    { id: 'a4', text: 'Golgi Apparatus', correct: false },
+  ],
 };
 
 let objectIdCounter = 0;
@@ -120,18 +183,136 @@ function generateStars(count: number): StarConfig[] {
   });
 }
 
-// minY/maxY define the vertical band the asteroid's TOP edge may spawn in.
-// We subtract MAX_ASTEROID_SIZE from maxY before calling this so that even
-// the largest possible asteroid's bottom edge stays within maxY.
-function randomObject(minY: number, maxY: number): SpaceObject {
-  const size = 30 + Math.random() * 20;
-  const safeMaxY = Math.max(minY, maxY - MAX_ASTEROID_SIZE);
-  return {
-    id: objectIdCounter++,
-    x: Math.random() * (SCREEN_W - size),
-    y: minY + Math.random() * Math.max(1, safeMaxY - minY),
-    size,
+/**
+ * Given a lane index and the total lane count, returns the `left` x
+ * position for that lane's object.
+ *
+ * The screen is divided into `laneCount` equal-width columns. Each object
+ * is centered in its column, with a small random jitter so things don't
+ * look too robotic/grid-like — but the jitter is capped at 20% of the
+ * lane's free space, which mathematically guarantees the object's circle
+ * never crosses into a neighboring lane. That's what makes "no stacking"
+ * a guarantee rather than a probability.
+ */
+function laneX(laneIndex: number, laneCount: number): number {
+  const laneWidth = SCREEN_W / laneCount;
+  const freeSpace = laneWidth - ANSWER_OBJECT_SIZE;
+  const maxJitter = Math.max(0, freeSpace * 0.2);
+  const jitter = (Math.random() - 0.5) * 2 * maxJitter;
+  const laneCenter = laneWidth * laneIndex + laneWidth / 2;
+  return laneCenter - ANSWER_OBJECT_SIZE / 2 + jitter;
+}
+
+/**
+ * THE single source of truth for spawning a falling answer.
+ *
+ * Every answer object — whether it's part of the initial batch for a new
+ * question, or a replacement spawned after a wrong answer gets shot —
+ * goes through this exact function. Because there's only one code path,
+ * it's structurally impossible for an object to spawn anywhere except
+ * "off-screen above, in its assigned lane."
+ *
+ * `spawnY` is always negative (above y = 0), computed once in the main
+ * component from SPAWN_ABOVE_SCREEN — nothing here ever picks a random
+ * starting height.
+ */
+function spawnAnswerInLane(
+  label: string,
+  isCorrect: boolean,
+  laneIndex: number,
+  laneCount: number,
+  spawnY: number,
+  maxY: number,
+  onUpdate: (id: number, y: number) => void
+): SpaceObject {
+  const size = ANSWER_OBJECT_SIZE;
+  const x = laneX(laneIndex, laneCount);
+  const safeMaxY = Math.max(spawnY, maxY - size);
+  const travelDistance = safeMaxY - spawnY;
+  const id = objectIdCounter++;
+  const duration =
+    FALL_MIN_DURATION + Math.random() * (FALL_MAX_DURATION - FALL_MIN_DURATION);
+
+  const anim = new Animated.Value(0);
+
+  // Random head start along the fall so simultaneously-spawned answers
+  // don't all move in visible lock-step, while still always starting
+  // from spawnY (off-screen above) — the head start only affects how far
+  // ALONG that same top-to-bottom path it starts.
+  const startProgress = Math.random();
+  anim.setValue(startProgress);
+  onUpdate(id, spawnY + startProgress * travelDistance);
+
+  const listenerId = anim.addListener(({ value }) => {
+    onUpdate(id, spawnY + value * travelDistance);
+  });
+
+  const runLoop = () => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: duration * (1 - startProgress),
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+      anim.setValue(0);
+      Animated.loop(
+        Animated.timing(anim, {
+          toValue: 1,
+          duration,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      ).start();
+    });
   };
+  runLoop();
+
+  const stop = () => {
+    anim.stopAnimation();
+    anim.removeListener(listenerId);
+  };
+
+  return {
+    id,
+    x,
+    size,
+    minY: spawnY,
+    maxY: safeMaxY,
+    anim,
+    stop,
+    label,
+    isCorrect,
+    laneIndex,
+  };
+}
+
+/**
+ * Builds the full set of falling answer objects for a question: one
+ * object per answer, each permanently assigned to its own lane
+ * (0..answers.length-1), all spawning off-screen above the header.
+ */
+function buildAnswerObjects(
+  question: Question,
+  spawnY: number,
+  maxY: number,
+  onUpdate: (id: number, y: number) => void
+): SpaceObject[] {
+  const laneCount = question.answers.length;
+  // Shuffle which answer goes in which lane so the correct answer isn't
+  // always in the same spot question after question.
+  const shuffled = [...question.answers].sort(() => Math.random() - 0.5);
+  return shuffled.map((answer, laneIndex) =>
+    spawnAnswerInLane(
+      answer.text,
+      answer.correct,
+      laneIndex,
+      laneCount,
+      spawnY,
+      maxY,
+      onUpdate
+    )
+  );
 }
 
 /* ----------------------------- Star ----------------------------- */
@@ -260,51 +441,71 @@ const ShootingStar: React.FC<{ slotIndex: number }> = React.memo(
   }
 );
 
-/* ------------------------- Space object (asteroid) ------------------------- */
+/* ------------------------- Answer object (falling circle) ------------------------- */
 
-const SpaceObjectView: React.FC<{ obj: SpaceObject; exploding: boolean }> =
-  React.memo(({ obj, exploding }) => {
-    const scale = useRef(new Animated.Value(1)).current;
-    const opacity = useRef(new Animated.Value(1)).current;
+const SpaceObjectView: React.FC<{
+  obj: SpaceObject;
+  hitState: 'none' | 'correct' | 'wrong';
+}> = React.memo(({ obj, hitState }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
 
-    useEffect(() => {
-      if (exploding) {
-        Animated.parallel([
-          Animated.timing(scale, {
-            toValue: 1.6,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      } else {
-        scale.setValue(1);
-        opacity.setValue(1);
-      }
-    }, [exploding, scale, opacity]);
+  useEffect(() => {
+    if (hitState !== 'none') {
+      Animated.parallel([
+        Animated.timing(scale, {
+          toValue: 1.6,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      scale.setValue(1);
+      opacity.setValue(1);
+    }
+  }, [hitState, scale, opacity]);
 
-    return (
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.spaceObject,
-          {
-            left: obj.x,
-            top: obj.y,
-            width: obj.size,
-            height: obj.size,
-            borderRadius: obj.size / 2,
-            opacity,
-            transform: [{ scale }],
-          },
-        ]}
-      />
-    );
+  // Fall driven by translateY on the native thread — smooth, no JS lag.
+  const translateY = obj.anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, obj.maxY - obj.minY],
   });
+
+  const flashBorderColor =
+    hitState === 'correct' ? THEME.correct : hitState === 'wrong' ? THEME.wrong : THEME.borderBright;
+  const flashBg =
+    hitState === 'correct' ? THEME.correctGlow : hitState === 'wrong' ? THEME.wrongGlow : THEME.bgElevated;
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.spaceObject,
+        {
+          left: obj.x,
+          top: obj.minY,
+          width: obj.size,
+          height: obj.size,
+          // obj.size / 2 makes this a perfect circle regardless of size.
+          borderRadius: obj.size / 2,
+          backgroundColor: flashBg,
+          borderColor: flashBorderColor,
+          opacity,
+          transform: [{ translateY }, { scale }],
+        },
+      ]}
+    >
+      <Text style={styles.spaceObjectLabel} numberOfLines={3}>
+        {obj.label}
+      </Text>
+    </Animated.View>
+  );
+});
 
 /* ------------------------------- Bullet ------------------------------- */
 
@@ -320,15 +521,15 @@ const BulletView: React.FC<{ bullet: Bullet }> = React.memo(({ bullet }) => (
 const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   starCount = 80,
   shootingStars = true,
-  backgroundColor = '#000000',
+  backgroundColor = THEME.bg,
   style,
-  objectCount = 5,
   shipSize = SHIP_DEFAULT_SIZE,
   onBack,
   studySets = DUMMY_STUDY_SETS,
   currentStudySetId,
   onSelectStudySet,
   question = DUMMY_QUESTION,
+  onAnswer,
   maxBullets = 5,
   fireCooldownMs = 220,
   children,
@@ -337,28 +538,60 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
   const stars = useMemo(() => generateStars(starCount), [starCount]);
 
-  // Question card now anchors to the very bottom edge...
   const questionCardBottom = insets.bottom + 16;
-  const questionCardTop = SCREEN_H - questionCardBottom - QUESTION_CARD_HEIGHT;
-
-  // ...and the ship sits ABOVE it, with a guaranteed gap (SHIP_QUESTION_GAP)
-  // so the ship and the question card never visually touch or overlap.
   const shipBottomOffset =
     questionCardBottom + QUESTION_CARD_HEIGHT + SHIP_QUESTION_GAP;
   const shipX = SCREEN_W / 2 - shipSize / 2;
   const shipY = SCREEN_H - shipSize - shipBottomOffset;
 
-  // Play area for asteroids: below the header, above the ship,
-  // with an extra margin so asteroid circles can't visually clip either.
+  // topSafeZone is only used to gate taps over the header now — objects
+  // never spawn there, only pass through it while falling.
   const topSafeZone = insets.top + HEADER_HEIGHT + QUESTION_CARD_MARGIN;
   const bottomSafeZone = shipY - QUESTION_CARD_MARGIN;
 
+  // The ONE spawn height used everywhere — fully off-screen above y = 0.
+  const spawnY = -ANSWER_OBJECT_SIZE - SPAWN_ABOVE_SCREEN;
+
+  // Number of lanes = number of answers for the current question. Kept in
+  // a ref so fireBullet's respawn logic always has the correct lane count
+  // even if the question object reference changes between renders.
+  const laneCountRef = useRef(question.answers.length);
+  useEffect(() => {
+    laneCountRef.current = question.answers.length;
+  }, [question]);
+
+  const objectYRef = useRef<Map<number, number>>(new Map());
+  const updateObjectY = useCallback((id: number, y: number) => {
+    objectYRef.current.set(id, y);
+  }, []);
+
   const [objects, setObjects] = useState<SpaceObject[]>(() =>
-    Array.from({ length: objectCount }, () =>
-      randomObject(topSafeZone, bottomSafeZone)
-    )
+    buildAnswerObjects(question, spawnY, bottomSafeZone, updateObjectY)
   );
-  const [destroyedIds, setDestroyedIds] = useState<Set<number>>(new Set());
+  const objectsRef = useRef(objects);
+  useEffect(() => {
+    objectsRef.current = objects;
+  }, [objects]);
+
+  const questionIdRef = useRef(question.id);
+  useEffect(() => {
+    if (questionIdRef.current === question.id) return;
+    questionIdRef.current = question.id;
+    objectsRef.current.forEach((o) => o.stop());
+    objectYRef.current.clear();
+    setObjects(
+      buildAnswerObjects(question, spawnY, bottomSafeZone, updateObjectY)
+    );
+    setHitStates({});
+  }, [question, spawnY, bottomSafeZone, updateObjectY]);
+
+  useEffect(() => {
+    return () => {
+      objectsRef.current.forEach((o) => o.stop());
+    };
+  }, []);
+
+  const [hitStates, setHitStates] = useState<Record<number, 'correct' | 'wrong'>>({});
   const [bullets, setBullets] = useState<Bullet[]>([]);
 
   const [internalSetId, setInternalSetId] = useState(
@@ -375,7 +608,6 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     }
   }, [onBack]);
 
-  // ---- Folder / study set switcher: Alert-based for now ----
   const handleOpenFolderPicker = useCallback(() => {
     const setButtons = studySets.map((set) => ({
       text: set.subtitle ? `${set.name} (${set.subtitle})` : set.name,
@@ -393,12 +625,11 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     );
   }, [studySets, onSelectStudySet]);
 
-  // ---- Bullet rate limiting ----
   const lastFireTimeRef = useRef(0);
   const activeBulletCountRef = useRef(0);
 
   const fireBullet = useCallback(
-    (targetX: number, targetY: number, hitObjectId?: number) => {
+    (targetX: number, targetY: number, hitObject?: SpaceObject) => {
       const now = Date.now();
       if (now - lastFireTimeRef.current < fireCooldownMs) return;
       if (activeBulletCountRef.current >= maxBullets) return;
@@ -432,16 +663,56 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         );
         setBullets((prev) => prev.filter((b) => b.id !== id));
 
-        if (hitObjectId !== undefined) {
-          setDestroyedIds((prev) => new Set(prev).add(hitObjectId));
+        if (hitObject) {
+          const result: 'correct' | 'wrong' = hitObject.isCorrect ? 'correct' : 'wrong';
+          setHitStates((prev) => ({ ...prev, [hitObject.id]: result }));
+
+          onAnswer?.(hitObject.isCorrect, hitObject.label);
+
           setTimeout(() => {
-            setObjects((prev) => [
-              ...prev.filter((o) => o.id !== hitObjectId),
-              randomObject(topSafeZone, bottomSafeZone),
-            ]);
-            setDestroyedIds((prev) => {
-              const next = new Set(prev);
-              next.delete(hitObjectId);
+            hitObject.stop();
+            objectYRef.current.delete(hitObject.id);
+
+            setObjects((prev) => {
+              const remaining = prev.filter((o) => o.id !== hitObject.id);
+
+              // Correct answer shot → round is over, clear the field.
+              // (Parent should pass a new `question` prop to start the
+              // next round, which spawns a brand new set from above.)
+              if (hitObject.isCorrect) {
+                remaining.forEach((o) => o.stop());
+                return [];
+              }
+
+              // Wrong answer shot → respawn a NEW wrong answer in the
+              // SAME lane the destroyed one owned. Reusing the lane index
+              // (not a random x) is what guarantees the replacement can
+              // never overlap any of the other still-falling objects,
+              // which each own a different lane. It always spawns from
+              // spawnY (off-screen above) via spawnAnswerInLane — the one
+              // and only spawn path in this file.
+              const wrongPool = question.answers.filter((a) => !a.correct);
+              const replacementText =
+                wrongPool[Math.floor(Math.random() * wrongPool.length)]?.text ??
+                hitObject.label;
+
+              return [
+                ...remaining,
+                spawnAnswerInLane(
+                  replacementText,
+                  false,
+                  hitObject.laneIndex,
+                  laneCountRef.current,
+                  spawnY,
+                  bottomSafeZone,
+                  updateObjectY
+                ),
+              ];
+            });
+
+            setHitStates((prev) => {
+              const next = { ...prev };
+              delete next[hitObject.id];
               return next;
             });
           }, 220);
@@ -454,8 +725,11 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
       shipY,
       fireCooldownMs,
       maxBullets,
-      topSafeZone,
+      spawnY,
       bottomSafeZone,
+      updateObjectY,
+      question,
+      onAnswer,
     ]
   );
 
@@ -463,20 +737,23 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     (evt: GestureResponderEvent) => {
       const { locationX, locationY } = evt.nativeEvent;
 
-      // Ignore taps over the header or the ship/question zone
+      // Taps are ignored above the header / below the ship — answers
+      // fall through this zone but are only "shootable" while inside it.
       if (locationY < topSafeZone || locationY > bottomSafeZone) return;
 
       const hitObject = objects.find((obj) => {
+        const currentY = objectYRef.current.get(obj.id) ?? obj.minY;
         const cx = obj.x + obj.size / 2;
-        const cy = obj.y + obj.size / 2;
+        const cy = currentY + obj.size / 2;
         const dist = Math.sqrt((locationX - cx) ** 2 + (locationY - cy) ** 2);
         return dist <= obj.size / 2 + 10;
       });
 
       if (hitObject) {
+        const currentY = objectYRef.current.get(hitObject.id) ?? hitObject.minY;
         const cx = hitObject.x + hitObject.size / 2;
-        const cy = hitObject.y + hitObject.size / 2;
-        fireBullet(cx, cy, hitObject.id);
+        const cy = currentY + hitObject.size / 2;
+        fireBullet(cx, cy, hitObject);
       } else {
         fireBullet(locationX, locationY);
       }
@@ -499,7 +776,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         <SpaceObjectView
           key={obj.id}
           obj={obj}
-          exploding={destroyedIds.has(obj.id)}
+          hitState={hitStates[obj.id] ?? 'none'}
         />
       ))}
 
@@ -509,7 +786,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
       <Pressable style={StyleSheet.absoluteFill} onPress={handleTap} />
 
-      {/* ---------------- Fixed ship ---------------- */}
+      {/* ---------------- Fixed ship (triangle) ---------------- */}
       <View
         pointerEvents="none"
         style={[
@@ -557,7 +834,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         </Pressable>
       </View>
 
-      {/* ---------------- Question HUD panel (below the ship, near bottom) ---------------- */}
+      {/* ---------------- Question HUD panel (green theme) ---------------- */}
       <View
         style={[
           styles.questionCard,
@@ -565,7 +842,6 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         ]}
         pointerEvents="box-none"
       >
-        {/* sci-fi corner brackets */}
         <View style={[styles.cornerBracket, styles.cornerTL]} />
         <View style={[styles.cornerBracket, styles.cornerTR]} />
         <View style={[styles.cornerBracket, styles.cornerBL]} />
@@ -615,12 +891,21 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
   },
+
   spaceObject: {
     position: 'absolute',
-    backgroundColor: '#8b8b9e',
     borderWidth: 2,
-    borderColor: '#5c5c73',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
+  spaceObjectLabel: {
+    color: THEME.textWhite,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
   bullet: {
     position: 'absolute',
     left: -3,
@@ -635,7 +920,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
   },
 
-  /* ---- Ship (fixed) ---- */
   ship: {
     position: 'absolute',
     alignItems: 'center',
@@ -659,7 +943,6 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
 
-  /* ---- Header ---- */
   header: {
     position: 'absolute',
     top: 0,
@@ -692,27 +975,26 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
-  /* ---- Folder / study set button (green theme, no dropdown chevron) ---- */
   folderButton: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 40,
-    backgroundColor: 'rgba(46,204,113,0.12)',
+    backgroundColor: THEME.primaryGlow,
     borderWidth: 1,
-    borderColor: 'rgba(46,204,113,0.4)',
-    borderRadius: 20,
+    borderColor: THEME.borderBright,
+    borderRadius: THEME.radiusFull,
     paddingHorizontal: 12,
     maxWidth: SCREEN_W * 0.62,
   },
   folderIconSmall: {
     width: 16,
     height: 12,
-    backgroundColor: '#2ecc71',
+    backgroundColor: THEME.primary,
     borderRadius: 2,
     marginRight: 8,
   },
   folderLabel: {
-    color: '#eafff2',
+    color: THEME.textWhite,
     fontSize: 13,
     fontWeight: '600',
     flexShrink: 1,
@@ -721,19 +1003,18 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
-  /* ---- Question HUD panel (below the ship, near bottom) ---- */
   questionCard: {
     position: 'absolute',
     left: 16,
     right: 16,
     zIndex: 15,
-    backgroundColor: 'rgba(10,14,26,0.72)',
+    backgroundColor: THEME.panelBg,
     borderWidth: 1,
-    borderColor: 'rgba(79,209,255,0.3)',
-    borderRadius: 14,
+    borderColor: THEME.panelBorder,
+    borderRadius: THEME.radiusMd,
     padding: 14,
     justifyContent: 'center',
-    shadowColor: '#4fd1ff',
+    shadowColor: THEME.primary,
     shadowOpacity: 0.25,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 0 },
@@ -742,7 +1023,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 12,
     height: 12,
-    borderColor: '#4fd1ff',
+    borderColor: THEME.primary,
   },
   cornerTL: {
     top: -1,
@@ -780,9 +1061,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(79,209,255,0.12)',
+    backgroundColor: THEME.primaryGlow,
     borderWidth: 1,
-    borderColor: 'rgba(79,209,255,0.5)',
+    borderColor: THEME.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -790,7 +1071,7 @@ const styles = StyleSheet.create({
   questionBadgeDiamond: {
     width: 10,
     height: 10,
-    backgroundColor: '#4fd1ff',
+    backgroundColor: THEME.primary,
     transform: [{ rotate: '45deg' }],
   },
   questionTextBlock: {
@@ -805,17 +1086,17 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#4fd1ff',
+    backgroundColor: THEME.primary,
     marginRight: 6,
   },
   questionKicker: {
-    color: '#4fd1ff',
+    color: THEME.primary,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 1,
   },
   questionText: {
-    color: '#ffffff',
+    color: THEME.textWhite,
     fontSize: 15,
     fontWeight: '600',
     lineHeight: 20,
