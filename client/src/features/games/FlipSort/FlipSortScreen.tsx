@@ -113,16 +113,16 @@ const onUpdateCardStatus = useCallback(
     resetFlip,
   } = useCardFlip();
 
-  // const handleBackPress = useCallback(() => {
-  //   // Navigate back to selection wizard
-  //   router.navigate({
-  //     pathname: "/games/SelectionWizard",
-  //     params: { gameRoute: "/games/FlipSort" }
-  //   });
-  // }, [router]);
-  const handleBackPress = (() => {
-    router.replace("/(tabs)/game");
-  });
+  const handleBackPress = useCallback(() => {
+    // Navigate back to selection wizard
+    router.navigate({
+      pathname: "/games/SelectionWizard",
+      params: { gameRoute: "/games/FlipSort" }
+    });
+  }, [router]);
+  // const handleBackPress = (() => {
+  //   router.replace("/(tabs)/game");
+  // });
 
   const handleChangeFolderPress = useCallback(() => {
     // Navigate back to selection wizard to choose another folder

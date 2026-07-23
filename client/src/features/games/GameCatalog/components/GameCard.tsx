@@ -42,7 +42,10 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     overflow: 'hidden',
     flexDirection: 'column',
-    marginBottom: GAP,
+    // marginBottom removed — spacing is now handled by rowGap/columnGap
+    // on the parent grid container in GameCatalog.tsx, so this card no
+    // longer adds its own bottom margin (that was stacking with the
+    // parent's gap and causing uneven spacing, especially on the last row).
     ...Platform.select({
       ios: {
         shadowColor: '#000',

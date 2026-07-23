@@ -15,10 +15,10 @@ import {
   ViewStyle,
   Pressable,
   GestureResponderEvent,
-  Alert,
   Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
@@ -127,6 +127,13 @@ interface Bullet {
   anim: Animated.ValueXY;
 }
 
+// Named alias instead of an inline generic — avoids the
+// "useState<Record<number, ...>>" double-angle-bracket pattern that some
+// clipboard/editor pipelines mangle, and gives `prev` a real type in every
+// setHitStates callback instead of falling back to `any`.
+type HitState = "correct" | "wrong";
+type HitStatesMap = Record<number, HitState>;
+
 const NUM_SHOOTING_STAR_SLOTS = 2;
 const SHIP_DEFAULT_SIZE = 160;
 const BULLET_SPEED = 700;
@@ -147,13 +154,6 @@ const FALL_MAX_DURATION = 30000;
 // in from fully off-screen instead of popping in inside the play area.
 // Bigger number = spawns higher up / takes longer to become visible.
 const SPAWN_ABOVE_SCREEN = 60;
-
-const DUMMY_STUDY_SETS: StudySet[] = [
-  { id: "1", name: "Biology 101", subtitle: "42 cards" },
-  { id: "2", name: "Spanish Vocab", subtitle: "120 cards" },
-  { id: "3", name: "World History", subtitle: "78 cards" },
-  { id: "4", name: "Chemistry Basics", subtitle: "35 cards" },
-];
 
 const DUMMY_QUESTION: Question = {
   id: "q1",
@@ -446,7 +446,7 @@ const ShootingStar: React.FC<{ slotIndex: number }> = React.memo(
 
 const SpaceObjectView: React.FC<{
   obj: SpaceObject;
-  hitState: "none" | "correct" | "wrong";
+  hitState: "none" | HitState;
 }> = React.memo(({ obj, hitState }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(1)).current;
@@ -534,7 +534,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   style,
   shipSize = SHIP_DEFAULT_SIZE,
   onBack,
-  studySets = DUMMY_STUDY_SETS,
+  studySets = [],
   currentStudySetId,
   onSelectStudySet,
   question = DUMMY_QUESTION,
@@ -544,6 +544,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   children,
 }) => {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const stars = useMemo(() => generateStars(starCount), [starCount]);
 
@@ -564,7 +565,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   // Number of lanes = number of answers for the current question. Kept in
   // a ref so fireBullet's respawn logic always has the correct lane count
   // even if the question object reference changes between renders.
-  const laneCountRef = useRef(question.answers.length);
+  const laneCountRef = useRef<number>(question.answers.length);
   useEffect(() => {
     laneCountRef.current = question.answers.length;
   }, [question]);
@@ -577,12 +578,12 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   const [objects, setObjects] = useState<SpaceObject[]>(() =>
     buildAnswerObjects(question, spawnY, bottomSafeZone, updateObjectY),
   );
-  const objectsRef = useRef(objects);
+  const objectsRef = useRef<SpaceObject[]>(objects);
   useEffect(() => {
     objectsRef.current = objects;
   }, [objects]);
 
-  const questionIdRef = useRef(question.id);
+  const questionIdRef = useRef<string>(question.id);
   useEffect(() => {
     if (questionIdRef.current === question.id) return;
     questionIdRef.current = question.id;
@@ -600,12 +601,10 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     };
   }, []);
 
-  const [hitStates, setHitStates] = useState<
-    Record<number, "correct" | "wrong">
-  >({});
+  const [hitStates, setHitStates] = useState<HitStatesMap>({});
   const [bullets, setBullets] = useState<Bullet[]>([]);
 
-  const [internalSetId, setInternalSetId] = useState(
+  const [internalSetId, setInternalSetId] = useState<string | undefined>(
     currentStudySetId ?? studySets[0]?.id,
   );
   const activeSetId = currentStudySetId ?? internalSetId;
@@ -614,30 +613,22 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   const handleBack = useCallback(() => {
     if (onBack) {
       onBack();
-    } else {
-      Alert.alert("Back pressed", "Wire up the onBack prop to navigate.");
+      return;
     }
-  }, [onBack]);
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/");
+    }
+  }, [onBack, router]);
 
   const handleOpenFolderPicker = useCallback(() => {
-    const setButtons = studySets.map((set) => ({
-      text: set.subtitle ? `${set.name} (${set.subtitle})` : set.name,
-      onPress: () => {
-        setInternalSetId(set.id);
-        onSelectStudySet?.(set);
-      },
-    }));
+    // TODO: point this at your actual study-set picker screen/route
+    router.replace("/games/SelectionWizard");
+  }, [router]);
 
-    Alert.alert(
-      "Choose a study set",
-      "Navigate to the folder picker screen here later.",
-      [...setButtons, { text: "Cancel", style: "cancel" }],
-      { cancelable: true },
-    );
-  }, [studySets, onSelectStudySet]);
-
-  const lastFireTimeRef = useRef(0);
-  const activeBulletCountRef = useRef(0);
+  const lastFireTimeRef = useRef<number>(0);
+  const activeBulletCountRef = useRef<number>(0);
 
   const fireBullet = useCallback(
     (targetX: number, targetY: number, hitObject?: SpaceObject) => {
@@ -655,7 +646,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
       const id = bulletIdCounter++;
       const bullet: Bullet = { id, anim };
 
-      setBullets((prev) => [...prev, bullet]);
+      setBullets((prev: Bullet[]) => [...prev, bullet]);
 
       const dx = targetX - startX;
       const dy = targetY - startY;
@@ -672,13 +663,14 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
           0,
           activeBulletCountRef.current - 1,
         );
-        setBullets((prev) => prev.filter((b) => b.id !== id));
+        setBullets((prev: Bullet[]) => prev.filter((b) => b.id !== id));
 
         if (hitObject) {
-          const result: "correct" | "wrong" = hitObject.isCorrect
-            ? "correct"
-            : "wrong";
-          setHitStates((prev) => ({ ...prev, [hitObject.id]: result }));
+          const result: HitState = hitObject.isCorrect ? "correct" : "wrong";
+          setHitStates((prev: HitStatesMap) => ({
+            ...prev,
+            [hitObject.id]: result,
+          }));
 
           onAnswer?.(hitObject.isCorrect, hitObject.label);
 
@@ -686,7 +678,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
             hitObject.stop();
             objectYRef.current.delete(hitObject.id);
 
-            setObjects((prev) => {
+            setObjects((prev: SpaceObject[]) => {
               const remaining = prev.filter((o) => o.id !== hitObject.id);
 
               // Correct answer shot → round is over, clear the field.
@@ -723,7 +715,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
               ];
             });
 
-            setHitStates((prev) => {
+            setHitStates((prev: HitStatesMap) => {
               const next = { ...prev };
               delete next[hitObject.id];
               return next;
@@ -848,7 +840,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         >
           <View style={styles.folderIconSmall} />
           <Text style={styles.folderLabel} numberOfLines={1}>
-            {currentStudySet ? currentStudySet.name : "Select study set"}
+            {currentStudySet ? currentStudySet.name : "change"}
           </Text>
         </Pressable>
       </View>

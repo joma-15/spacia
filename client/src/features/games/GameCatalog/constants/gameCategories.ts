@@ -14,22 +14,22 @@ export const GAME_CATEGORIES: GameCategory[] = [
   {
     id: '1',
     title: 'Space blast',
-    image: require(`${BASE_PATH}/drei.jpg`),
+    image: require(`${BASE_PATH}/spaceblast.png`),
     tint: '#5B8DEF',
     route: '/games/SpaceBlast'
   },
-  {
-    id: '2',
-    title: 'WordRush',
-    image: require(`${BASE_PATH}/luis.jpg`),
-    tint: '#34D399',
-    route: '/games/WordRush',
-  },
-  {
-    id: '3',
-    title: 'MemoryMatch',
-    image: require(`${BASE_PATH}/jed.jpg`),
-    tint: '#E86A92',
-    route: '/games/MemoryMatch',
-  },
+  // {
+  //   id: '2',
+  //   title: 'WordRush',
+  //   image: require(`${BASE_PATH}/luis.jpg`),
+  //   tint: '#34D399',
+  //   route: '/games/WordRush',
+  // },
+  // {
+  //   id: '3',
+  //   title: 'MemoryMatch',
+  //   image: require(`${BASE_PATH}/jed.jpg`),
+  //   tint: '#E86A92',
+  //   route: '/games/MemoryMatch',
+  // },
 ];

@@ -20,6 +20,9 @@ interface GameCatalogProps {
   gamesToday?: number;
 }
 
+const HORIZONTAL_PADDING = 20; // must match GameCard.tsx's HORIZONTAL_PADDING
+const GAP = 10; // must match GameCard.tsx's GAP
+
 // The scrollable body of the gaming home screen: header, streak pill,
 // search, and the grid of playable game categories.
 export const GameCatalog: React.FC<GameCatalogProps> = ({
@@ -45,7 +48,7 @@ export const GameCatalog: React.FC<GameCatalogProps> = ({
 
       <SectionHeader title="Game Categories" onActionPress={onSeeAllPress} />
 
-      <View style={styles.cardList}>
+      <View style={styles.grid}>
         {filteredCategories.map((category) => (
           <GameCard key={category.id} category={category} onPress={onSelectGame} />
         ))}
@@ -59,12 +62,13 @@ export const GameCatalog: React.FC<GameCatalogProps> = ({
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingHorizontal: 20, // must match HORIZONTAL_PADDING in GameCard.tsx
+    paddingHorizontal: HORIZONTAL_PADDING, // must match HORIZONTAL_PADDING in GameCard.tsx
     paddingBottom: 32,
   },
-  cardList: {
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    rowGap: GAP,
+    columnGap: GAP,
   },
 });

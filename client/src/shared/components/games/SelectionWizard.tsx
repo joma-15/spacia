@@ -235,7 +235,6 @@ export default function SelectionWizard() {
       <View style={styles.listHeader}>
         <Text style={styles.listHeaderTitle}>My Subjects</Text>
 
-        <Text style={styles.seeAll}>See all →</Text>
       </View>
 
       {/* Folder List */}
