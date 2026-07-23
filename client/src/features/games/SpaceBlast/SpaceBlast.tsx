@@ -4,7 +4,7 @@ import React, {
   useRef,
   useState,
   useCallback,
-} from 'react';
+} from "react";
 import {
   View,
   Text,
@@ -16,37 +16,38 @@ import {
   Pressable,
   GestureResponderEvent,
   Alert,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  Image,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
 /* ═══════════════════════════════════════════════════════════════════════
  * THEME — all colors/radii/shadows in one place, edit here to re-skin.
  * ═══════════════════════════════════════════════════════════════════════ */
 const THEME = {
-  bg: '#0F1F17',
-  bgCard: '#162B1E',
-  bgElevated: '#1C3527',
+  bg: "#0F1F17",
+  bgCard: "#162B1E",
+  bgElevated: "#1C3527",
 
-  primary: '#3DDC84',
-  primaryDim: '#2AAF63',
-  primaryGlow: 'rgba(61,220,132,0.25)',
+  primary: "#3DDC84",
+  primaryDim: "#2AAF63",
+  primaryGlow: "rgba(61,220,132,0.25)",
 
-  correct: '#3DDC84',
-  correctGlow: 'rgba(61,220,132,0.35)',
-  wrong: '#E05C7A',
-  wrongGlow: 'rgba(224,92,122,0.35)',
+  correct: "#3DDC84",
+  correctGlow: "rgba(61,220,132,0.35)",
+  wrong: "#E05C7A",
+  wrongGlow: "rgba(224,92,122,0.35)",
 
-  textWhite: '#F0FFF6',
-  textMid: '#A8C5B0',
-  textMuted: '#5A7A65',
+  textWhite: "#F0FFF6",
+  textMid: "#A8C5B0",
+  textMuted: "#5A7A65",
 
-  border: '#243D2C',
-  borderBright: '#2E5438',
+  border: "#243D2C",
+  borderBright: "#2E5438",
 
-  panelBg: 'rgba(15,31,23,0.78)',
-  panelBorder: 'rgba(61,220,132,0.35)',
+  panelBg: "rgba(15,31,23,0.78)",
+  panelBorder: "rgba(61,220,132,0.35)",
 
   radiusSm: 10,
   radiusMd: 14,
@@ -127,20 +128,20 @@ interface Bullet {
 }
 
 const NUM_SHOOTING_STAR_SLOTS = 2;
-const SHIP_DEFAULT_SIZE = 44;
+const SHIP_DEFAULT_SIZE = 160;
 const BULLET_SPEED = 700;
 const HEADER_HEIGHT = 56;
 const QUESTION_CARD_HEIGHT = 92;
 const QUESTION_CARD_MARGIN = 12;
 
-const SHIP_QUESTION_GAP = 8;
+const SHIP_QUESTION_GAP = -120;
 
 // Answer objects are circles this size (diameter, in px).
 const ANSWER_OBJECT_SIZE = 78;
 
 // Fall speed range in ms — edit these two numbers to change speed.
-const FALL_MIN_DURATION = 5000;
-const FALL_MAX_DURATION = 9000;
+const FALL_MIN_DURATION = 20000;
+const FALL_MAX_DURATION = 30000;
 
 // How far above the very top of the screen an answer spawns, so it falls
 // in from fully off-screen instead of popping in inside the play area.
@@ -148,20 +149,20 @@ const FALL_MAX_DURATION = 9000;
 const SPAWN_ABOVE_SCREEN = 60;
 
 const DUMMY_STUDY_SETS: StudySet[] = [
-  { id: '1', name: 'Biology 101', subtitle: '42 cards' },
-  { id: '2', name: 'Spanish Vocab', subtitle: '120 cards' },
-  { id: '3', name: 'World History', subtitle: '78 cards' },
-  { id: '4', name: 'Chemistry Basics', subtitle: '35 cards' },
+  { id: "1", name: "Biology 101", subtitle: "42 cards" },
+  { id: "2", name: "Spanish Vocab", subtitle: "120 cards" },
+  { id: "3", name: "World History", subtitle: "78 cards" },
+  { id: "4", name: "Chemistry Basics", subtitle: "35 cards" },
 ];
 
 const DUMMY_QUESTION: Question = {
-  id: 'q1',
-  text: 'What is the powerhouse of the cell?',
+  id: "q1",
+  text: "What is the powerhouse of the cell?",
   answers: [
-    { id: 'a1', text: 'Mitochondria', correct: true },
-    { id: 'a2', text: 'Nucleus', correct: false },
-    { id: 'a3', text: 'Ribosome', correct: false },
-    { id: 'a4', text: 'Golgi Apparatus', correct: false },
+    { id: "a1", text: "Mitochondria", correct: true },
+    { id: "a2", text: "Nucleus", correct: false },
+    { id: "a3", text: "Ribosome", correct: false },
+    { id: "a4", text: "Golgi Apparatus", correct: false },
   ],
 };
 
@@ -223,7 +224,7 @@ function spawnAnswerInLane(
   laneCount: number,
   spawnY: number,
   maxY: number,
-  onUpdate: (id: number, y: number) => void
+  onUpdate: (id: number, y: number) => void,
 ): SpaceObject {
   const size = ANSWER_OBJECT_SIZE;
   const x = laneX(laneIndex, laneCount);
@@ -262,7 +263,7 @@ function spawnAnswerInLane(
           duration,
           easing: Easing.linear,
           useNativeDriver: true,
-        })
+        }),
       ).start();
     });
   };
@@ -296,7 +297,7 @@ function buildAnswerObjects(
   question: Question,
   spawnY: number,
   maxY: number,
-  onUpdate: (id: number, y: number) => void
+  onUpdate: (id: number, y: number) => void,
 ): SpaceObject[] {
   const laneCount = question.answers.length;
   // Shuffle which answer goes in which lane so the correct answer isn't
@@ -310,8 +311,8 @@ function buildAnswerObjects(
       laneCount,
       spawnY,
       maxY,
-      onUpdate
-    )
+      onUpdate,
+    ),
   );
 }
 
@@ -336,7 +337,7 @@ const Star: React.FC<{ config: StarConfig }> = React.memo(({ config }) => {
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
     loop.start();
     return () => loop.stop();
@@ -433,25 +434,25 @@ const ShootingStar: React.FC<{ slotIndex: number }> = React.memo(
           styles.shootingStar,
           {
             opacity,
-            transform: [{ translateX }, { translateY }, { rotate: '35deg' }],
+            transform: [{ translateX }, { translateY }, { rotate: "35deg" }],
           },
         ]}
       />
     );
-  }
+  },
 );
 
 /* ------------------------- Answer object (falling circle) ------------------------- */
 
 const SpaceObjectView: React.FC<{
   obj: SpaceObject;
-  hitState: 'none' | 'correct' | 'wrong';
+  hitState: "none" | "correct" | "wrong";
 }> = React.memo(({ obj, hitState }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (hitState !== 'none') {
+    if (hitState !== "none") {
       Animated.parallel([
         Animated.timing(scale, {
           toValue: 1.6,
@@ -477,9 +478,17 @@ const SpaceObjectView: React.FC<{
   });
 
   const flashBorderColor =
-    hitState === 'correct' ? THEME.correct : hitState === 'wrong' ? THEME.wrong : THEME.borderBright;
+    hitState === "correct"
+      ? THEME.correct
+      : hitState === "wrong"
+        ? THEME.wrong
+        : THEME.borderBright;
   const flashBg =
-    hitState === 'correct' ? THEME.correctGlow : hitState === 'wrong' ? THEME.wrongGlow : THEME.bgElevated;
+    hitState === "correct"
+      ? THEME.correctGlow
+      : hitState === "wrong"
+        ? THEME.wrongGlow
+        : THEME.bgElevated;
 
   return (
     <Animated.View
@@ -566,7 +575,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   }, []);
 
   const [objects, setObjects] = useState<SpaceObject[]>(() =>
-    buildAnswerObjects(question, spawnY, bottomSafeZone, updateObjectY)
+    buildAnswerObjects(question, spawnY, bottomSafeZone, updateObjectY),
   );
   const objectsRef = useRef(objects);
   useEffect(() => {
@@ -580,7 +589,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     objectsRef.current.forEach((o) => o.stop());
     objectYRef.current.clear();
     setObjects(
-      buildAnswerObjects(question, spawnY, bottomSafeZone, updateObjectY)
+      buildAnswerObjects(question, spawnY, bottomSafeZone, updateObjectY),
     );
     setHitStates({});
   }, [question, spawnY, bottomSafeZone, updateObjectY]);
@@ -591,11 +600,13 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     };
   }, []);
 
-  const [hitStates, setHitStates] = useState<Record<number, 'correct' | 'wrong'>>({});
+  const [hitStates, setHitStates] = useState<
+    Record<number, "correct" | "wrong">
+  >({});
   const [bullets, setBullets] = useState<Bullet[]>([]);
 
   const [internalSetId, setInternalSetId] = useState(
-    currentStudySetId ?? studySets[0]?.id
+    currentStudySetId ?? studySets[0]?.id,
   );
   const activeSetId = currentStudySetId ?? internalSetId;
   const currentStudySet = studySets.find((s) => s.id === activeSetId);
@@ -604,7 +615,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     if (onBack) {
       onBack();
     } else {
-      Alert.alert('Back pressed', 'Wire up the onBack prop to navigate.');
+      Alert.alert("Back pressed", "Wire up the onBack prop to navigate.");
     }
   }, [onBack]);
 
@@ -618,10 +629,10 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     }));
 
     Alert.alert(
-      'Choose a study set',
-      'Navigate to the folder picker screen here later.',
-      [...setButtons, { text: 'Cancel', style: 'cancel' }],
-      { cancelable: true }
+      "Choose a study set",
+      "Navigate to the folder picker screen here later.",
+      [...setButtons, { text: "Cancel", style: "cancel" }],
+      { cancelable: true },
     );
   }, [studySets, onSelectStudySet]);
 
@@ -659,12 +670,14 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
       }).start(() => {
         activeBulletCountRef.current = Math.max(
           0,
-          activeBulletCountRef.current - 1
+          activeBulletCountRef.current - 1,
         );
         setBullets((prev) => prev.filter((b) => b.id !== id));
 
         if (hitObject) {
-          const result: 'correct' | 'wrong' = hitObject.isCorrect ? 'correct' : 'wrong';
+          const result: "correct" | "wrong" = hitObject.isCorrect
+            ? "correct"
+            : "wrong";
           setHitStates((prev) => ({ ...prev, [hitObject.id]: result }));
 
           onAnswer?.(hitObject.isCorrect, hitObject.label);
@@ -705,7 +718,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
                   laneCountRef.current,
                   spawnY,
                   bottomSafeZone,
-                  updateObjectY
+                  updateObjectY,
                 ),
               ];
             });
@@ -730,7 +743,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
       updateObjectY,
       question,
       onAnswer,
-    ]
+    ],
   );
 
   const handleTap = useCallback(
@@ -758,7 +771,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         fireBullet(locationX, locationY);
       }
     },
-    [objects, fireBullet, topSafeZone, bottomSafeZone]
+    [objects, fireBullet, topSafeZone, bottomSafeZone],
   );
 
   return (
@@ -776,7 +789,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         <SpaceObjectView
           key={obj.id}
           obj={obj}
-          hitState={hitStates[obj.id] ?? 'none'}
+          hitState={hitStates[obj.id] ?? "none"}
         />
       ))}
 
@@ -786,7 +799,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
       <Pressable style={StyleSheet.absoluteFill} onPress={handleTap} />
 
-      {/* ---------------- Fixed ship (triangle) ---------------- */}
+      {/* ---------------- Spaceship ---------------- */}
       <View
         pointerEvents="none"
         style={[
@@ -799,8 +812,14 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
           },
         ]}
       >
-        <View style={styles.shipBody} />
-        <View style={styles.shipThruster} />
+        <Image
+          source={require("@/assets/images/spaceship.png")}
+          style={{
+            width: "100%",
+            height: "100%",
+          }}
+          resizeMode="contain"
+        />
       </View>
 
       {/* ---------------- Header ---------------- */}
@@ -829,7 +848,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         >
           <View style={styles.folderIconSmall} />
           <Text style={styles.folderLabel} numberOfLines={1}>
-            {currentStudySet ? currentStudySet.name : 'Select study set'}
+            {currentStudySet ? currentStudySet.name : "Select study set"}
           </Text>
         </Pressable>
       </View>
@@ -871,59 +890,60 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    width: '100%',
-    height: '100%',
-    overflow: 'hidden',
-    position: 'relative',
+    width: "100%",
+    height: "100%",
+    overflow: "hidden",
+    position: "relative",
   },
   star: {
-    position: 'absolute',
-    backgroundColor: '#ffffff',
+    position: "absolute",
+    backgroundColor: "#ffffff",
   },
   shootingStar: {
-    position: 'absolute',
+    position: "absolute",
     width: 90,
     height: 2,
     borderRadius: 1,
-    backgroundColor: '#ffffff',
-    shadowColor: '#ffffff',
+    backgroundColor: "#ffffff",
+    shadowColor: "#ffffff",
     shadowOpacity: 0.8,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
   },
 
   spaceObject: {
-    position: 'absolute',
+    position: "absolute",
     borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 6,
   },
   spaceObjectLabel: {
     color: THEME.textWhite,
     fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
   },
 
   bullet: {
-    position: 'absolute',
+    position: "absolute",
     left: -3,
     top: 0,
     width: 6,
     height: 14,
     borderRadius: 3,
-    backgroundColor: '#ffe066',
-    shadowColor: '#ffe066',
+    backgroundColor: "#ffe066",
+    shadowColor: "#ffe066",
     shadowOpacity: 0.9,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
   },
 
   ship: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 16,
   },
   shipBody: {
     width: 0,
@@ -931,27 +951,27 @@ const styles = StyleSheet.create({
     borderLeftWidth: 18,
     borderRightWidth: 18,
     borderBottomWidth: 34,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: '#4fd1ff',
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "#4fd1ff",
   },
   shipThruster: {
     width: 10,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#ffb84d',
+    backgroundColor: "#ffb84d",
     marginTop: -2,
   },
 
   header: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     zIndex: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     height: HEADER_HEIGHT + 8,
   },
@@ -959,25 +979,25 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   backArrow: {
     width: 11,
     height: 11,
     borderLeftWidth: 2.2,
     borderBottomWidth: 2.2,
-    borderColor: '#ffffff',
-    transform: [{ rotate: '45deg' }],
+    borderColor: "#ffffff",
+    transform: [{ rotate: "45deg" }],
     marginLeft: 4,
   },
 
   folderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     height: 40,
     backgroundColor: THEME.primaryGlow,
     borderWidth: 1,
@@ -996,7 +1016,7 @@ const styles = StyleSheet.create({
   folderLabel: {
     color: THEME.textWhite,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     flexShrink: 1,
   },
   pressed: {
@@ -1004,7 +1024,7 @@ const styles = StyleSheet.create({
   },
 
   questionCard: {
-    position: 'absolute',
+    position: "absolute",
     left: 16,
     right: 16,
     zIndex: 15,
@@ -1013,14 +1033,14 @@ const styles = StyleSheet.create({
     borderColor: THEME.panelBorder,
     borderRadius: THEME.radiusMd,
     padding: 14,
-    justifyContent: 'center',
+    justifyContent: "center",
     shadowColor: THEME.primary,
     shadowOpacity: 0.25,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 0 },
   },
   cornerBracket: {
-    position: 'absolute',
+    position: "absolute",
     width: 12,
     height: 12,
     borderColor: THEME.primary,
@@ -1054,8 +1074,8 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 6,
   },
   questionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   questionBadge: {
     width: 34,
@@ -1064,22 +1084,22 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.primaryGlow,
     borderWidth: 1,
     borderColor: THEME.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   questionBadgeDiamond: {
     width: 10,
     height: 10,
     backgroundColor: THEME.primary,
-    transform: [{ rotate: '45deg' }],
+    transform: [{ rotate: "45deg" }],
   },
   questionTextBlock: {
     flex: 1,
   },
   kickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 4,
   },
   kickerDot: {
@@ -1092,13 +1112,13 @@ const styles = StyleSheet.create({
   questionKicker: {
     color: THEME.primary,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 1,
   },
   questionText: {
     color: THEME.textWhite,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     lineHeight: 20,
   },
 
