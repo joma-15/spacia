@@ -51,6 +51,8 @@ const THEME = {
   panelBg: "rgba(15,31,23,0.78)",
   panelBorder: "rgba(61,220,132,0.35)",
 
+  overlayBg: "rgba(6,14,10,0.82)",
+
   radiusSm: 10,
   radiusMd: 14,
   radiusFull: 999,
@@ -89,8 +91,31 @@ interface SpaceBackgroundProps {
   currentStudySetId?: string;
   onSelectStudySet?: (set: StudySet) => void;
 
+  // Preferred: pass the full quiz as a list. The component advances
+  // through these itself — one correct hit moves to the next question,
+  // and a "You Win" modal appears after the last one.
+  questions?: Question[];
+
+  // Back-compat: a single question. Only used if `questions` isn't
+  // provided. In that case the component still behaves the same as
+  // before — you just get a one-question "quiz".
   question?: Question;
+
   onAnswer?: (correct: boolean, answerId: string) => void;
+
+  // Called when the player finishes the whole `questions` list, right
+  // when the win modal's OK button is pressed. If omitted, the default
+  // behavior is to navigate back to the game tab (`/(tabs)/game`).
+  onWin?: () => void;
+
+  // Number of hearts/lives the player starts with. Each wrong answer
+  // grays one out; when all are gone the Game Over modal appears.
+  maxLives?: number;
+
+  // Called when the player runs out of lives, right when the Game Over
+  // modal's OK button is pressed. If omitted, the default behavior is
+  // to navigate back to the game tab (`/(tabs)/game`), same as onWin.
+  onGameOver?: () => void;
 
   maxBullets?: number;
   fireCooldownMs?: number;
@@ -110,9 +135,6 @@ interface StarConfig {
 
 interface SpaceObject {
   id: number;
-  // Static resting position — the object hovers around this point instead
-  // of traveling anywhere. Motion is purely a small animated offset from
-  // this base position (see animX / animY below).
   x: number;
   y: number;
   size: number;
@@ -121,10 +143,9 @@ interface SpaceObject {
   stop: () => void;
   label: string;
   isCorrect: boolean;
-  // Which horizontal lane this object owns. Lanes are fixed, non-overlapping
-  // columns — as long as at most one object occupies a lane at a time,
-  // objects can never visually stack on top of each other.
   laneIndex: number;
+  ampX: number;
+  ampY: number;
 }
 
 interface Bullet {
@@ -132,10 +153,6 @@ interface Bullet {
   anim: Animated.ValueXY;
 }
 
-// Named alias instead of an inline generic — avoids the
-// "useState<Record<number, ...>>" double-angle-bracket pattern that some
-// clipboard/editor pipelines mangle, and gives `prev` a real type in every
-// setHitStates callback instead of falling back to `any`.
 type HitState = "correct" | "wrong";
 type HitStatesMap = Record<number, HitState>;
 
@@ -146,15 +163,16 @@ const HEADER_HEIGHT = 56;
 const QUESTION_CARD_HEIGHT = 92;
 const QUESTION_CARD_MARGIN = 12;
 
-// Answer objects are circles this size (diameter, in px). Bumped up so the
-// rocky texture/glow actually reads.
-const ANSWER_OBJECT_SIZE = 100;
+const ANSWER_OBJECT_SIZE = 90;
 
-// Each lane cycles through one of these asteroid "species" — different
-// base rock color + matching glow, echoing the mixed purple/olive/rust
-// asteroids in the banner art instead of one flat theme color.
+// Quizlet-Blast-style floating answers: only a handful of real correct
+// answers (pulled from the whole question bank) float at once — never
+// made-up distractors, and never the full set of 10+ answers at a time.
+const FLOATING_ANSWER_MIN = 4;
+const FLOATING_ANSWER_MAX = 5;
+
 interface RockPalette {
-  colors: [string, string]; // gradient: highlight -> shadow
+  colors: [string, string];
   glow: string;
   border: string;
   craterColor: string;
@@ -162,28 +180,24 @@ interface RockPalette {
 
 const ROCK_PALETTES: RockPalette[] = [
   {
-    // purple asteroid (like "Mitochondria" / "Ribosome" in the banner)
     colors: ["#7A5FBF", "#2E1F52"],
     glow: "rgba(155,110,255,0.45)",
     border: "#B29CFF",
     craterColor: "rgba(20,10,40,0.55)",
   },
   {
-    // dark olive/stone asteroid (like "Nucleus")
     colors: ["#6B6F4A", "#26281A"],
     glow: "rgba(200,200,120,0.35)",
     border: "#9BA06A",
     craterColor: "rgba(10,10,5,0.55)",
   },
   {
-    // rust/ember asteroid (echoes the orange explosion rocks)
     colors: ["#C97A46", "#5A2C14"],
     glow: "rgba(255,150,80,0.4)",
     border: "#E0A56B",
     craterColor: "rgba(35,15,5,0.55)",
   },
   {
-    // slate/graphite asteroid (like "Vacuole")
     colors: ["#5C6B70", "#1C2528"],
     glow: "rgba(160,200,210,0.3)",
     border: "#8CA3A9",
@@ -191,13 +205,10 @@ const ROCK_PALETTES: RockPalette[] = [
   },
 ];
 
-// Floating motion tuning — each object gently bobs/sways around its fixed
-// resting spot instead of falling. Edit these to change how "alive" the
-// float feels.
-const FLOAT_MIN_DURATION = 2200; // ms for one half-cycle (down/up or left/right)
+const FLOAT_MIN_DURATION = 2200;
 const FLOAT_MAX_DURATION = 3800;
-const FLOAT_AMPLITUDE_Y = 14; // px, vertical bob distance from resting spot
-const FLOAT_AMPLITUDE_X = 10; // px, horizontal sway distance from resting spot
+const FLOAT_AMPLITUDE_Y = 14;
+const FLOAT_AMPLITUDE_X = 10;
 
 const DUMMY_QUESTION: Question = {
   id: "q1",
@@ -210,8 +221,167 @@ const DUMMY_QUESTION: Question = {
   ],
 };
 
+// A 10-question dummy set so the component is playable/testable with zero
+// wiring. Used automatically whenever no `questions` prop is passed. Once
+// you pass your own `questions={...}`, this is ignored entirely.
+const DUMMY_QUESTIONS: Question[] = [
+  DUMMY_QUESTION,
+  {
+    id: "q2",
+    text: "Which organelle packages and ships proteins?",
+    answers: [
+      { id: "q2a1", text: "Golgi Apparatus", correct: true },
+      { id: "q2a2", text: "Lysosome", correct: false },
+      { id: "q2a3", text: "Cytoplasm", correct: false },
+      { id: "q2a4", text: "Vacuole", correct: false },
+    ],
+  },
+  {
+    id: "q3",
+    text: "What planet is known as the Red Planet?",
+    answers: [
+      { id: "q3a1", text: "Mars", correct: true },
+      { id: "q3a2", text: "Venus", correct: false },
+      { id: "q3a3", text: "Jupiter", correct: false },
+      { id: "q3a4", text: "Saturn", correct: false },
+    ],
+  },
+  {
+    id: "q4",
+    text: "What is the chemical symbol for gold?",
+    answers: [
+      { id: "q4a1", text: "Au", correct: true },
+      { id: "q4a2", text: "Ag", correct: false },
+      { id: "q4a3", text: "Gd", correct: false },
+      { id: "q4a4", text: "Go", correct: false },
+    ],
+  },
+  {
+    id: "q5",
+    text: "Who wrote 'Romeo and Juliet'?",
+    answers: [
+      { id: "q5a1", text: "William Shakespeare", correct: true },
+      { id: "q5a2", text: "Charles Dickens", correct: false },
+      { id: "q5a3", text: "Jane Austen", correct: false },
+      { id: "q5a4", text: "Mark Twain", correct: false },
+    ],
+  },
+  {
+    id: "q6",
+    text: "What is the largest ocean on Earth?",
+    answers: [
+      { id: "q6a1", text: "Pacific Ocean", correct: true },
+      { id: "q6a2", text: "Atlantic Ocean", correct: false },
+      { id: "q6a3", text: "Indian Ocean", correct: false },
+      { id: "q6a4", text: "Arctic Ocean", correct: false },
+    ],
+  },
+  {
+    id: "q7",
+    text: "How many bones are in the adult human body?",
+    answers: [
+      { id: "q7a1", text: "206", correct: true },
+      { id: "q7a2", text: "180", correct: false },
+      { id: "q7a3", text: "220", correct: false },
+      { id: "q7a4", text: "150", correct: false },
+    ],
+  },
+  {
+    id: "q8",
+    text: "What gas do plants absorb from the atmosphere?",
+    answers: [
+      { id: "q8a1", text: "Carbon Dioxide", correct: true },
+      { id: "q8a2", text: "Oxygen", correct: false },
+      { id: "q8a3", text: "Nitrogen", correct: false },
+      { id: "q8a4", text: "Hydrogen", correct: false },
+    ],
+  },
+  {
+    id: "q9",
+    text: "What is the smallest prime number?",
+    answers: [
+      { id: "q9a1", text: "2", correct: true },
+      { id: "q9a2", text: "0", correct: false },
+      { id: "q9a3", text: "1", correct: false },
+      { id: "q9a4", text: "3", correct: false },
+    ],
+  },
+  {
+    id: "q10",
+    text: "Which layer of the Earth is mostly liquid iron and nickel?",
+    answers: [
+      { id: "q10a1", text: "Outer Core", correct: true },
+      { id: "q10a2", text: "Mantle", correct: false },
+      { id: "q10a3", text: "Crust", correct: false },
+      { id: "q10a4", text: "Inner Core", correct: false },
+    ],
+  },
+];
+
 let objectIdCounter = 0;
 let bulletIdCounter = 0;
+
+/**
+ * Flattens every correct answer across the whole question bank into a
+ * deduplicated pool of strings. This is the *only* source floating
+ * answer circles are drawn from — never randomly invented text.
+ */
+function buildAnswerPool(questions: Question[]): string[] {
+  const seen = new Set<string>();
+  const pool: string[] = [];
+  questions.forEach((q) => {
+    q.answers.forEach((a) => {
+      if (a.correct && !seen.has(a.text)) {
+        seen.add(a.text);
+        pool.push(a.text);
+      }
+    });
+  });
+  return pool;
+}
+
+/**
+ * Picks a small (4-5) set of answer strings to float for the current
+ * question: the current correct answer is always included, and the rest
+ * are randomly sampled distractors pulled from other questions' correct
+ * answers (never duplicated within the set). The result is shuffled so
+ * the correct answer doesn't always land in the same lane/position.
+ */
+function pickFloatingAnswers(
+  correctText: string,
+  pool: string[],
+  count: number,
+): string[] {
+  const distractorPool = pool.filter((text) => text !== correctText);
+  const shuffledDistractors = [...distractorPool].sort(
+    () => Math.random() - 0.5,
+  );
+
+  const wantedDistractors = Math.max(0, count - 1);
+  const chosenDistractors: string[] = [];
+  const used = new Set<string>();
+
+  for (const text of shuffledDistractors) {
+    if (chosenDistractors.length >= wantedDistractors) break;
+    if (used.has(text)) continue;
+    used.add(text);
+    chosenDistractors.push(text);
+  }
+
+  // Not enough unique distractors in the pool (e.g. a very small question
+  // bank) — reuse from the pool rather than inventing fake answers.
+  let i = 0;
+  while (
+    chosenDistractors.length < wantedDistractors &&
+    distractorPool.length > 0
+  ) {
+    chosenDistractors.push(distractorPool[i % distractorPool.length]);
+    i++;
+  }
+
+  const result = [correctText, ...chosenDistractors];
+  return result.sort(() => Math.random() - 0.5);
+}
 
 function generateStars(count: number): StarConfig[] {
   return Array.from({ length: count }, (_, i) => {
@@ -228,18 +398,6 @@ function generateStars(count: number): StarConfig[] {
   });
 }
 
-/**
- * Given a lane index and the total lane count, returns the `left` x
- * position for that lane's object.
- *
- * The screen is divided into `laneCount` equal-width columns. Each object
- * is centered in its column, with a small random jitter so things don't
- * look too robotic/grid-like — but the jitter is capped at 20% of the
- * lane's free space, which mathematically guarantees the object's circle
- * never crosses into a neighboring lane. That's what makes "no stacking"
- * a guarantee rather than a probability (each lane only ever holds one
- * object, and lanes are non-overlapping columns).
- */
 function laneX(laneIndex: number, laneCount: number): number {
   const laneWidth = SCREEN_W / laneCount;
   const freeSpace = laneWidth - ANSWER_OBJECT_SIZE;
@@ -249,12 +407,6 @@ function laneX(laneIndex: number, laneCount: number): number {
   return laneCenter - ANSWER_OBJECT_SIZE / 2 + jitter;
 }
 
-/**
- * Starts an infinite, gentle back-and-forth loop on an Animated.Value
- * between 0 and 1 (sine-ish ease), used to drive a small pixel offset.
- * `initialDelay` staggers the very first leg so objects don't all bob in
- * lock-step.
- */
 function startFloatLoop(
   animVal: Animated.Value,
   duration: number,
@@ -284,16 +436,6 @@ function startFloatLoop(
   step();
 }
 
-/**
- * THE single source of truth for spawning a floating answer.
- *
- * Every answer object — whether it's part of the initial batch for a new
- * question, or a replacement spawned after a wrong answer gets shot —
- * goes through this exact function. The object gets a fixed resting
- * position (x from its lane, y randomized within the play area) and then
- * hovers there via small animated x/y offsets — it never travels anywhere
- * beyond that.
- */
 function spawnAnswerInLane(
   label: string,
   isCorrect: boolean,
@@ -302,6 +444,7 @@ function spawnAnswerInLane(
   playAreaTop: number,
   playAreaBottom: number,
   onUpdate: (id: number, x: number, y: number) => void,
+  speedMultiplier: number = 1,
 ): SpaceObject {
   const size = ANSWER_OBJECT_SIZE;
   const x = laneX(laneIndex, laneCount);
@@ -312,15 +455,26 @@ function spawnAnswerInLane(
   const animX = new Animated.Value(0);
   const animY = new Animated.Value(0);
 
+  // Difficulty scaling: a higher speedMultiplier shortens the float-loop
+  // duration (faster drifting) and widens the movement amplitude a bit,
+  // so later questions feel slightly more chaotic than early ones.
   const xDuration =
-    FLOAT_MIN_DURATION +
-    Math.random() * (FLOAT_MAX_DURATION - FLOAT_MIN_DURATION);
+    (FLOAT_MIN_DURATION +
+      Math.random() * (FLOAT_MAX_DURATION - FLOAT_MIN_DURATION)) /
+    speedMultiplier;
   const yDuration =
-    FLOAT_MIN_DURATION +
-    Math.random() * (FLOAT_MAX_DURATION - FLOAT_MIN_DURATION);
+    (FLOAT_MIN_DURATION +
+      Math.random() * (FLOAT_MAX_DURATION - FLOAT_MIN_DURATION)) /
+    speedMultiplier;
 
   const xDelay = Math.random() * FLOAT_MAX_DURATION;
   const yDelay = Math.random() * FLOAT_MAX_DURATION;
+
+  const ampVariation = 0.85 + Math.random() * 0.3; // +/-15% per object
+  const ampX =
+    FLOAT_AMPLITUDE_X * ampVariation * Math.min(speedMultiplier, 1.4);
+  const ampY =
+    FLOAT_AMPLITUDE_Y * ampVariation * Math.min(speedMultiplier, 1.4);
 
   let currentX = x;
   let currentY = y;
@@ -330,11 +484,11 @@ function spawnAnswerInLane(
   onUpdate(id, currentX, currentY);
 
   const listenerIdX = animX.addListener(({ value }) => {
-    currentX = x + toOffset(FLOAT_AMPLITUDE_X, value);
+    currentX = x + toOffset(ampX, value);
     onUpdate(id, currentX, currentY);
   });
   const listenerIdY = animY.addListener(({ value }) => {
-    currentY = y + toOffset(FLOAT_AMPLITUDE_Y, value);
+    currentY = y + toOffset(ampY, value);
     onUpdate(id, currentX, currentY);
   });
 
@@ -359,34 +513,35 @@ function spawnAnswerInLane(
     label,
     isCorrect,
     laneIndex,
+    ampX,
+    ampY,
   };
 }
 
-/**
- * Builds the full set of floating answer objects for a question: one
- * object per answer, each permanently assigned to its own lane
- * (0..answers.length-1), each hovering at its own resting spot within the
- * visible play area.
- */
-function buildAnswerObjects(
-  question: Question,
+function buildAnswerObjectsFromPool(
+  correctText: string,
+  pool: string[],
   playAreaTop: number,
   playAreaBottom: number,
   onUpdate: (id: number, x: number, y: number) => void,
+  speedMultiplier: number = 1,
 ): SpaceObject[] {
-  const laneCount = question.answers.length;
-  // Shuffle which answer goes in which lane so the correct answer isn't
-  // always in the same spot question after question.
-  const shuffled = [...question.answers].sort(() => Math.random() - 0.5);
-  return shuffled.map((answer, laneIndex) =>
+  const count =
+    FLOATING_ANSWER_MIN +
+    Math.floor(
+      Math.random() * (FLOATING_ANSWER_MAX - FLOATING_ANSWER_MIN + 1),
+    );
+  const texts = pickFloatingAnswers(correctText, pool, count);
+  return texts.map((text, laneIndex) =>
     spawnAnswerInLane(
-      answer.text,
-      answer.correct,
+      text,
+      text === correctText,
       laneIndex,
-      laneCount,
+      texts.length,
       playAreaTop,
       playAreaBottom,
       onUpdate,
+      speedMultiplier,
     ),
   );
 }
@@ -548,16 +703,13 @@ const SpaceObjectView: React.FC<{
 
   const translateX = obj.animX.interpolate({
     inputRange: [0, 1],
-    outputRange: [-FLOAT_AMPLITUDE_X, FLOAT_AMPLITUDE_X],
+    outputRange: [-obj.ampX, obj.ampX],
   });
   const translateY = obj.animY.interpolate({
     inputRange: [0, 1],
-    outputRange: [-FLOAT_AMPLITUDE_Y, FLOAT_AMPLITUDE_Y],
+    outputRange: [-obj.ampY, obj.ampY],
   });
 
-  // Rock species is picked by lane, so the same slot always reads as the
-  // same "kind" of asteroid across a round, then hit-state colors are
-  // layered on top when shot.
   const palette = ROCK_PALETTES[obj.laneIndex % ROCK_PALETTES.length];
 
   const isHit = hitState !== "none";
@@ -606,8 +758,6 @@ const SpaceObjectView: React.FC<{
           { width: obj.size, height: obj.size, borderRadius: obj.size / 2 },
         ]}
       >
-        {/* Faked crater texture — a few soft dark blobs at fixed relative
-            spots. Purely decorative, doesn't affect hit-testing. */}
         <View
           pointerEvents="none"
           style={[
@@ -693,8 +843,12 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   studySets = [],
   currentStudySetId,
   onSelectStudySet,
+  questions,
   question = DUMMY_QUESTION,
   onAnswer,
+  onWin,
+  maxLives = 3,
+  onGameOver,
   maxBullets = 5,
   fireCooldownMs = 220,
   children,
@@ -716,51 +870,129 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
   const shipY = SCREEN_H - shipSize - shipBottomOffset;
 
-  // The visible play area answers can hover in: below the header, above
-  // the ship/question card. Objects spawn and float entirely within this
-  // band — no off-screen spawning, no falling through it.
   const topSafeZone = insets.top + HEADER_HEIGHT + QUESTION_CARD_MARGIN;
   const bottomSafeZone = shipY - QUESTION_CARD_MARGIN;
 
-  // Number of lanes = number of answers for the current question. Kept in
-  // a ref so fireBullet's respawn logic always has the correct lane count
-  // even if the question object reference changes between renders.
-  const laneCountRef = useRef<number>(question.answers.length);
-  useEffect(() => {
-    laneCountRef.current = question.answers.length;
-  }, [question]);
+  /* ---------------- Quiz progression (list of questions) ---------------- */
 
-  // Tracks each object's current (x, y) including its live float offset,
-  // used for accurate tap hit-testing.
+  // Prefer the `questions` list; fall back to the single `question` prop
+  // so existing single-question usage keeps working unchanged.
+  const questionList = useMemo<Question[]>(() => {
+    if (questions && questions.length > 0) return questions;
+    // No `questions` prop passed at all — use the 10-question dummy set so
+    // the game is playable out of the box. (An explicit single `question`
+    // prop, if passed without `questions`, still wins over the dummy set.)
+    if (question !== DUMMY_QUESTION) return [question];
+    return DUMMY_QUESTIONS;
+  }, [questions, question]);
+
+  // A cheap fingerprint so we can tell when the *whole quiz* changed
+  // (e.g. parent swapped in a new study set) vs. just re-rendered.
+  const questionListKey = useMemo(
+    () => questionList.map((q) => q.id).join("|"),
+    [questionList],
+  );
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showWinModal, setShowWinModal] = useState(false);
+
+  // Lives/hearts: 3 (or `maxLives`) to start, one turns gray per wrong
+  // answer. `livesRef` mirrors the state synchronously so the delayed
+  // (setTimeout) hit-resolution logic below can read the up-to-date
+  // value without waiting for a re-render.
+  const [lives, setLives] = useState(maxLives);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const livesRef = useRef(lives);
+  useEffect(() => {
+    livesRef.current = lives;
+  }, [lives]);
+
+  const prevListKeyRef = useRef(questionListKey);
+  useEffect(() => {
+    if (prevListKeyRef.current === questionListKey) return;
+    prevListKeyRef.current = questionListKey;
+    setCurrentIndex(0);
+    setShowWinModal(false);
+    setShowGameOverModal(false);
+    setLives(maxLives);
+  }, [questionListKey, maxLives]);
+
+  const safeIndex = Math.min(currentIndex, questionList.length - 1);
+  const currentQuestion = questionList[safeIndex] ?? DUMMY_QUESTION;
+  const isLastQuestion = safeIndex >= questionList.length - 1;
+
+  // Quizlet-Blast-style answer pool: every correct answer across the whole
+  // question bank, deduplicated. This is the only source floating answer
+  // circles are drawn from — never randomly invented text.
+  const answerPool = useMemo(
+    () => buildAnswerPool(questionList),
+    [questionList],
+  );
+
+  const currentCorrectAnswer = useMemo(() => {
+    const correct = currentQuestion.answers.find((a) => a.correct);
+    return correct ? correct.text : (currentQuestion.answers[0]?.text ?? "");
+  }, [currentQuestion]);
+
+  // Difficulty scaling: floats get modestly faster/more erratic as the
+  // player advances through the question list, capped so it never gets
+  // unreadable.
+  const speedMultiplier = useMemo(
+    () => Math.min(1 + safeIndex * 0.08, 1.8),
+    [safeIndex],
+  );
+
+  const laneCountRef = useRef<number>(currentQuestion.answers.length);
+  useEffect(() => {
+    laneCountRef.current = currentQuestion.answers.length;
+  }, [currentQuestion]);
+
   const objectPosRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const updateObjectPos = useCallback((id: number, x: number, y: number) => {
     objectPosRef.current.set(id, { x, y });
   }, []);
 
   const [objects, setObjects] = useState<SpaceObject[]>(() =>
-    buildAnswerObjects(question, topSafeZone, bottomSafeZone, updateObjectPos),
+    buildAnswerObjectsFromPool(
+      currentCorrectAnswer,
+      answerPool,
+      topSafeZone,
+      bottomSafeZone,
+      updateObjectPos,
+      speedMultiplier,
+    ),
   );
   const objectsRef = useRef<SpaceObject[]>(objects);
   useEffect(() => {
     objectsRef.current = objects;
   }, [objects]);
 
-  const questionIdRef = useRef<string>(question.id);
+  const questionIdRef = useRef<string>(currentQuestion.id);
   useEffect(() => {
-    if (questionIdRef.current === question.id) return;
-    questionIdRef.current = question.id;
+    if (questionIdRef.current === currentQuestion.id) return;
+    questionIdRef.current = currentQuestion.id;
     objectsRef.current.forEach((o) => o.stop());
     objectPosRef.current.clear();
     setObjects(
-      buildAnswerObjects(
-        question,
+      buildAnswerObjectsFromPool(
+        currentCorrectAnswer,
+        answerPool,
         topSafeZone,
         bottomSafeZone,
         updateObjectPos,
+        speedMultiplier,
       ),
     );
     setHitStates({});
-  }, [question, topSafeZone, bottomSafeZone, updateObjectPos]);
+  }, [
+    currentQuestion,
+    currentCorrectAnswer,
+    answerPool,
+    speedMultiplier,
+    topSafeZone,
+    bottomSafeZone,
+    updateObjectPos,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -777,13 +1009,17 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   const activeSetId = currentStudySetId ?? internalSetId;
   const currentStudySet = studySets.find((s) => s.id === activeSetId);
 
+  const goToGameTab = useCallback(() => {
+    router.replace("/(tabs)/game");
+  }, [router]);
+
   const handleBack = useCallback(() => {
     if (onBack) {
       onBack();
       return;
     }
     if (router.canGoBack()) {
-      router.back();
+      router.replace("/(tabs)/game");
     } else {
       router.replace("/");
     }
@@ -794,11 +1030,31 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     router.replace("/games/SelectionWizard");
   }, [router]);
 
+  const handleWinModalOk = useCallback(() => {
+    setShowWinModal(false);
+    if (onWin) {
+      onWin();
+      return;
+    }
+    goToGameTab();
+  }, [onWin, goToGameTab]);
+
+  const handleGameOverOk = useCallback(() => {
+    setShowGameOverModal(false);
+    if (onGameOver) {
+      onGameOver();
+      return;
+    }
+    goToGameTab();
+  }, [onGameOver, goToGameTab]);
+
   const lastFireTimeRef = useRef<number>(0);
   const activeBulletCountRef = useRef<number>(0);
 
   const fireBullet = useCallback(
     (targetX: number, targetY: number, hitObject?: SpaceObject) => {
+      if (showWinModal || showGameOverModal) return;
+
       const now = Date.now();
       if (now - lastFireTimeRef.current < fireCooldownMs) return;
       if (activeBulletCountRef.current >= maxBullets) return;
@@ -841,6 +1097,17 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
           onAnswer?.(hitObject.isCorrect, hitObject.label);
 
+          if (!hitObject.isCorrect) {
+            setLives((prev) => {
+              const next = Math.max(0, prev - 1);
+              livesRef.current = next;
+              if (next <= 0) {
+                setShowGameOverModal(true);
+              }
+              return next;
+            });
+          }
+
           setTimeout(() => {
             hitObject.stop();
             objectPosRef.current.delete(hitObject.id);
@@ -848,25 +1115,50 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
             setObjects((prev: SpaceObject[]) => {
               const remaining = prev.filter((o) => o.id !== hitObject.id);
 
-              // Correct answer shot → round is over, clear the field.
-              // (Parent should pass a new `question` prop to start the
-              // next round, which spawns a brand new set to float in.)
               if (hitObject.isCorrect) {
+                // Correct answer shot: clear the field. If there's another
+                // question queued up, advance to it — the questionIdRef
+                // effect above will notice currentQuestion changed and
+                // spawn a fresh set of floating answers. If this was the
+                // last question, show the win modal instead.
+                remaining.forEach((o) => o.stop());
+
+                if (isLastQuestion) {
+                  setShowWinModal(true);
+                } else {
+                  setCurrentIndex((idx) => idx + 1);
+                }
+
+                return [];
+              }
+
+              // Out of lives — freeze the board (the Game Over modal is
+              // already up) instead of respawning another distractor.
+              if (livesRef.current <= 0) {
                 remaining.forEach((o) => o.stop());
                 return [];
               }
 
-              // Wrong answer shot → respawn a NEW wrong answer in the
-              // SAME lane the destroyed one owned. Reusing the lane index
-              // (not a random x) is what guarantees the replacement can
-              // never overlap any of the other still-floating objects,
-              // which each own a different lane. It gets a fresh resting
-              // spot via spawnAnswerInLane — the one and only spawn path
-              // in this file.
-              const wrongPool = question.answers.filter((a) => !a.correct);
+              // Wrong answer shot → respawn a NEW distractor in the SAME
+              // lane the destroyed one owned. The replacement is always a
+              // real correct answer pulled from the global answer pool
+              // (never an invented answer), avoiding whatever's already
+              // floating and the current question's correct answer.
+              const shownLabels = new Set(remaining.map((o) => o.label));
+              const availableDistractors = answerPool.filter(
+                (text) =>
+                  text !== currentCorrectAnswer && !shownLabels.has(text),
+              );
+              const distractorSource =
+                availableDistractors.length > 0
+                  ? availableDistractors
+                  : answerPool.filter(
+                      (text) => text !== currentCorrectAnswer,
+                    );
               const replacementText =
-                wrongPool[Math.floor(Math.random() * wrongPool.length)]?.text ??
-                hitObject.label;
+                distractorSource[
+                  Math.floor(Math.random() * distractorSource.length)
+                ] ?? hitObject.label;
 
               return [
                 ...remaining,
@@ -878,6 +1170,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
                   topSafeZone,
                   bottomSafeZone,
                   updateObjectPos,
+                  speedMultiplier,
                 ),
               ];
             });
@@ -900,17 +1193,23 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
       topSafeZone,
       bottomSafeZone,
       updateObjectPos,
-      question,
+      currentQuestion,
+      currentCorrectAnswer,
+      answerPool,
+      speedMultiplier,
+      isLastQuestion,
       onAnswer,
+      showWinModal,
+      showGameOverModal,
     ],
   );
 
   const handleTap = useCallback(
     (evt: GestureResponderEvent) => {
+      if (showWinModal || showGameOverModal) return;
+
       const { locationX, locationY } = evt.nativeEvent;
 
-      // Taps are ignored above the header / below the ship — objects only
-      // ever float within this zone anyway.
       if (locationY < topSafeZone || locationY > bottomSafeZone) return;
 
       const hitObject = objects.find((obj) => {
@@ -936,7 +1235,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         fireBullet(locationX, locationY);
       }
     },
-    [objects, fireBullet, topSafeZone, bottomSafeZone],
+    [objects, fireBullet, topSafeZone, bottomSafeZone, showWinModal, showGameOverModal],
   );
 
   return (
@@ -1003,19 +1302,36 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
           <View style={styles.backArrow} />
         </Pressable>
 
-        <Pressable
-          onPress={handleOpenFolderPicker}
-          hitSlop={6}
-          style={({ pressed }) => [
-            styles.folderButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <View style={styles.folderIconSmall} />
-          <Text style={styles.folderLabel} numberOfLines={1}>
-            {currentStudySet ? currentStudySet.name : "change"}
+        <View style={styles.headerRightGroup} pointerEvents="box-none">
+          <Pressable
+            onPress={handleOpenFolderPicker}
+            hitSlop={6}
+            style={({ pressed }) => [
+              styles.folderButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.folderIconSmall} />
+            <Text style={styles.folderLabel} numberOfLines={1}>
+              {currentStudySet ? currentStudySet.name : "change"}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* ---------------- Lives / hearts (below the back button) ---------------- */}
+      <View
+        style={[styles.livesRow, { top: insets.top + 8 + HEADER_HEIGHT }]}
+        pointerEvents="none"
+      >
+        {Array.from({ length: maxLives }, (_, i) => (
+          <Text
+            key={i}
+            style={[styles.heartIcon, i >= lives && styles.heartIconLost]}
+          >
+            ♥
           </Text>
-        </Pressable>
+        ))}
       </View>
 
       {/* ---------------- Question HUD panel (green theme) ---------------- */}
@@ -1038,14 +1354,91 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
           <View style={styles.questionTextBlock}>
             <View style={styles.kickerRow}>
               <View style={styles.kickerDot} />
-              <Text style={styles.questionKicker}>INCOMING TRANSMISSION</Text>
+              <Text style={styles.questionKicker}>
+                {questionList.length > 1
+                  ? `QUESTION ${safeIndex + 1}/${questionList.length}`
+                  : "INCOMING TRANSMISSION"}
+              </Text>
             </View>
             <Text style={styles.questionText} numberOfLines={2}>
-              {question.text}
+              {currentQuestion.text}
             </Text>
           </View>
         </View>
       </View>
+
+      {/* ---------------- You Win modal ---------------- */}
+      {showWinModal && (
+        <View style={styles.winModalOverlay} pointerEvents="auto">
+          <View style={styles.winModalCard}>
+            <View style={[styles.cornerBracket, styles.cornerTL]} />
+            <View style={[styles.cornerBracket, styles.cornerTR]} />
+            <View style={[styles.cornerBracket, styles.cornerBL]} />
+            <View style={[styles.cornerBracket, styles.cornerBR]} />
+
+            <View style={styles.winModalBadge}>
+              <View style={styles.questionBadgeDiamond} />
+            </View>
+            <Text style={styles.winModalTitle}>YOU WIN!</Text>
+            <Text style={styles.winModalSubtitle}>
+              You answered all {questionList.length}{" "}
+              {questionList.length === 1 ? "question" : "questions"}{" "}
+              correctly.
+            </Text>
+
+            <Pressable
+              onPress={handleWinModalOk}
+              style={({ pressed }) => [
+                styles.winModalButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.winModalButtonText}>OK</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* ---------------- Game Over modal ---------------- */}
+      {showGameOverModal && (
+        <View style={styles.winModalOverlay} pointerEvents="auto">
+          <View style={[styles.winModalCard, styles.gameOverCard]}>
+            <View
+              style={[styles.cornerBracket, styles.cornerTL, styles.cornerDanger]}
+            />
+            <View
+              style={[styles.cornerBracket, styles.cornerTR, styles.cornerDanger]}
+            />
+            <View
+              style={[styles.cornerBracket, styles.cornerBL, styles.cornerDanger]}
+            />
+            <View
+              style={[styles.cornerBracket, styles.cornerBR, styles.cornerDanger]}
+            />
+
+            <View style={[styles.winModalBadge, styles.gameOverBadge]}>
+              <Text style={styles.gameOverBadgeIcon}>♥</Text>
+            </View>
+            <Text style={[styles.winModalTitle, styles.gameOverTitle]}>
+              GAME OVER
+            </Text>
+            <Text style={styles.winModalSubtitle}>
+              You ran out of lives. Give it another shot!
+            </Text>
+
+            <Pressable
+              onPress={handleGameOverOk}
+              style={({ pressed }) => [
+                styles.winModalButton,
+                styles.gameOverButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.winModalButtonText}>OK</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       {children && <View style={styles.content}>{children}</View>}
     </View>
@@ -1082,7 +1475,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.9,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 8, // Android glow approximation
+    elevation: 8,
   },
   rockGradient: {
     alignItems: "center",
@@ -1174,6 +1567,30 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
+  headerRightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  livesRow: {
+    position: "absolute",
+    left: 16,
+    zIndex: 20,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  heartIcon: {
+    fontSize: 30,
+    lineHeight: 32,
+    marginRight: 5,
+    color: THEME.wrong,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  heartIconLost: {
+    color: THEME.textMuted,
+  },
+
   folderButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1252,6 +1669,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomRightRadius: 6,
   },
+  cornerDanger: {
+    borderColor: THEME.wrong,
+  },
   questionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1299,6 +1719,92 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     lineHeight: 20,
+  },
+
+  winModalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
+    backgroundColor: THEME.overlayBg,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  winModalCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: THEME.panelBg,
+    borderWidth: 1,
+    borderColor: THEME.panelBorder,
+    borderRadius: THEME.radiusMd,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    shadowColor: THEME.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  winModalBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: THEME.primaryGlow,
+    borderWidth: 1,
+    borderColor: THEME.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  winModalTitle: {
+    color: THEME.textWhite,
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  winModalSubtitle: {
+    color: THEME.textMid,
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 22,
+  },
+  winModalButton: {
+    width: "100%",
+    height: 46,
+    borderRadius: THEME.radiusFull,
+    backgroundColor: THEME.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  winModalButtonText: {
+    color: THEME.bg,
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+
+  gameOverCard: {
+    borderColor: THEME.wrongGlow,
+    shadowColor: THEME.wrong,
+  },
+  gameOverBadge: {
+    backgroundColor: THEME.wrongGlow,
+    borderColor: THEME.wrong,
+  },
+  gameOverBadgeIcon: {
+    fontSize: 20,
+    color: THEME.wrong,
+  },
+  gameOverTitle: {
+    color: THEME.wrong,
+  },
+  gameOverButton: {
+    backgroundColor: THEME.wrong,
   },
 
   content: {
