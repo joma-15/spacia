@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import * as Device from "expo-device";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
@@ -140,8 +141,6 @@ const BULLET_SPEED = 700;
 const HEADER_HEIGHT = 56;
 const QUESTION_CARD_HEIGHT = 92;
 const QUESTION_CARD_MARGIN = 12;
-
-const SHIP_QUESTION_GAP = -120;
 
 // Answer objects are circles this size (diameter, in px).
 const ANSWER_OBJECT_SIZE = 78;
@@ -545,13 +544,25 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const isTablet = Device.deviceType === Device.DeviceType.TABLET; 
 
   const stars = useMemo(() => generateStars(starCount), [starCount]);
 
+  // const questionCardBottom = insets.bottom + 16;
+  // const questionCardTop = questionCardBottom + QUESTION_CARD_HEIGHT;
+  // const shipBottomOffset = questionCardTop; // ship's bottom edge = card's top edge, exactly
+  // const shipX = SCREEN_W / 2 - shipSize / 2;
+  // const shipY = SCREEN_H - shipSize - shipBottomOffset;
+
   const questionCardBottom = insets.bottom + 16;
+
+  const SHIP_OVERLAP = isTablet ? shipSize * 0.31 : shipSize * 0.75;
+
   const shipBottomOffset =
-    questionCardBottom + QUESTION_CARD_HEIGHT + SHIP_QUESTION_GAP;
+    questionCardBottom + QUESTION_CARD_HEIGHT - SHIP_OVERLAP;
+
   const shipX = SCREEN_W / 2 - shipSize / 2;
+
   const shipY = SCREEN_H - shipSize - shipBottomOffset;
 
   // topSafeZone is only used to gate taps over the header now — objects
