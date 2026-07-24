@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Device from "expo-device";
+import { LinearGradient } from "expo-linear-gradient";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
@@ -109,11 +110,14 @@ interface StarConfig {
 
 interface SpaceObject {
   id: number;
+  // Static resting position — the object hovers around this point instead
+  // of traveling anywhere. Motion is purely a small animated offset from
+  // this base position (see animX / animY below).
   x: number;
+  y: number;
   size: number;
-  minY: number;
-  maxY: number;
-  anim: Animated.Value;
+  animX: Animated.Value;
+  animY: Animated.Value;
   stop: () => void;
   label: string;
   isCorrect: boolean;
@@ -142,17 +146,58 @@ const HEADER_HEIGHT = 56;
 const QUESTION_CARD_HEIGHT = 92;
 const QUESTION_CARD_MARGIN = 12;
 
-// Answer objects are circles this size (diameter, in px).
-const ANSWER_OBJECT_SIZE = 78;
+// Answer objects are circles this size (diameter, in px). Bumped up so the
+// rocky texture/glow actually reads.
+const ANSWER_OBJECT_SIZE = 100;
 
-// Fall speed range in ms — edit these two numbers to change speed.
-const FALL_MIN_DURATION = 20000;
-const FALL_MAX_DURATION = 30000;
+// Each lane cycles through one of these asteroid "species" — different
+// base rock color + matching glow, echoing the mixed purple/olive/rust
+// asteroids in the banner art instead of one flat theme color.
+interface RockPalette {
+  colors: [string, string]; // gradient: highlight -> shadow
+  glow: string;
+  border: string;
+  craterColor: string;
+}
 
-// How far above the very top of the screen an answer spawns, so it falls
-// in from fully off-screen instead of popping in inside the play area.
-// Bigger number = spawns higher up / takes longer to become visible.
-const SPAWN_ABOVE_SCREEN = 60;
+const ROCK_PALETTES: RockPalette[] = [
+  {
+    // purple asteroid (like "Mitochondria" / "Ribosome" in the banner)
+    colors: ["#7A5FBF", "#2E1F52"],
+    glow: "rgba(155,110,255,0.45)",
+    border: "#B29CFF",
+    craterColor: "rgba(20,10,40,0.55)",
+  },
+  {
+    // dark olive/stone asteroid (like "Nucleus")
+    colors: ["#6B6F4A", "#26281A"],
+    glow: "rgba(200,200,120,0.35)",
+    border: "#9BA06A",
+    craterColor: "rgba(10,10,5,0.55)",
+  },
+  {
+    // rust/ember asteroid (echoes the orange explosion rocks)
+    colors: ["#C97A46", "#5A2C14"],
+    glow: "rgba(255,150,80,0.4)",
+    border: "#E0A56B",
+    craterColor: "rgba(35,15,5,0.55)",
+  },
+  {
+    // slate/graphite asteroid (like "Vacuole")
+    colors: ["#5C6B70", "#1C2528"],
+    glow: "rgba(160,200,210,0.3)",
+    border: "#8CA3A9",
+    craterColor: "rgba(5,10,12,0.55)",
+  },
+];
+
+// Floating motion tuning — each object gently bobs/sways around its fixed
+// resting spot instead of falling. Edit these to change how "alive" the
+// float feels.
+const FLOAT_MIN_DURATION = 2200; // ms for one half-cycle (down/up or left/right)
+const FLOAT_MAX_DURATION = 3800;
+const FLOAT_AMPLITUDE_Y = 14; // px, vertical bob distance from resting spot
+const FLOAT_AMPLITUDE_X = 10; // px, horizontal sway distance from resting spot
 
 const DUMMY_QUESTION: Question = {
   id: "q1",
@@ -192,7 +237,8 @@ function generateStars(count: number): StarConfig[] {
  * look too robotic/grid-like — but the jitter is capped at 20% of the
  * lane's free space, which mathematically guarantees the object's circle
  * never crosses into a neighboring lane. That's what makes "no stacking"
- * a guarantee rather than a probability.
+ * a guarantee rather than a probability (each lane only ever holds one
+ * object, and lanes are non-overlapping columns).
  */
 function laneX(laneIndex: number, laneCount: number): number {
   const laneWidth = SCREEN_W / laneCount;
@@ -204,82 +250,111 @@ function laneX(laneIndex: number, laneCount: number): number {
 }
 
 /**
- * THE single source of truth for spawning a falling answer.
+ * Starts an infinite, gentle back-and-forth loop on an Animated.Value
+ * between 0 and 1 (sine-ish ease), used to drive a small pixel offset.
+ * `initialDelay` staggers the very first leg so objects don't all bob in
+ * lock-step.
+ */
+function startFloatLoop(
+  animVal: Animated.Value,
+  duration: number,
+  initialDelay: number,
+) {
+  let first = true;
+  const step = () => {
+    Animated.sequence([
+      Animated.timing(animVal, {
+        toValue: 1,
+        duration,
+        delay: first ? initialDelay : 0,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.timing(animVal, {
+        toValue: 0,
+        duration,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      first = false;
+      if (finished) step();
+    });
+  };
+  step();
+}
+
+/**
+ * THE single source of truth for spawning a floating answer.
  *
  * Every answer object — whether it's part of the initial batch for a new
  * question, or a replacement spawned after a wrong answer gets shot —
- * goes through this exact function. Because there's only one code path,
- * it's structurally impossible for an object to spawn anywhere except
- * "off-screen above, in its assigned lane."
- *
- * `spawnY` is always negative (above y = 0), computed once in the main
- * component from SPAWN_ABOVE_SCREEN — nothing here ever picks a random
- * starting height.
+ * goes through this exact function. The object gets a fixed resting
+ * position (x from its lane, y randomized within the play area) and then
+ * hovers there via small animated x/y offsets — it never travels anywhere
+ * beyond that.
  */
 function spawnAnswerInLane(
   label: string,
   isCorrect: boolean,
   laneIndex: number,
   laneCount: number,
-  spawnY: number,
-  maxY: number,
-  onUpdate: (id: number, y: number) => void,
+  playAreaTop: number,
+  playAreaBottom: number,
+  onUpdate: (id: number, x: number, y: number) => void,
 ): SpaceObject {
   const size = ANSWER_OBJECT_SIZE;
   const x = laneX(laneIndex, laneCount);
-  const safeMaxY = Math.max(spawnY, maxY - size);
-  const travelDistance = safeMaxY - spawnY;
+  const usableHeight = Math.max(0, playAreaBottom - playAreaTop - size);
+  const y = playAreaTop + Math.random() * usableHeight;
   const id = objectIdCounter++;
-  const duration =
-    FALL_MIN_DURATION + Math.random() * (FALL_MAX_DURATION - FALL_MIN_DURATION);
 
-  const anim = new Animated.Value(0);
+  const animX = new Animated.Value(0);
+  const animY = new Animated.Value(0);
 
-  // Random head start along the fall so simultaneously-spawned answers
-  // don't all move in visible lock-step, while still always starting
-  // from spawnY (off-screen above) — the head start only affects how far
-  // ALONG that same top-to-bottom path it starts.
-  const startProgress = Math.random();
-  anim.setValue(startProgress);
-  onUpdate(id, spawnY + startProgress * travelDistance);
+  const xDuration =
+    FLOAT_MIN_DURATION +
+    Math.random() * (FLOAT_MAX_DURATION - FLOAT_MIN_DURATION);
+  const yDuration =
+    FLOAT_MIN_DURATION +
+    Math.random() * (FLOAT_MAX_DURATION - FLOAT_MIN_DURATION);
 
-  const listenerId = anim.addListener(({ value }) => {
-    onUpdate(id, spawnY + value * travelDistance);
+  const xDelay = Math.random() * FLOAT_MAX_DURATION;
+  const yDelay = Math.random() * FLOAT_MAX_DURATION;
+
+  let currentX = x;
+  let currentY = y;
+
+  const toOffset = (amp: number, value: number) => -amp + value * 2 * amp;
+
+  onUpdate(id, currentX, currentY);
+
+  const listenerIdX = animX.addListener(({ value }) => {
+    currentX = x + toOffset(FLOAT_AMPLITUDE_X, value);
+    onUpdate(id, currentX, currentY);
+  });
+  const listenerIdY = animY.addListener(({ value }) => {
+    currentY = y + toOffset(FLOAT_AMPLITUDE_Y, value);
+    onUpdate(id, currentX, currentY);
   });
 
-  const runLoop = () => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: duration * (1 - startProgress),
-      easing: Easing.linear,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) return;
-      anim.setValue(0);
-      Animated.loop(
-        Animated.timing(anim, {
-          toValue: 1,
-          duration,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-      ).start();
-    });
-  };
-  runLoop();
+  startFloatLoop(animX, xDuration, xDelay);
+  startFloatLoop(animY, yDuration, yDelay);
 
   const stop = () => {
-    anim.stopAnimation();
-    anim.removeListener(listenerId);
+    animX.stopAnimation();
+    animX.removeListener(listenerIdX);
+    animY.stopAnimation();
+    animY.removeListener(listenerIdY);
   };
 
   return {
     id,
     x,
+    y,
     size,
-    minY: spawnY,
-    maxY: safeMaxY,
-    anim,
+    animX,
+    animY,
     stop,
     label,
     isCorrect,
@@ -288,15 +363,16 @@ function spawnAnswerInLane(
 }
 
 /**
- * Builds the full set of falling answer objects for a question: one
+ * Builds the full set of floating answer objects for a question: one
  * object per answer, each permanently assigned to its own lane
- * (0..answers.length-1), all spawning off-screen above the header.
+ * (0..answers.length-1), each hovering at its own resting spot within the
+ * visible play area.
  */
 function buildAnswerObjects(
   question: Question,
-  spawnY: number,
-  maxY: number,
-  onUpdate: (id: number, y: number) => void,
+  playAreaTop: number,
+  playAreaBottom: number,
+  onUpdate: (id: number, x: number, y: number) => void,
 ): SpaceObject[] {
   const laneCount = question.answers.length;
   // Shuffle which answer goes in which lane so the correct answer isn't
@@ -308,8 +384,8 @@ function buildAnswerObjects(
       answer.correct,
       laneIndex,
       laneCount,
-      spawnY,
-      maxY,
+      playAreaTop,
+      playAreaBottom,
       onUpdate,
     ),
   );
@@ -441,7 +517,7 @@ const ShootingStar: React.FC<{ slotIndex: number }> = React.memo(
   },
 );
 
-/* ------------------------- Answer object (falling circle) ------------------------- */
+/* ------------------------- Answer object (floating circle) ------------------------- */
 
 const SpaceObjectView: React.FC<{
   obj: SpaceObject;
@@ -470,24 +546,38 @@ const SpaceObjectView: React.FC<{
     }
   }, [hitState, scale, opacity]);
 
-  // Fall driven by translateY on the native thread — smooth, no JS lag.
-  const translateY = obj.anim.interpolate({
+  const translateX = obj.animX.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, obj.maxY - obj.minY],
+    outputRange: [-FLOAT_AMPLITUDE_X, FLOAT_AMPLITUDE_X],
+  });
+  const translateY = obj.animY.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-FLOAT_AMPLITUDE_Y, FLOAT_AMPLITUDE_Y],
   });
 
-  const flashBorderColor =
-    hitState === "correct"
-      ? THEME.correct
-      : hitState === "wrong"
-        ? THEME.wrong
-        : THEME.borderBright;
-  const flashBg =
+  // Rock species is picked by lane, so the same slot always reads as the
+  // same "kind" of asteroid across a round, then hit-state colors are
+  // layered on top when shot.
+  const palette = ROCK_PALETTES[obj.laneIndex % ROCK_PALETTES.length];
+
+  const isHit = hitState !== "none";
+  const overlayColor =
     hitState === "correct"
       ? THEME.correctGlow
       : hitState === "wrong"
         ? THEME.wrongGlow
-        : THEME.bgElevated;
+        : "transparent";
+  const borderColor =
+    hitState === "correct"
+      ? THEME.correct
+      : hitState === "wrong"
+        ? THEME.wrong
+        : palette.border;
+  const shadowColor = isHit
+    ? hitState === "correct"
+      ? THEME.correct
+      : THEME.wrong
+    : palette.glow;
 
   return (
     <Animated.View
@@ -496,21 +586,88 @@ const SpaceObjectView: React.FC<{
         styles.spaceObject,
         {
           left: obj.x,
-          top: obj.minY,
+          top: obj.y,
           width: obj.size,
           height: obj.size,
-          // obj.size / 2 makes this a perfect circle regardless of size.
           borderRadius: obj.size / 2,
-          backgroundColor: flashBg,
-          borderColor: flashBorderColor,
+          borderColor,
+          shadowColor,
           opacity,
-          transform: [{ translateY }, { scale }],
+          transform: [{ translateX }, { translateY }, { scale }],
         },
       ]}
     >
-      <Text style={styles.spaceObjectLabel} numberOfLines={3}>
-        {obj.label}
-      </Text>
+      <LinearGradient
+        colors={palette.colors}
+        start={{ x: 0.25, y: 0.2 }}
+        end={{ x: 0.8, y: 1 }}
+        style={[
+          styles.rockGradient,
+          { width: obj.size, height: obj.size, borderRadius: obj.size / 2 },
+        ]}
+      >
+        {/* Faked crater texture — a few soft dark blobs at fixed relative
+            spots. Purely decorative, doesn't affect hit-testing. */}
+        <View
+          pointerEvents="none"
+          style={[
+            styles.crater,
+            {
+              backgroundColor: palette.craterColor,
+              width: obj.size * 0.22,
+              height: obj.size * 0.22,
+              borderRadius: obj.size * 0.11,
+              top: obj.size * 0.18,
+              left: obj.size * 0.62,
+            },
+          ]}
+        />
+        <View
+          pointerEvents="none"
+          style={[
+            styles.crater,
+            {
+              backgroundColor: palette.craterColor,
+              width: obj.size * 0.15,
+              height: obj.size * 0.15,
+              borderRadius: obj.size * 0.075,
+              top: obj.size * 0.6,
+              left: obj.size * 0.18,
+            },
+          ]}
+        />
+        <View
+          pointerEvents="none"
+          style={[
+            styles.crater,
+            {
+              backgroundColor: palette.craterColor,
+              width: obj.size * 0.12,
+              height: obj.size * 0.12,
+              borderRadius: obj.size * 0.06,
+              top: obj.size * 0.68,
+              left: obj.size * 0.6,
+            },
+          ]}
+        />
+
+        {isHit && (
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: overlayColor,
+                borderRadius: obj.size / 2,
+              },
+            ]}
+          />
+        )}
+
+        <Text style={styles.spaceObjectLabel} numberOfLines={3}>
+          {obj.label}
+        </Text>
+      </LinearGradient>
     </Animated.View>
   );
 });
@@ -544,15 +701,9 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const isTablet = Device.deviceType === Device.DeviceType.TABLET; 
+  const isTablet = Device.deviceType === Device.DeviceType.TABLET;
 
   const stars = useMemo(() => generateStars(starCount), [starCount]);
-
-  // const questionCardBottom = insets.bottom + 16;
-  // const questionCardTop = questionCardBottom + QUESTION_CARD_HEIGHT;
-  // const shipBottomOffset = questionCardTop; // ship's bottom edge = card's top edge, exactly
-  // const shipX = SCREEN_W / 2 - shipSize / 2;
-  // const shipY = SCREEN_H - shipSize - shipBottomOffset;
 
   const questionCardBottom = insets.bottom + 16;
 
@@ -565,13 +716,11 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
   const shipY = SCREEN_H - shipSize - shipBottomOffset;
 
-  // topSafeZone is only used to gate taps over the header now — objects
-  // never spawn there, only pass through it while falling.
+  // The visible play area answers can hover in: below the header, above
+  // the ship/question card. Objects spawn and float entirely within this
+  // band — no off-screen spawning, no falling through it.
   const topSafeZone = insets.top + HEADER_HEIGHT + QUESTION_CARD_MARGIN;
   const bottomSafeZone = shipY - QUESTION_CARD_MARGIN;
-
-  // The ONE spawn height used everywhere — fully off-screen above y = 0.
-  const spawnY = -ANSWER_OBJECT_SIZE - SPAWN_ABOVE_SCREEN;
 
   // Number of lanes = number of answers for the current question. Kept in
   // a ref so fireBullet's respawn logic always has the correct lane count
@@ -581,13 +730,15 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     laneCountRef.current = question.answers.length;
   }, [question]);
 
-  const objectYRef = useRef<Map<number, number>>(new Map());
-  const updateObjectY = useCallback((id: number, y: number) => {
-    objectYRef.current.set(id, y);
+  // Tracks each object's current (x, y) including its live float offset,
+  // used for accurate tap hit-testing.
+  const objectPosRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const updateObjectPos = useCallback((id: number, x: number, y: number) => {
+    objectPosRef.current.set(id, { x, y });
   }, []);
 
   const [objects, setObjects] = useState<SpaceObject[]>(() =>
-    buildAnswerObjects(question, spawnY, bottomSafeZone, updateObjectY),
+    buildAnswerObjects(question, topSafeZone, bottomSafeZone, updateObjectPos),
   );
   const objectsRef = useRef<SpaceObject[]>(objects);
   useEffect(() => {
@@ -599,12 +750,17 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     if (questionIdRef.current === question.id) return;
     questionIdRef.current = question.id;
     objectsRef.current.forEach((o) => o.stop());
-    objectYRef.current.clear();
+    objectPosRef.current.clear();
     setObjects(
-      buildAnswerObjects(question, spawnY, bottomSafeZone, updateObjectY),
+      buildAnswerObjects(
+        question,
+        topSafeZone,
+        bottomSafeZone,
+        updateObjectPos,
+      ),
     );
     setHitStates({});
-  }, [question, spawnY, bottomSafeZone, updateObjectY]);
+  }, [question, topSafeZone, bottomSafeZone, updateObjectPos]);
 
   useEffect(() => {
     return () => {
@@ -687,14 +843,14 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
           setTimeout(() => {
             hitObject.stop();
-            objectYRef.current.delete(hitObject.id);
+            objectPosRef.current.delete(hitObject.id);
 
             setObjects((prev: SpaceObject[]) => {
               const remaining = prev.filter((o) => o.id !== hitObject.id);
 
               // Correct answer shot → round is over, clear the field.
               // (Parent should pass a new `question` prop to start the
-              // next round, which spawns a brand new set from above.)
+              // next round, which spawns a brand new set to float in.)
               if (hitObject.isCorrect) {
                 remaining.forEach((o) => o.stop());
                 return [];
@@ -703,10 +859,10 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
               // Wrong answer shot → respawn a NEW wrong answer in the
               // SAME lane the destroyed one owned. Reusing the lane index
               // (not a random x) is what guarantees the replacement can
-              // never overlap any of the other still-falling objects,
-              // which each own a different lane. It always spawns from
-              // spawnY (off-screen above) via spawnAnswerInLane — the one
-              // and only spawn path in this file.
+              // never overlap any of the other still-floating objects,
+              // which each own a different lane. It gets a fresh resting
+              // spot via spawnAnswerInLane — the one and only spawn path
+              // in this file.
               const wrongPool = question.answers.filter((a) => !a.correct);
               const replacementText =
                 wrongPool[Math.floor(Math.random() * wrongPool.length)]?.text ??
@@ -719,9 +875,9 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
                   false,
                   hitObject.laneIndex,
                   laneCountRef.current,
-                  spawnY,
+                  topSafeZone,
                   bottomSafeZone,
-                  updateObjectY,
+                  updateObjectPos,
                 ),
               ];
             });
@@ -741,9 +897,9 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
       shipY,
       fireCooldownMs,
       maxBullets,
-      spawnY,
+      topSafeZone,
       bottomSafeZone,
-      updateObjectY,
+      updateObjectPos,
       question,
       onAnswer,
     ],
@@ -753,22 +909,28 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     (evt: GestureResponderEvent) => {
       const { locationX, locationY } = evt.nativeEvent;
 
-      // Taps are ignored above the header / below the ship — answers
-      // fall through this zone but are only "shootable" while inside it.
+      // Taps are ignored above the header / below the ship — objects only
+      // ever float within this zone anyway.
       if (locationY < topSafeZone || locationY > bottomSafeZone) return;
 
       const hitObject = objects.find((obj) => {
-        const currentY = objectYRef.current.get(obj.id) ?? obj.minY;
-        const cx = obj.x + obj.size / 2;
-        const cy = currentY + obj.size / 2;
+        const currentPos = objectPosRef.current.get(obj.id) ?? {
+          x: obj.x,
+          y: obj.y,
+        };
+        const cx = currentPos.x + obj.size / 2;
+        const cy = currentPos.y + obj.size / 2;
         const dist = Math.sqrt((locationX - cx) ** 2 + (locationY - cy) ** 2);
         return dist <= obj.size / 2 + 10;
       });
 
       if (hitObject) {
-        const currentY = objectYRef.current.get(hitObject.id) ?? hitObject.minY;
-        const cx = hitObject.x + hitObject.size / 2;
-        const cy = currentY + hitObject.size / 2;
+        const currentPos = objectPosRef.current.get(hitObject.id) ?? {
+          x: hitObject.x,
+          y: hitObject.y,
+        };
+        const cx = currentPos.x + hitObject.size / 2;
+        const cy = currentPos.y + hitObject.size / 2;
         fireBullet(cx, cy, hitObject);
       } else {
         fireBullet(locationX, locationY);
@@ -917,15 +1079,29 @@ const styles = StyleSheet.create({
   spaceObject: {
     position: "absolute",
     borderWidth: 2,
+    shadowOpacity: 0.9,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8, // Android glow approximation
+  },
+  rockGradient: {
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
+    overflow: "hidden",
+  },
+  crater: {
+    position: "absolute",
   },
   spaceObjectLabel: {
     color: THEME.textWhite,
     fontSize: 12,
     fontWeight: "700",
     textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    zIndex: 2,
   },
 
   bullet: {
