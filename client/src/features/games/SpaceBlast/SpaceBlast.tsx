@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Device from "expo-device";
 import { LinearGradient } from "expo-linear-gradient";
+import { Asset } from "expo-asset";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
@@ -58,24 +59,26 @@ const THEME = {
   radiusFull: 999,
 } as const;
 
-/* ----------------------------- Types ----------------------------- */
+/* ═══════════════════════════════════════════════════════════════════════
+ * FLASHCARD DATA MODEL — this matches the app's existing Flashcard type
+ * exactly and is NOT modified. Every piece of gameplay logic below is
+ * built on top of this shape only.
+ * ═══════════════════════════════════════════════════════════════════════ */
+export type CardStatus = "review" | "understood";
+
+export interface FlashCard {
+  id: string;
+  question: string;
+  answer: string;
+  status: CardStatus;
+}
+
+/* ----------------------------- Other types ----------------------------- */
 
 export interface StudySet {
   id: string;
   name: string;
   subtitle?: string;
-}
-
-export interface Answer {
-  id: string;
-  text: string;
-  correct: boolean;
-}
-
-export interface Question {
-  id: string;
-  text: string;
-  answers: Answer[];
 }
 
 interface SpaceBackgroundProps {
@@ -91,20 +94,25 @@ interface SpaceBackgroundProps {
   currentStudySetId?: string;
   onSelectStudySet?: (set: StudySet) => void;
 
-  // Preferred: pass the full quiz as a list. The component advances
-  // through these itself — one correct hit moves to the next question,
-  // and a "You Win" modal appears after the last one.
-  questions?: Question[];
+  // The flashcards that drive the whole game. One card = one question
+  // (`card.question`) with exactly one correct answer (`card.answer`).
+  // Floating answer bubbles are ALWAYS pulled from other cards' `answer`
+  // fields — never invented — see AnswerPool below.
+  flashcards?: FlashCard[];
 
-  // Back-compat: a single question. Only used if `questions` isn't
-  // provided. In that case the component still behaves the same as
-  // before — you just get a one-question "quiz".
-  question?: Question;
+  // Minimum number of flashcards required to start the game. Defaults to
+  // 10. If there aren't enough, a modal is shown instead of the game.
+  minFlashcards?: number;
 
-  onAnswer?: (correct: boolean, answerId: string) => void;
+  // Called when the player taps "Go to Library" on the not-enough-cards
+  // modal. If omitted, the default behavior is to navigate to the
+  // Library tab (`/(tabs)/library`).
+  onGoToLibrary?: () => void;
 
-  // Called when the player finishes the whole `questions` list, right
-  // when the win modal's OK button is pressed. If omitted, the default
+  onAnswer?: (correct: boolean, answerText: string) => void;
+
+  // Called when the player finishes every flashcard, right when the
+  // "You Win" modal's OK button is pressed. If omitted, the default
   // behavior is to navigate back to the game tab (`/(tabs)/game`).
   onWin?: () => void;
 
@@ -119,6 +127,13 @@ interface SpaceBackgroundProps {
 
   maxBullets?: number;
   fireCooldownMs?: number;
+
+  // Set this to true while the caller is still fetching/hydrating the
+  // `flashcards` prop from its own source (network, storage, etc). The
+  // game will keep showing the loading spinner — on top of its own
+  // image-asset preloading — until this flips back to false. Optional;
+  // defaults to false, meaning "loading" is driven by asset preload only.
+  isDataLoading?: boolean;
 
   children?: React.ReactNode;
 }
@@ -153,6 +168,18 @@ interface Bullet {
   anim: Animated.ValueXY;
 }
 
+// A one-shot explosion effect spawned wherever a bubble was just hit.
+// It lives entirely independently of the SpaceObject it replaces — once
+// spawned it animates and removes itself, regardless of what the answer
+// board does afterward.
+interface Explosion {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  variant: HitState;
+}
+
 type HitState = "correct" | "wrong";
 type HitStatesMap = Record<number, HitState>;
 
@@ -165,11 +192,19 @@ const QUESTION_CARD_MARGIN = 12;
 
 const ANSWER_OBJECT_SIZE = 90;
 
-// Quizlet-Blast-style floating answers: only a handful of real correct
-// answers (pulled from the whole question bank) float at once — never
-// made-up distractors, and never the full set of 10+ answers at a time.
+// Quizlet-Blast-style floating answers: only a handful of real answers
+// (pulled from the whole flashcard bank) float at once — never made-up
+// distractors, and never the full deck at a time.
 const FLOATING_ANSWER_MIN = 4;
 const FLOATING_ANSWER_MAX = 5;
+
+// The player needs at least this many flashcards for the answer pool to
+// have enough real distractors to feel varied.
+const MIN_FLASHCARDS_REQUIRED = 10;
+
+// How many recently-shown answers the pool avoids immediately re-using,
+// so the same distractor doesn't reappear round after round.
+const RECENT_ANSWER_HISTORY_SIZE = 6;
 
 interface RockPalette {
   colors: [string, string];
@@ -210,177 +245,215 @@ const FLOAT_MAX_DURATION = 3800;
 const FLOAT_AMPLITUDE_Y = 14;
 const FLOAT_AMPLITUDE_X = 10;
 
-const DUMMY_QUESTION: Question = {
-  id: "q1",
-  text: "What is the powerhouse of the cell?",
-  answers: [
-    { id: "a1", text: "Mitochondria", correct: true },
-    { id: "a2", text: "Nucleus", correct: false },
-    { id: "a3", text: "Ribosome", correct: false },
-    { id: "a4", text: "Golgi Apparatus", correct: false },
-  ],
-};
-
-// A 10-question dummy set so the component is playable/testable with zero
-// wiring. Used automatically whenever no `questions` prop is passed. Once
-// you pass your own `questions={...}`, this is ignored entirely.
-const DUMMY_QUESTIONS: Question[] = [
-  DUMMY_QUESTION,
-  {
-    id: "q2",
-    text: "Which organelle packages and ships proteins?",
-    answers: [
-      { id: "q2a1", text: "Golgi Apparatus", correct: true },
-      { id: "q2a2", text: "Lysosome", correct: false },
-      { id: "q2a3", text: "Cytoplasm", correct: false },
-      { id: "q2a4", text: "Vacuole", correct: false },
-    ],
-  },
-  {
-    id: "q3",
-    text: "What planet is known as the Red Planet?",
-    answers: [
-      { id: "q3a1", text: "Mars", correct: true },
-      { id: "q3a2", text: "Venus", correct: false },
-      { id: "q3a3", text: "Jupiter", correct: false },
-      { id: "q3a4", text: "Saturn", correct: false },
-    ],
-  },
-  {
-    id: "q4",
-    text: "What is the chemical symbol for gold?",
-    answers: [
-      { id: "q4a1", text: "Au", correct: true },
-      { id: "q4a2", text: "Ag", correct: false },
-      { id: "q4a3", text: "Gd", correct: false },
-      { id: "q4a4", text: "Go", correct: false },
-    ],
-  },
-  {
-    id: "q5",
-    text: "Who wrote 'Romeo and Juliet'?",
-    answers: [
-      { id: "q5a1", text: "William Shakespeare", correct: true },
-      { id: "q5a2", text: "Charles Dickens", correct: false },
-      { id: "q5a3", text: "Jane Austen", correct: false },
-      { id: "q5a4", text: "Mark Twain", correct: false },
-    ],
-  },
-  {
-    id: "q6",
-    text: "What is the largest ocean on Earth?",
-    answers: [
-      { id: "q6a1", text: "Pacific Ocean", correct: true },
-      { id: "q6a2", text: "Atlantic Ocean", correct: false },
-      { id: "q6a3", text: "Indian Ocean", correct: false },
-      { id: "q6a4", text: "Arctic Ocean", correct: false },
-    ],
-  },
-  {
-    id: "q7",
-    text: "How many bones are in the adult human body?",
-    answers: [
-      { id: "q7a1", text: "206", correct: true },
-      { id: "q7a2", text: "180", correct: false },
-      { id: "q7a3", text: "220", correct: false },
-      { id: "q7a4", text: "150", correct: false },
-    ],
-  },
-  {
-    id: "q8",
-    text: "What gas do plants absorb from the atmosphere?",
-    answers: [
-      { id: "q8a1", text: "Carbon Dioxide", correct: true },
-      { id: "q8a2", text: "Oxygen", correct: false },
-      { id: "q8a3", text: "Nitrogen", correct: false },
-      { id: "q8a4", text: "Hydrogen", correct: false },
-    ],
-  },
-  {
-    id: "q9",
-    text: "What is the smallest prime number?",
-    answers: [
-      { id: "q9a1", text: "2", correct: true },
-      { id: "q9a2", text: "0", correct: false },
-      { id: "q9a3", text: "1", correct: false },
-      { id: "q9a4", text: "3", correct: false },
-    ],
-  },
-  {
-    id: "q10",
-    text: "Which layer of the Earth is mostly liquid iron and nickel?",
-    answers: [
-      { id: "q10a1", text: "Outer Core", correct: true },
-      { id: "q10a2", text: "Mantle", correct: false },
-      { id: "q10a3", text: "Crust", correct: false },
-      { id: "q10a4", text: "Inner Core", correct: false },
-    ],
-  },
+/* ═══════════════════════════════════════════════════════════════════════
+ * DUMMY FLASHCARD DATASET
+ * A 30-card dummy deck (well above the 10-card minimum) so the game is
+ * playable/testable with zero wiring. Strictly matches the FlashCard
+ * interface above. Every `answer` string is unique so the answer pool
+ * never has to worry about two different cards sharing one answer.
+ * ═══════════════════════════════════════════════════════════════════════ */
+const DUMMY_FLASHCARDS: FlashCard[] = [
+  { id: "c1", question: "What is the powerhouse of the cell?", answer: "Mitochondria", status: "review" },
+  { id: "c2", question: "Which organelle packages and ships proteins?", answer: "Golgi Apparatus", status: "understood" },
+  { id: "c3", question: "What planet is known as the Red Planet?", answer: "Mars", status: "review" },
+  { id: "c4", question: "What is the chemical symbol for gold?", answer: "Au", status: "understood" },
+  { id: "c5", question: "Who wrote 'Romeo and Juliet'?", answer: "William Shakespeare", status: "review" },
+  { id: "c6", question: "What is the largest ocean on Earth?", answer: "Pacific Ocean", status: "understood" },
+  { id: "c7", question: "How many bones are in the adult human body?", answer: "206", status: "review" },
+  { id: "c8", question: "What gas do plants absorb from the atmosphere?", answer: "Carbon Dioxide", status: "understood" },
+  { id: "c9", question: "What is the smallest prime number?", answer: "2", status: "review" },
+  { id: "c10", question: "Which layer of the Earth is mostly liquid iron and nickel?", answer: "Outer Core", status: "understood" },
+  { id: "c11", question: "What is the capital of France?", answer: "Paris", status: "review" },
+  { id: "c12", question: "What is the capital of Japan?", answer: "Tokyo", status: "understood" },
+  { id: "c13", question: "What is the capital of England?", answer: "London", status: "review" },
+  { id: "c14", question: "What is the capital of Germany?", answer: "Berlin", status: "understood" },
+  { id: "c15", question: "What is the freezing point of water in Celsius?", answer: "0", status: "review" },
+  { id: "c16", question: "What is the boiling point of water in Celsius?", answer: "100", status: "understood" },
+  { id: "c17", question: "Which planet has the most moons in our solar system?", answer: "Saturn", status: "review" },
+  { id: "c18", question: "What is the hardest natural substance on Earth?", answer: "Diamond", status: "understood" },
+  { id: "c19", question: "Who painted the Mona Lisa?", answer: "Leonardo da Vinci", status: "review" },
+  { id: "c20", question: "What is the longest river in the world?", answer: "Nile River", status: "understood" },
+  { id: "c21", question: "What is the currency of Japan?", answer: "Yen", status: "review" },
+  { id: "c22", question: "What is the square root of 64?", answer: "8", status: "understood" },
+  { id: "c23", question: "Which gas makes up most of Earth's atmosphere?", answer: "Nitrogen", status: "review" },
+  { id: "c24", question: "What is the largest mammal on Earth?", answer: "Blue Whale", status: "understood" },
+  { id: "c25", question: "Who developed the theory of relativity?", answer: "Albert Einstein", status: "review" },
+  { id: "c26", question: "What is the chemical formula for water?", answer: "H2O", status: "understood" },
+  { id: "c27", question: "What is the tallest mountain in the world?", answer: "Mount Everest", status: "review" },
+  { id: "c28", question: "How many continents are there?", answer: "7", status: "understood" },
+  { id: "c29", question: "What is the speed of light in a vacuum?", answer: "299,792 km/s", status: "review" },
+  { id: "c30", question: "Which element has the atomic number 1?", answer: "Hydrogen", status: "understood" },
 ];
 
 let objectIdCounter = 0;
 let bulletIdCounter = 0;
+let explosionIdCounter = 0;
 
-/**
- * Flattens every correct answer across the whole question bank into a
- * deduplicated pool of strings. This is the *only* source floating
- * answer circles are drawn from — never randomly invented text.
- */
-function buildAnswerPool(questions: Question[]): string[] {
-  const seen = new Set<string>();
-  const pool: string[] = [];
-  questions.forEach((q) => {
-    q.answers.forEach((a) => {
-      if (a.correct && !seen.has(a.text)) {
-        seen.add(a.text);
-        pool.push(a.text);
-      }
-    });
-  });
-  return pool;
+// One explosion asset per outcome, plus the spaceship — swap these for
+// your actual files. All three are preloaded up front (see
+// GAME_IMAGE_ASSETS + the asset-loading effect below) so nothing pops in
+// blank the first time it's asked to render.
+const EXPLOSION_IMAGE_CORRECT = require("@/assets/images/explosion-correct.png");
+const EXPLOSION_IMAGE_WRONG = require("@/assets/images/explosion-wrong.png");
+const SPACESHIP_IMAGE = require("@/assets/images/spaceship.png");
+const EXPLOSION_DURATION_MS = 380;
+
+// Every image module the game needs on screen. Passed to
+// `Asset.loadAsync` on mount so the underlying bitmaps are downloaded/
+// decoded before the game is allowed to start — this is what fixes the
+// "explosion doesn't render the first time" issue, which happens when an
+// <Image source={require(...)}> is asked to draw before RN has finished
+// resolving/caching that asset.
+const GAME_IMAGE_ASSETS = [
+  EXPLOSION_IMAGE_CORRECT,
+  EXPLOSION_IMAGE_WRONG,
+  SPACESHIP_IMAGE,
+];
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * RANDOMIZATION HELPERS
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/** Classic Fisher-Yates shuffle. Returns a new array, uniform distribution. */
+function fisherYatesShuffle<T>(input: T[]): T[] {
+  const arr = input.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
 }
 
 /**
- * Picks a small (4-5) set of answer strings to float for the current
- * question: the current correct answer is always included, and the rest
- * are randomly sampled distractors pulled from other questions' correct
- * answers (never duplicated within the set). The result is shuffled so
- * the correct answer doesn't always land in the same lane/position.
+ * AnswerPool — efficient, stateful distractor picker.
+ *
+ * Design goals (see task spec §8):
+ *  - No brute-force `array.filter(...).sort(() => Math.random() - 0.5)`
+ *    over the WHOLE flashcard list on every pick (that's O(n log n) per
+ *    bubble, every time a bubble is destroyed — doesn't scale to
+ *    thousands of cards).
+ *  - Instead: pre-shuffle a flat index pool once (Fisher-Yates, O(n)),
+ *    then hand out indices with a simple moving cursor (O(1) amortized
+ *    per pick). The pool is only reshuffled again once the cursor runs
+ *    off the end, so a full deck is only touched O(1) times per full
+ *    cycle through it, not once per pick.
+ *  - A small bounded "recently used" queue (Set + array acting as a
+ *    ring buffer) prevents an answer from reappearing immediately after
+ *    being shown, without needing to scan history on every pick.
  */
-function pickFloatingAnswers(
-  correctText: string,
-  pool: string[],
+class AnswerPool {
+  private cards: FlashCard[];
+  private order: number[] = [];
+  private cursor = 0;
+  private recentQueue: string[] = [];
+  private recentSet: Set<string> = new Set();
+  private recentCap: number;
+
+  constructor(cards: FlashCard[]) {
+    this.cards = cards;
+    this.recentCap = AnswerPool.computeRecentCap(cards.length);
+    this.reshuffle();
+  }
+
+  private static computeRecentCap(cardCount: number): number {
+    // Never let the "avoid repeats" window swallow the whole pool —
+    // otherwise a small deck could starve and have nothing left to pick.
+    return Math.max(1, Math.min(RECENT_ANSWER_HISTORY_SIZE, cardCount - 1));
+  }
+
+  private reshuffle() {
+    const indices = Array.from({ length: this.cards.length }, (_, i) => i);
+    this.order = fisherYatesShuffle(indices);
+    this.cursor = 0;
+  }
+
+  private markRecent(answer: string) {
+    if (this.recentSet.has(answer)) return;
+    this.recentQueue.push(answer);
+    this.recentSet.add(answer);
+    while (this.recentQueue.length > this.recentCap) {
+      const removed = this.recentQueue.shift();
+      if (removed !== undefined) this.recentSet.delete(removed);
+    }
+  }
+
+  /**
+   * Swap in a fresh flashcard list (e.g. the study set changed). Resets
+   * the shuffle order and recency history so nothing stale leaks across
+   * decks.
+   */
+  updateCards(cards: FlashCard[]) {
+    this.cards = cards;
+    this.recentCap = AnswerPool.computeRecentCap(cards.length);
+    this.recentQueue = [];
+    this.recentSet.clear();
+    this.reshuffle();
+  }
+
+  /**
+   * Pick one distractor answer that is not in `exclude` (the answers
+   * already visible on screen) and, when possible, not recently shown.
+   * O(1) amortized: each call advances a cursor through a pre-shuffled
+   * index array instead of re-filtering/re-sorting the whole deck.
+   */
+  pickDistractor(exclude: Set<string>): string | null {
+    const n = this.cards.length;
+    if (n === 0) return null;
+
+    const maxAttempts = n * 2; // bounded — never spins forever
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      if (this.cursor >= this.order.length) this.reshuffle();
+      const idx = this.order[this.cursor++];
+      attempts++;
+
+      const candidate = this.cards[idx]?.answer;
+      if (!candidate) continue;
+      if (exclude.has(candidate)) continue;
+      if (this.recentSet.has(candidate)) continue;
+
+      this.markRecent(candidate);
+      return candidate;
+    }
+
+    // Relaxed fallback: recency window exhausted the pool (tiny decks).
+    // Just guarantee uniqueness against what's currently visible.
+    for (const card of this.cards) {
+      if (!exclude.has(card.answer)) {
+        this.markRecent(card.answer);
+        return card.answer;
+      }
+    }
+
+    return null; // truly nothing left (deck has 1 unique answer)
+  }
+}
+
+/**
+ * Choose the initial set of floating answers for a question: the
+ * correct answer plus 3-4 unique distractors pulled from the pool, then
+ * shuffled so the correct answer doesn't always land in the same lane.
+ */
+function pickInitialAnswers(
+  correctAnswer: string,
+  pool: AnswerPool,
   count: number,
 ): string[] {
-  const distractorPool = pool.filter((text) => text !== correctText);
-  const shuffledDistractors = [...distractorPool].sort(
-    () => Math.random() - 0.5,
-  );
-
+  const shown = new Set<string>([correctAnswer]);
+  const result = [correctAnswer];
   const wantedDistractors = Math.max(0, count - 1);
-  const chosenDistractors: string[] = [];
-  const used = new Set<string>();
 
-  for (const text of shuffledDistractors) {
-    if (chosenDistractors.length >= wantedDistractors) break;
-    if (used.has(text)) continue;
-    used.add(text);
-    chosenDistractors.push(text);
+  for (let i = 0; i < wantedDistractors; i++) {
+    const candidate = pool.pickDistractor(shown);
+    if (candidate === null) break; // pool exhausted, keep what we have
+    shown.add(candidate);
+    result.push(candidate);
   }
 
-  // Not enough unique distractors in the pool (e.g. a very small question
-  // bank) — reuse from the pool rather than inventing fake answers.
-  let i = 0;
-  while (
-    chosenDistractors.length < wantedDistractors &&
-    distractorPool.length > 0
-  ) {
-    chosenDistractors.push(distractorPool[i % distractorPool.length]);
-    i++;
-  }
-
-  const result = [correctText, ...chosenDistractors];
-  return result.sort(() => Math.random() - 0.5);
+  return fisherYatesShuffle(result);
 }
 
 function generateStars(count: number): StarConfig[] {
@@ -518,26 +591,29 @@ function spawnAnswerInLane(
   };
 }
 
-function buildAnswerObjectsFromPool(
-  correctText: string,
-  pool: string[],
+function buildInitialAnswerObjects(
+  correctAnswer: string,
+  pool: AnswerPool,
   playAreaTop: number,
   playAreaBottom: number,
   onUpdate: (id: number, x: number, y: number) => void,
   speedMultiplier: number = 1,
 ): SpaceObject[] {
+  if (!correctAnswer) return [];
+
   const count =
     FLOATING_ANSWER_MIN +
     Math.floor(
       Math.random() * (FLOATING_ANSWER_MAX - FLOATING_ANSWER_MIN + 1),
     );
-  const texts = pickFloatingAnswers(correctText, pool, count);
-  return texts.map((text, laneIndex) =>
+  const labels = pickInitialAnswers(correctAnswer, pool, count);
+
+  return labels.map((label, laneIndex) =>
     spawnAnswerInLane(
-      text,
-      text === correctText,
+      label,
+      label === correctAnswer,
       laneIndex,
-      texts.length,
+      labels.length,
       playAreaTop,
       playAreaBottom,
       onUpdate,
@@ -831,7 +907,109 @@ const BulletView: React.FC<{ bullet: Bullet }> = React.memo(({ bullet }) => (
   />
 ));
 
+/* ------------------------------ Explosion ------------------------------ */
+
+// Plays once at the spot a bubble was destroyed, then calls `onDone` so
+// the parent can drop it from state. Fully decoupled from the answer
+// board — it doesn't matter that the SpaceObject it's covering for has
+// already been removed.
+const ExplosionView: React.FC<{
+  explosion: Explosion;
+  onDone: (id: number) => void;
+}> = React.memo(({ explosion, onDone }) => {
+  const scale = useRef(new Animated.Value(0.35)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(scale, {
+        toValue: 1.3,
+        duration: EXPLOSION_DURATION_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: EXPLOSION_DURATION_MS,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) onDone(explosion.id);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.explosion,
+        {
+          left: explosion.x,
+          top: explosion.y,
+          width: explosion.size,
+          height: explosion.size,
+          opacity,
+          transform: [{ scale }],
+        },
+      ]}
+    >
+      <Image
+        source={
+          explosion.variant === "correct"
+            ? EXPLOSION_IMAGE_CORRECT
+            : EXPLOSION_IMAGE_WRONG
+        }
+        style={{ width: "100%", height: "100%" }}
+        resizeMode="contain"
+      />
+    </Animated.View>
+  );
+});
+
+/* ------------------------------ Loading spinner ------------------------------ */
+
+// Small themed ring spinner used on the loading overlay while assets
+// (and, optionally, the caller's own data) are still loading. Purely
+// decorative/animated — no gameplay dependency.
+const LoadingSpinner: React.FC = React.memo(() => {
+  const rotation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(rotation, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const spin = rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  return (
+    <Animated.View
+      style={[styles.loadingSpinner, { transform: [{ rotate: spin }] }]}
+    />
+  );
+});
+
 /* ---------------------------- Main component ---------------------------- */
+
+const PLACEHOLDER_CARD: FlashCard = {
+  id: "__placeholder__",
+  question: "",
+  answer: "",
+  status: "review",
+};
 
 const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   starCount = 80,
@@ -843,14 +1021,16 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   studySets = [],
   currentStudySetId,
   onSelectStudySet,
-  questions,
-  question = DUMMY_QUESTION,
+  flashcards = DUMMY_FLASHCARDS,
+  minFlashcards = MIN_FLASHCARDS_REQUIRED,
+  onGoToLibrary,
   onAnswer,
   onWin,
   maxLives = 3,
   onGameOver,
   maxBullets = 5,
   fireCooldownMs = 220,
+  isDataLoading = false,
   children,
 }) => {
   const insets = useSafeAreaInsets();
@@ -873,24 +1053,68 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   const topSafeZone = insets.top + HEADER_HEIGHT + QUESTION_CARD_MARGIN;
   const bottomSafeZone = shipY - QUESTION_CARD_MARGIN;
 
-  /* ---------------- Quiz progression (list of questions) ---------------- */
+  /* ---------------- Asset preloading ---------------- */
 
-  // Prefer the `questions` list; fall back to the single `question` prop
-  // so existing single-question usage keeps working unchanged.
-  const questionList = useMemo<Question[]>(() => {
-    if (questions && questions.length > 0) return questions;
-    // No `questions` prop passed at all — use the 10-question dummy set so
-    // the game is playable out of the box. (An explicit single `question`
-    // prop, if passed without `questions`, still wins over the dummy set.)
-    if (question !== DUMMY_QUESTION) return [question];
-    return DUMMY_QUESTIONS;
-  }, [questions, question]);
+  // Nothing in the game (ship, explosions) is allowed to render/animate
+  // until every image asset has actually finished loading. This is what
+  // fixes explosions failing to appear the very first time the game is
+  // opened — on a cold start, an <Image source={require(...)}> can be
+  // asked to draw before RN/Expo has resolved & cached that asset, so we
+  // explicitly wait for `Asset.loadAsync` to resolve before showing
+  // anything. If the caller also needs time to fetch/hydrate the
+  // `flashcards` prop from elsewhere, pass `isDataLoading` and the same
+  // spinner will keep covering the screen until that's done too.
+  const [assetsReady, setAssetsReady] = useState(false);
 
-  // A cheap fingerprint so we can tell when the *whole quiz* changed
+  useEffect(() => {
+    let cancelled = false;
+
+    Asset.loadAsync(GAME_IMAGE_ASSETS)
+      .catch((err) => {
+        // Don't hard-block the game forever if preloading itself fails
+        // (e.g. offline first launch with assets not yet cached) — log
+        // it and let the game proceed; the images will just lazily load
+        // as before in that edge case.
+        console.warn("SpaceBackground: failed to preload game assets", err);
+      })
+      .finally(() => {
+        if (!cancelled) setAssetsReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Single source of truth for "is it safe to show/play the game yet".
+  const isReady = assetsReady && !isDataLoading;
+
+  /* ---------------- Flashcard validation (task spec §2) ---------------- */
+
+  const hasEnoughCards = flashcards.length >= minFlashcards;
+
+  const [showMinCardsModal, setShowMinCardsModal] = useState(
+    !hasEnoughCards,
+  );
+  useEffect(() => {
+    setShowMinCardsModal(!hasEnoughCards);
+  }, [hasEnoughCards]);
+
+  const handleGoToLibrary = useCallback(() => {
+    if (onGoToLibrary) {
+      onGoToLibrary();
+      return;
+    }
+    router.replace("/(tabs)/library");
+  }, [onGoToLibrary, router]);
+
+  /* ---------------- Quiz progression (flashcard deck) ---------------- */
+
+  // A cheap fingerprint so we can tell when the *whole deck* changed
   // (e.g. parent swapped in a new study set) vs. just re-rendered.
-  const questionListKey = useMemo(
-    () => questionList.map((q) => q.id).join("|"),
-    [questionList],
+  const flashcardsKey = useMemo(
+    () => flashcards.map((c) => c.id).join("|"),
+    [flashcards],
   );
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -907,76 +1131,117 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     livesRef.current = lives;
   }, [lives]);
 
-  const prevListKeyRef = useRef(questionListKey);
+  // The answer pool is the single source of truth for every distractor
+  // shown in the game — see AnswerPool above. It's created once and
+  // mutated in place (not rebuilt on every render) for efficiency.
+  const answerPoolRef = useRef<AnswerPool>(new AnswerPool(flashcards));
+
+  // Play order: a shuffled sequence of indices into `flashcards`, so the
+  // question order is randomized per session instead of always following
+  // the array's natural order. `currentIndex` walks through THIS array,
+  // and `playOrderRef.current[currentIndex]` gives the actual flashcard
+  // index. Built once per deck (Fisher-Yates, O(n)) and re-shuffled only
+  // when the deck itself changes — never recomputed on every render.
+  const playOrderRef = useRef<number[]>(
+    fisherYatesShuffle(flashcards.map((_, i) => i)),
+  );
+
+  const prevDeckKeyRef = useRef(flashcardsKey);
   useEffect(() => {
-    if (prevListKeyRef.current === questionListKey) return;
-    prevListKeyRef.current = questionListKey;
+    if (prevDeckKeyRef.current === flashcardsKey) return;
+    prevDeckKeyRef.current = flashcardsKey;
+    answerPoolRef.current.updateCards(flashcards);
+    playOrderRef.current = fisherYatesShuffle(flashcards.map((_, i) => i));
     setCurrentIndex(0);
     setShowWinModal(false);
     setShowGameOverModal(false);
     setLives(maxLives);
-  }, [questionListKey, maxLives]);
+  }, [flashcardsKey, flashcards, maxLives]);
 
-  const safeIndex = Math.min(currentIndex, questionList.length - 1);
-  const currentQuestion = questionList[safeIndex] ?? DUMMY_QUESTION;
-  const isLastQuestion = safeIndex >= questionList.length - 1;
-
-  // Quizlet-Blast-style answer pool: every correct answer across the whole
-  // question bank, deduplicated. This is the only source floating answer
-  // circles are drawn from — never randomly invented text.
-  const answerPool = useMemo(
-    () => buildAnswerPool(questionList),
-    [questionList],
-  );
-
-  const currentCorrectAnswer = useMemo(() => {
-    const correct = currentQuestion.answers.find((a) => a.correct);
-    return correct ? correct.text : (currentQuestion.answers[0]?.text ?? "");
-  }, [currentQuestion]);
+  const safeIndex =
+    flashcards.length > 0
+      ? Math.min(currentIndex, flashcards.length - 1)
+      : 0;
+  const currentCardIndex = playOrderRef.current[safeIndex] ?? safeIndex;
+  const currentCard = flashcards[currentCardIndex] ?? PLACEHOLDER_CARD;
+  const isLastCard = safeIndex >= flashcards.length - 1;
+  const currentCorrectAnswer = currentCard.answer;
 
   // Difficulty scaling: floats get modestly faster/more erratic as the
-  // player advances through the question list, capped so it never gets
-  // unreadable.
+  // player advances through the deck, capped so it never gets unreadable.
   const speedMultiplier = useMemo(
     () => Math.min(1 + safeIndex * 0.08, 1.8),
     [safeIndex],
   );
 
-  const laneCountRef = useRef<number>(currentQuestion.answers.length);
-  useEffect(() => {
-    laneCountRef.current = currentQuestion.answers.length;
-  }, [currentQuestion]);
+  const laneCountRef = useRef<number>(FLOATING_ANSWER_MIN);
 
   const objectPosRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const updateObjectPos = useCallback((id: number, x: number, y: number) => {
     objectPosRef.current.set(id, { x, y });
   }, []);
 
-  const [objects, setObjects] = useState<SpaceObject[]>(() =>
-    buildAnswerObjectsFromPool(
-      currentCorrectAnswer,
-      answerPool,
-      topSafeZone,
-      bottomSafeZone,
-      updateObjectPos,
-      speedMultiplier,
-    ),
-  );
+  // Objects start empty and are only populated once the game is actually
+  // allowed to start (see the "gameInitializedRef" effect below) — this
+  // keeps the very first floating answers (and their animations) from
+  // spinning up before assets/data have finished loading.
+  const [objects, setObjects] = useState<SpaceObject[]>([]);
   const objectsRef = useRef<SpaceObject[]>(objects);
   useEffect(() => {
     objectsRef.current = objects;
+    laneCountRef.current = objects.length > 0 ? objects.length : FLOATING_ANSWER_MIN;
   }, [objects]);
 
-  const questionIdRef = useRef<string>(currentQuestion.id);
+  // Fires exactly once, the moment the game first becomes ready to play
+  // (assets loaded + enough cards) — builds the first round of floating
+  // answers. Guarded so it never re-runs on ordinary re-renders.
+  const gameInitializedRef = useRef(false);
   useEffect(() => {
-    if (questionIdRef.current === currentQuestion.id) return;
-    questionIdRef.current = currentQuestion.id;
+    if (!isReady || !hasEnoughCards || gameInitializedRef.current) return;
+    gameInitializedRef.current = true;
+
+    setObjects(
+      buildInitialAnswerObjects(
+        currentCorrectAnswer,
+        answerPoolRef.current,
+        topSafeZone,
+        bottomSafeZone,
+        updateObjectPos,
+        speedMultiplier,
+      ),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReady, hasEnoughCards]);
+
+  // When a correct hit advances the question internally (inside
+  // fireBullet's setTimeout), we handle the board update ourselves —
+  // swapping out just the hit circle rather than rebuilding everything.
+  // This ref tells the "card changed" effect below to skip its own full
+  // board rebuild for that one transition, so it doesn't stomp on the
+  // surgical update. It still fires a full rebuild for any other cause
+  // of a card change (e.g. a brand-new deck being loaded).
+  const skipNextCardResetRef = useRef(false);
+
+  const cardIdRef = useRef<string>(currentCard.id);
+  useEffect(() => {
+    if (cardIdRef.current === currentCard.id) return;
+    cardIdRef.current = currentCard.id;
+
+    if (skipNextCardResetRef.current) {
+      // Already handled inline by the correct-answer hit logic — the
+      // replacement bubble for this card is already on the board.
+      skipNextCardResetRef.current = false;
+      return;
+    }
+
+    if (!hasEnoughCards || !isReady) return;
+
     objectsRef.current.forEach((o) => o.stop());
     objectPosRef.current.clear();
     setObjects(
-      buildAnswerObjectsFromPool(
+      buildInitialAnswerObjects(
         currentCorrectAnswer,
-        answerPool,
+        answerPoolRef.current,
         topSafeZone,
         bottomSafeZone,
         updateObjectPos,
@@ -985,9 +1250,10 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     );
     setHitStates({});
   }, [
-    currentQuestion,
+    currentCard,
     currentCorrectAnswer,
-    answerPool,
+    hasEnoughCards,
+    isReady,
     speedMultiplier,
     topSafeZone,
     bottomSafeZone,
@@ -1002,6 +1268,10 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
   const [hitStates, setHitStates] = useState<HitStatesMap>({});
   const [bullets, setBullets] = useState<Bullet[]>([]);
+  const [explosions, setExplosions] = useState<Explosion[]>([]);
+  const handleExplosionDone = useCallback((id: number) => {
+    setExplosions((prev) => prev.filter((e) => e.id !== id));
+  }, []);
 
   const [internalSetId, setInternalSetId] = useState<string | undefined>(
     currentStudySetId ?? studySets[0]?.id,
@@ -1051,9 +1321,16 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   const lastFireTimeRef = useRef<number>(0);
   const activeBulletCountRef = useRef<number>(0);
 
+  const blockInput =
+    showWinModal ||
+    showGameOverModal ||
+    showMinCardsModal ||
+    !hasEnoughCards ||
+    !isReady;
+
   const fireBullet = useCallback(
     (targetX: number, targetY: number, hitObject?: SpaceObject) => {
-      if (showWinModal || showGameOverModal) return;
+      if (blockInput) return;
 
       const now = Date.now();
       if (now - lastFireTimeRef.current < fireCooldownMs) return;
@@ -1095,6 +1372,26 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
             [hitObject.id]: result,
           }));
 
+          // Spawn the explosion at the bubble's last known on-screen
+          // position (it's still floating/animating right up to the
+          // moment it's hit, so we read from objectPosRef rather than
+          // hitObject's stale spawn-time x/y).
+          const impactPos = objectPosRef.current.get(hitObject.id) ?? {
+            x: hitObject.x,
+            y: hitObject.y,
+          };
+          const explosionSize = hitObject.size * 1.5;
+          setExplosions((prev) => [
+            ...prev,
+            {
+              id: explosionIdCounter++,
+              x: impactPos.x + hitObject.size / 2 - explosionSize / 2,
+              y: impactPos.y + hitObject.size / 2 - explosionSize / 2,
+              size: explosionSize,
+              variant: result,
+            },
+          ]);
+
           onAnswer?.(hitObject.isCorrect, hitObject.label);
 
           if (!hitObject.isCorrect) {
@@ -1108,28 +1405,105 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
             });
           }
 
+          // Precompute the next card up front, since we need it inside
+          // the setObjects updater below regardless of which branch runs.
+          // Goes through the shuffled play order, not raw array position.
+          const nextIndex = safeIndex + 1;
+          const nextCardIndex = playOrderRef.current[nextIndex];
+          const nextCard =
+            nextCardIndex !== undefined ? flashcards[nextCardIndex] : undefined;
+          const nextCorrectAnswer = nextCard?.answer ?? "";
+          const nextSpeedMultiplier = Math.min(1 + nextIndex * 0.08, 1.8);
+
           setTimeout(() => {
             hitObject.stop();
             objectPosRef.current.delete(hitObject.id);
 
             setObjects((prev: SpaceObject[]) => {
               const remaining = prev.filter((o) => o.id !== hitObject.id);
+              const pool = answerPoolRef.current;
 
               if (hitObject.isCorrect) {
-                // Correct answer shot: clear the field. If there's another
-                // question queued up, advance to it — the questionIdRef
-                // effect above will notice currentQuestion changed and
-                // spawn a fresh set of floating answers. If this was the
-                // last question, show the win modal instead.
-                remaining.forEach((o) => o.stop());
-
-                if (isLastQuestion) {
+                if (isLastCard) {
+                  // Deck finished — clear the field and show the win modal.
+                  remaining.forEach((o) => o.stop());
                   setShowWinModal(true);
-                } else {
-                  setCurrentIndex((idx) => idx + 1);
+                  return [];
                 }
 
-                return [];
+                // Only the hit circle disappears — every other bubble
+                // that was already floating stays exactly where it is
+                // (task spec §5/§10).
+                skipNextCardResetRef.current = true;
+                setCurrentIndex(nextIndex);
+
+                const remainingLabels = new Set(remaining.map((o) => o.label));
+
+                // Randomized-placement rule (task spec §7): the vacated
+                // slot must NOT always become the next correct answer —
+                // that made the freshly spawned bubble a dead giveaway
+                // every single round. Instead:
+                //  1. If the next correct answer already happens to be
+                //     floating among the surviving distractors, the
+                //     vacated slot just gets a fresh distractor.
+                //  2. Otherwise, flip a coin across ALL open slots (the
+                //     vacated one PLUS every bubble already on screen).
+                //     Whichever slot wins gets relabeled to the correct
+                //     answer; every other slot — including the vacated
+                //     one, if it didn't win — gets a distractor. So the
+                //     "new" bubble is only sometimes the correct one,
+                //     same as any other bubble on the board.
+                let replacementLabel: string;
+                let replacementIsCorrect: boolean;
+                let updatedRemaining = remaining;
+
+                if (remainingLabels.has(nextCorrectAnswer)) {
+                  const distractor = pool.pickDistractor(
+                    new Set([...remainingLabels, nextCorrectAnswer]),
+                  );
+                  replacementLabel = distractor ?? hitObject.label;
+                  replacementIsCorrect = false;
+                } else if (remaining.length === 0) {
+                  // No other bubbles to relabel — the vacated slot is the
+                  // only place the correct answer can go.
+                  replacementLabel = nextCorrectAnswer;
+                  replacementIsCorrect = true;
+                } else {
+                  const slotCount = remaining.length + 1; // +1 = vacated slot
+                  const chosenSlot = Math.floor(Math.random() * slotCount);
+
+                  if (chosenSlot === remaining.length) {
+                    // Vacated slot won the coin flip.
+                    replacementLabel = nextCorrectAnswer;
+                    replacementIsCorrect = true;
+                  } else {
+                    // An already-floating bubble becomes the correct
+                    // answer instead; the vacated slot gets a distractor.
+                    updatedRemaining = remaining.map((o, i) =>
+                      i === chosenSlot
+                        ? { ...o, label: nextCorrectAnswer, isCorrect: true }
+                        : o,
+                    );
+                    const distractor = pool.pickDistractor(
+                      new Set([...remainingLabels, nextCorrectAnswer]),
+                    );
+                    replacementLabel = distractor ?? hitObject.label;
+                    replacementIsCorrect = false;
+                  }
+                }
+
+                const replacement = spawnAnswerInLane(
+                  replacementLabel,
+                  replacementIsCorrect,
+                  hitObject.laneIndex,
+                  laneCountRef.current,
+                  topSafeZone,
+                  bottomSafeZone,
+                  updateObjectPos,
+                  nextSpeedMultiplier,
+                );
+
+                return [...updatedRemaining, replacement];
               }
 
               // Out of lives — freeze the board (the Game Over modal is
@@ -1140,30 +1514,20 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
               }
 
               // Wrong answer shot → respawn a NEW distractor in the SAME
-              // lane the destroyed one owned. The replacement is always a
-              // real correct answer pulled from the global answer pool
-              // (never an invented answer), avoiding whatever's already
-              // floating and the current question's correct answer.
-              const shownLabels = new Set(remaining.map((o) => o.label));
-              const availableDistractors = answerPool.filter(
-                (text) =>
-                  text !== currentCorrectAnswer && !shownLabels.has(text),
-              );
-              const distractorSource =
-                availableDistractors.length > 0
-                  ? availableDistractors
-                  : answerPool.filter(
-                      (text) => text !== currentCorrectAnswer,
-                    );
-              const replacementText =
-                distractorSource[
-                  Math.floor(Math.random() * distractorSource.length)
-                ] ?? hitObject.label;
+              // lane the destroyed one owned. The replacement is always
+              // a real answer pulled from the flashcard deck's answer
+              // pool (never invented), and is guaranteed unique against
+              // everything currently on screen, including the current
+              // question's correct answer (task spec §9).
+              const remainingLabels = new Set(remaining.map((o) => o.label));
+              remainingLabels.add(currentCorrectAnswer);
+              const distractor = pool.pickDistractor(remainingLabels);
+              const replacementLabel = distractor ?? hitObject.label;
 
               return [
                 ...remaining,
                 spawnAnswerInLane(
-                  replacementText,
+                  replacementLabel,
                   false,
                   hitObject.laneIndex,
                   laneCountRef.current,
@@ -1185,6 +1549,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
       });
     },
     [
+      blockInput,
       shipSize,
       shipX,
       shipY,
@@ -1193,20 +1558,18 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
       topSafeZone,
       bottomSafeZone,
       updateObjectPos,
-      currentQuestion,
+      safeIndex,
+      flashcards,
       currentCorrectAnswer,
-      answerPool,
       speedMultiplier,
-      isLastQuestion,
+      isLastCard,
       onAnswer,
-      showWinModal,
-      showGameOverModal,
     ],
   );
 
   const handleTap = useCallback(
     (evt: GestureResponderEvent) => {
-      if (showWinModal || showGameOverModal) return;
+      if (blockInput) return;
 
       const { locationX, locationY } = evt.nativeEvent;
 
@@ -1235,8 +1598,13 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         fireBullet(locationX, locationY);
       }
     },
-    [objects, fireBullet, topSafeZone, bottomSafeZone, showWinModal, showGameOverModal],
+    [objects, fireBullet, topSafeZone, bottomSafeZone, blockInput],
   );
+
+  // Game visuals (floating answers, bullets, explosions, ship, hearts,
+  // question HUD) only ever mount once the game is actually ready AND
+  // there are enough cards to play with.
+  const showGame = isReady && hasEnoughCards;
 
   return (
     <View style={[styles.container, { backgroundColor }, style]}>
@@ -1249,42 +1617,53 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
           <ShootingStar key={i} slotIndex={i} />
         ))}
 
-      {objects.map((obj) => (
-        <SpaceObjectView
-          key={obj.id}
-          obj={obj}
-          hitState={hitStates[obj.id] ?? "none"}
-        />
-      ))}
+      {showGame &&
+        objects.map((obj) => (
+          <SpaceObjectView
+            key={obj.id}
+            obj={obj}
+            hitState={hitStates[obj.id] ?? "none"}
+          />
+        ))}
 
-      {bullets.map((bullet) => (
-        <BulletView key={bullet.id} bullet={bullet} />
-      ))}
+      {showGame &&
+        bullets.map((bullet) => <BulletView key={bullet.id} bullet={bullet} />)}
+
+      {showGame &&
+        explosions.map((explosion) => (
+          <ExplosionView
+            key={explosion.id}
+            explosion={explosion}
+            onDone={handleExplosionDone}
+          />
+        ))}
 
       <Pressable style={StyleSheet.absoluteFill} onPress={handleTap} />
 
       {/* ---------------- Spaceship ---------------- */}
-      <View
-        pointerEvents="none"
-        style={[
-          styles.ship,
-          {
-            width: shipSize,
-            height: shipSize,
-            left: shipX,
-            top: shipY,
-          },
-        ]}
-      >
-        <Image
-          source={require("@/assets/images/spaceship.png")}
-          style={{
-            width: "100%",
-            height: "100%",
-          }}
-          resizeMode="contain"
-        />
-      </View>
+      {showGame && (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.ship,
+            {
+              width: shipSize,
+              height: shipSize,
+              left: shipX,
+              top: shipY,
+            },
+          ]}
+        >
+          <Image
+            source={SPACESHIP_IMAGE}
+            style={{
+              width: "100%",
+              height: "100%",
+            }}
+            resizeMode="contain"
+          />
+        </View>
+      )}
 
       {/* ---------------- Header ---------------- */}
       <View
@@ -1302,70 +1681,121 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
           <View style={styles.backArrow} />
         </Pressable>
 
-        <View style={styles.headerRightGroup} pointerEvents="box-none">
-          <Pressable
-            onPress={handleOpenFolderPicker}
-            hitSlop={6}
-            style={({ pressed }) => [
-              styles.folderButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={styles.folderIconSmall} />
-            <Text style={styles.folderLabel} numberOfLines={1}>
-              {currentStudySet ? currentStudySet.name : "change"}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* ---------------- Lives / hearts (below the back button) ---------------- */}
-      <View
-        style={[styles.livesRow, { top: insets.top + 8 + HEADER_HEIGHT }]}
-        pointerEvents="none"
-      >
-        {Array.from({ length: maxLives }, (_, i) => (
-          <Text
-            key={i}
-            style={[styles.heartIcon, i >= lives && styles.heartIconLost]}
-          >
-            ♥
-          </Text>
-        ))}
-      </View>
-
-      {/* ---------------- Question HUD panel (green theme) ---------------- */}
-      <View
-        style={[
-          styles.questionCard,
-          { bottom: questionCardBottom, height: QUESTION_CARD_HEIGHT },
-        ]}
-        pointerEvents="box-none"
-      >
-        <View style={[styles.cornerBracket, styles.cornerTL]} />
-        <View style={[styles.cornerBracket, styles.cornerTR]} />
-        <View style={[styles.cornerBracket, styles.cornerBL]} />
-        <View style={[styles.cornerBracket, styles.cornerBR]} />
-
-        <View style={styles.questionRow}>
-          <View style={styles.questionBadge}>
-            <View style={styles.questionBadgeDiamond} />
-          </View>
-          <View style={styles.questionTextBlock}>
-            <View style={styles.kickerRow}>
-              <View style={styles.kickerDot} />
-              <Text style={styles.questionKicker}>
-                {questionList.length > 1
-                  ? `QUESTION ${safeIndex + 1}/${questionList.length}`
-                  : "INCOMING TRANSMISSION"}
+        {showGame && (
+          <View style={styles.headerRightGroup} pointerEvents="box-none">
+            <Pressable
+              onPress={handleOpenFolderPicker}
+              hitSlop={6}
+              style={({ pressed }) => [
+                styles.folderButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.folderIconSmall} />
+              <Text style={styles.folderLabel} numberOfLines={1}>
+                {currentStudySet ? currentStudySet.name : "change"}
               </Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
+      {showGame && (
+        <>
+          {/* ---------------- Lives / hearts (below the back button) ---------------- */}
+          <View
+            style={[styles.livesRow, { top: insets.top + 8 + HEADER_HEIGHT }]}
+            pointerEvents="none"
+          >
+            {Array.from({ length: maxLives }, (_, i) => (
+              <Text
+                key={i}
+                style={[styles.heartIcon, i >= lives && styles.heartIconLost]}
+              >
+                ♥
+              </Text>
+            ))}
+          </View>
+
+          {/* ---------------- Question HUD panel (green theme) ---------------- */}
+          <View
+            style={[
+              styles.questionCard,
+              { bottom: questionCardBottom, height: QUESTION_CARD_HEIGHT },
+            ]}
+            pointerEvents="box-none"
+          >
+            <View style={[styles.cornerBracket, styles.cornerTL]} />
+            <View style={[styles.cornerBracket, styles.cornerTR]} />
+            <View style={[styles.cornerBracket, styles.cornerBL]} />
+            <View style={[styles.cornerBracket, styles.cornerBR]} />
+
+            <View style={styles.questionRow}>
+              <View style={styles.questionBadge}>
+                <View style={styles.questionBadgeDiamond} />
+              </View>
+              <View style={styles.questionTextBlock}>
+                <View style={styles.kickerRow}>
+                  <View style={styles.kickerDot} />
+                  <Text style={styles.questionKicker}>
+                    {flashcards.length > 1
+                      ? `QUESTION ${safeIndex + 1}/${flashcards.length}`
+                      : "INCOMING TRANSMISSION"}
+                  </Text>
+                </View>
+                <Text style={styles.questionText} numberOfLines={2}>
+                  {currentCard.question}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.questionText} numberOfLines={2}>
-              {currentQuestion.text}
+          </View>
+        </>
+      )}
+
+      {/* ---------------- Not enough flashcards modal ---------------- */}
+      {isReady && showMinCardsModal && (
+        <View style={styles.winModalOverlay} pointerEvents="auto">
+          <View style={styles.winModalCard}>
+            <View style={[styles.cornerBracket, styles.cornerTL]} />
+            <View style={[styles.cornerBracket, styles.cornerTR]} />
+            <View style={[styles.cornerBracket, styles.cornerBL]} />
+            <View style={[styles.cornerBracket, styles.cornerBR]} />
+
+            <View style={styles.minCardsIconWrap}>
+              <View style={styles.minCardsIconCardBack} />
+              <View style={styles.minCardsIconCardFront} />
+            </View>
+
+            <Text style={styles.winModalTitle}>MORE CARDS NEEDED</Text>
+            <Text style={styles.winModalSubtitle}>
+              You need at least {minFlashcards} flashcards to play this
+              game. More flashcards are required so the game has enough
+              answer choices.{"\n\n"}
+              You currently have {flashcards.length}.
             </Text>
+
+            <Pressable
+              onPress={handleGoToLibrary}
+              style={({ pressed }) => [
+                styles.winModalButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.winModalButtonText}>Go to Library</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleBack}
+              style={({ pressed }) => [
+                styles.minCardsSecondaryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.minCardsSecondaryButtonText}>Close</Text>
+            </Pressable>
           </View>
         </View>
-      </View>
+      )}
 
       {/* ---------------- You Win modal ---------------- */}
       {showWinModal && (
@@ -1381,8 +1811,8 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
             </View>
             <Text style={styles.winModalTitle}>YOU WIN!</Text>
             <Text style={styles.winModalSubtitle}>
-              You answered all {questionList.length}{" "}
-              {questionList.length === 1 ? "question" : "questions"}{" "}
+              You answered all {flashcards.length}{" "}
+              {flashcards.length === 1 ? "question" : "questions"}{" "}
               correctly.
             </Text>
 
@@ -1437,6 +1867,19 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
               <Text style={styles.winModalButtonText}>OK</Text>
             </Pressable>
           </View>
+        </View>
+      )}
+
+      {/* ---------------- Loading overlay ---------------- */}
+      {/* Sits above everything else (highest zIndex) until assets (and, if
+          `isDataLoading` is passed, the caller's own data) are ready. This
+          is what prevents the player from ever seeing a blank/broken
+          explosion frame on a cold first launch. */}
+      {!isReady && (
+        <View style={styles.loadingOverlay} pointerEvents="auto">
+          <LoadingSpinner />
+          <Text style={styles.loadingTitle}>PREPARING MISSION</Text>
+          <Text style={styles.loadingSubtitle}>Loading assets…</Text>
         </View>
       )}
 
@@ -1509,6 +1952,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.9,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
+  },
+
+  explosion: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 12,
   },
 
   ship: {
@@ -1805,6 +2255,84 @@ const styles = StyleSheet.create({
   },
   gameOverButton: {
     backgroundColor: THEME.wrong,
+  },
+
+  minCardsIconWrap: {
+    width: 56,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  minCardsIconCardBack: {
+    position: "absolute",
+    width: 40,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: THEME.bgElevated,
+    borderWidth: 1,
+    borderColor: THEME.borderBright,
+    transform: [{ rotate: "-8deg" }, { translateX: -4 }],
+  },
+  minCardsIconCardFront: {
+    position: "absolute",
+    width: 40,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: THEME.primaryGlow,
+    borderWidth: 1.5,
+    borderColor: THEME.primary,
+    transform: [{ rotate: "6deg" }, { translateX: 4 }],
+  },
+  minCardsSecondaryButton: {
+    width: "100%",
+    height: 46,
+    borderRadius: THEME.radiusFull,
+    borderWidth: 1,
+    borderColor: THEME.borderBright,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+  },
+  minCardsSecondaryButtonText: {
+    color: THEME.textMid,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 50,
+    backgroundColor: THEME.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingSpinner: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 4,
+    borderColor: THEME.border,
+    borderTopColor: THEME.primary,
+    marginBottom: 18,
+  },
+  loadingTitle: {
+    color: THEME.textWhite,
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  loadingSubtitle: {
+    color: THEME.textMuted,
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 
   content: {
