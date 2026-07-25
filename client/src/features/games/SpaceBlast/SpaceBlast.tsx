@@ -28,6 +28,7 @@ import {
   updateFlashcardStatus,
   replaceFlashcardsForFolder,
 } from "@/shared/database/flashcardRepository";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
@@ -250,8 +251,6 @@ const FLOAT_MIN_DURATION = 2200;
 const FLOAT_MAX_DURATION = 3800;
 const FLOAT_AMPLITUDE_Y = 14;
 const FLOAT_AMPLITUDE_X = 10;
-
-
 
 let objectIdCounter = 0;
 let bulletIdCounter = 0;
@@ -571,9 +570,7 @@ function buildInitialAnswerObjects(
 
   const count =
     FLOATING_ANSWER_MIN +
-    Math.floor(
-      Math.random() * (FLOATING_ANSWER_MAX - FLOATING_ANSWER_MIN + 1),
-    );
+    Math.floor(Math.random() * (FLOATING_ANSWER_MAX - FLOATING_ANSWER_MIN + 1));
   const labels = pickInitialAnswers(correctAnswer, pool, count);
 
   return labels.map((label, laneIndex) =>
@@ -1061,9 +1058,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
   const hasEnoughCards = flashcards.length >= minFlashcards;
 
-  const [showMinCardsModal, setShowMinCardsModal] = useState(
-    !hasEnoughCards,
-  );
+  const [showMinCardsModal, setShowMinCardsModal] = useState(!hasEnoughCards);
   useEffect(() => {
     setShowMinCardsModal(!hasEnoughCards);
   }, [hasEnoughCards]);
@@ -1127,9 +1122,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   }, [flashcardsKey, flashcards, maxLives]);
 
   const safeIndex =
-    flashcards.length > 0
-      ? Math.min(currentIndex, flashcards.length - 1)
-      : 0;
+    flashcards.length > 0 ? Math.min(currentIndex, flashcards.length - 1) : 0;
   const currentCardIndex = playOrderRef.current[safeIndex] ?? safeIndex;
   const currentCard = flashcards[currentCardIndex] ?? PLACEHOLDER_CARD;
   const isLastCard = safeIndex >= flashcards.length - 1;
@@ -1157,7 +1150,8 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   const objectsRef = useRef<SpaceObject[]>(objects);
   useEffect(() => {
     objectsRef.current = objects;
-    laneCountRef.current = objects.length > 0 ? objects.length : FLOATING_ANSWER_MIN;
+    laneCountRef.current =
+      objects.length > 0 ? objects.length : FLOATING_ANSWER_MIN;
   }, [objects]);
 
   // Fires exactly once, the moment the game first becomes ready to play
@@ -1266,7 +1260,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   const handleOpenFolderPicker = useCallback(() => {
     router.replace({
       pathname: "/games/SelectionWizard",
-      params: { gameRoute: "/games/SpaceBlast" }
+      params: { gameRoute: "/games/SpaceBlast" },
     });
   }, [router]);
 
@@ -1678,12 +1672,13 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
             pointerEvents="none"
           >
             {Array.from({ length: maxLives }, (_, i) => (
-              <Text
+              <MaterialCommunityIcons
                 key={i}
-                style={[styles.heartIcon, i >= lives && styles.heartIconLost]}
-              >
-                ♥
-              </Text>
+                name={i >= lives ? "heart-outline" : "heart"}
+                size={28}
+                color={i >= lives ? THEME.textMuted : THEME.wrong}
+                style={styles.heartIcon}
+              />
             ))}
           </View>
 
@@ -1738,9 +1733,9 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
             <Text style={styles.winModalTitle}>MORE CARDS NEEDED</Text>
             <Text style={styles.winModalSubtitle}>
-              You need at least {minFlashcards} flashcards to play this
-              game. More flashcards are required so the game has enough
-              answer choices.{"\n\n"}
+              You need at least {minFlashcards} flashcards to play this game.
+              More flashcards are required so the game has enough answer
+              choices.{"\n\n"}
               You currently have {flashcards.length}.
             </Text>
 
@@ -1782,8 +1777,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
             <Text style={styles.winModalTitle}>YOU WIN!</Text>
             <Text style={styles.winModalSubtitle}>
               You answered all {flashcards.length}{" "}
-              {flashcards.length === 1 ? "question" : "questions"}{" "}
-              correctly.
+              {flashcards.length === 1 ? "question" : "questions"} correctly.
             </Text>
 
             <Pressable
@@ -1804,16 +1798,32 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
         <View style={styles.winModalOverlay} pointerEvents="auto">
           <View style={[styles.winModalCard, styles.gameOverCard]}>
             <View
-              style={[styles.cornerBracket, styles.cornerTL, styles.cornerDanger]}
+              style={[
+                styles.cornerBracket,
+                styles.cornerTL,
+                styles.cornerDanger,
+              ]}
             />
             <View
-              style={[styles.cornerBracket, styles.cornerTR, styles.cornerDanger]}
+              style={[
+                styles.cornerBracket,
+                styles.cornerTR,
+                styles.cornerDanger,
+              ]}
             />
             <View
-              style={[styles.cornerBracket, styles.cornerBL, styles.cornerDanger]}
+              style={[
+                styles.cornerBracket,
+                styles.cornerBL,
+                styles.cornerDanger,
+              ]}
             />
             <View
-              style={[styles.cornerBracket, styles.cornerBR, styles.cornerDanger]}
+              style={[
+                styles.cornerBracket,
+                styles.cornerBR,
+                styles.cornerDanger,
+              ]}
             />
 
             <View style={[styles.winModalBadge, styles.gameOverBadge]}>
@@ -1999,16 +2009,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   heartIcon: {
-    fontSize: 30,
-    lineHeight: 32,
     marginRight: 5,
-    color: THEME.wrong,
     textShadowColor: "rgba(0,0,0,0.5)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  heartIconLost: {
-    color: THEME.textMuted,
   },
 
   folderButton: {
@@ -2326,7 +2330,10 @@ interface GameContentProps {
   folderName: string;
 }
 
-const SpaceBlastGameContent: React.FC<GameContentProps> = ({ folderId, folderName }) => {
+const SpaceBlastGameContent: React.FC<GameContentProps> = ({
+  folderId,
+  folderName,
+}) => {
   const [cards, setCards] = useState<FlashCard[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const isMountedRef = useRef(true);
@@ -2369,7 +2376,7 @@ const SpaceBlastGameContent: React.FC<GameContentProps> = ({ folderId, folderNam
         throw new Error("Failed to fetch from backend");
       }
       const data = await response.json();
-      
+
       const backend: FlashCard[] = data.map((item: any) => ({
         id: String(item.id),
         question: item.question,
@@ -2380,13 +2387,20 @@ const SpaceBlastGameContent: React.FC<GameContentProps> = ({ folderId, folderNam
       if (!isMountedRef.current) return;
 
       // 3. Compare local SQLite data with backend data
-      const isSynced = (localList: FlashCard[], backendList: FlashCard[]): boolean => {
+      const isSynced = (
+        localList: FlashCard[],
+        backendList: FlashCard[],
+      ): boolean => {
         if (localList.length !== backendList.length) return false;
         const localMap = new Map(localList.map((c) => [c.id, c]));
         for (const b of backendList) {
           const l = localMap.get(b.id);
           if (!l) return false;
-          if (l.question !== b.question || l.answer !== b.answer || l.status !== b.status) {
+          if (
+            l.question !== b.question ||
+            l.answer !== b.answer ||
+            l.status !== b.status
+          ) {
             return false;
           }
         }
@@ -2403,7 +2417,7 @@ const SpaceBlastGameContent: React.FC<GameContentProps> = ({ folderId, folderNam
       replaceFlashcardsForFolder(
         folderId,
         backend.map((card) => ({ ...card, folderId })),
-        "synced"
+        "synced",
       );
 
       if (isMountedRef.current) {
@@ -2439,8 +2453,8 @@ const SpaceBlastGameContent: React.FC<GameContentProps> = ({ folderId, folderNam
         // Update React state
         setCards((prev) =>
           prev.map((card) =>
-            card.id === cardId ? { ...card, status: newStatus } : card
-          )
+            card.id === cardId ? { ...card, status: newStatus } : card,
+          ),
         );
 
         // Sync to backend
@@ -2461,7 +2475,7 @@ const SpaceBlastGameContent: React.FC<GameContentProps> = ({ folderId, folderNam
         console.error("Failed to update flashcard status:", error);
       }
     },
-    []
+    [],
   );
 
   return (
@@ -2476,7 +2490,10 @@ const SpaceBlastGameContent: React.FC<GameContentProps> = ({ folderId, folderNam
 };
 
 const SpaceBlastScreen: React.FC = () => {
-  const { folderId, folderName } = useLocalSearchParams<{ folderId: string; folderName: string }>();
+  const { folderId, folderName } = useLocalSearchParams<{
+    folderId: string;
+    folderName: string;
+  }>();
 
   if (!folderId) {
     return (

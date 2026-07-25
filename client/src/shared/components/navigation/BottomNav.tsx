@@ -99,7 +99,16 @@ const BottomNav = ({ state, navigation, insets }: any) => {
             return (
               <TouchableOpacity
                 key={item.id}
-                onPress={() => setAddModalVisible(true)}
+                onPress={() => {
+                  const currentRoute = state.routes[state.index].name;
+                  if (currentRoute !== "library") {
+                    navigation.navigate("library");
+                  }
+                  // Small timeout ensures transition to active screen finishes before modal/keyboard opens
+                  setTimeout(() => {
+                    setAddModalVisible(true);
+                  }, 100);
+                }}
                 style={styles.centerWrap}
                 activeOpacity={0.85}
               >

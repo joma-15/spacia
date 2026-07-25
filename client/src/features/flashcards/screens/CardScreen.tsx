@@ -22,7 +22,7 @@ import AddCardModal from "../components/AddCardModal";
 import DeleteAllModal from "../components/DeleteAllModal";
 import PremiumModal from "../components/PremiumModal";
 import LoadingModal from "../components/LoadingModal";
-import InitialLoadingModal from "../components/InitialLoadingModal";
+import CardSkeletonList from "../components/CardSkeleton";
 import TextbookUploadModal from "../components/TextbookUploadModal";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -141,43 +141,47 @@ const CardScreen: React.FC = () => {
 
       {/* ── Scrollable card list with horizontal paging ── */}
       <View style={styles.listArea}>
-        <ScrollView
-          ref={scrollViewRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleScrollEnd}
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContainer}
-        >
-          <View style={{ width: pageWidth }}>
-            <CardList
-              cards={cards}
-              onUnderstand={handleUnderstand}
-              onMoveToReview={handleMoveToReview}
-              onDelete={handleDelete}
-              onEdit={handleEdit}
-            />
-          </View>
-          <View style={{ width: pageWidth }}>
-            <CardList
-              cards={reviewCards}
-              onUnderstand={handleUnderstand}
-              onMoveToReview={handleMoveToReview}
-              onDelete={handleDelete}
-              onEdit={handleEdit}
-            />
-          </View>
-          <View style={{ width: pageWidth }}>
-            <CardList
-              cards={understoodCards}
-              onUnderstand={handleUnderstand}
-              onMoveToReview={handleMoveToReview}
-              onDelete={handleDelete}
-              onEdit={handleEdit}
-            />
-          </View>
-        </ScrollView>
+        {initialLoading ? (
+          <CardSkeletonList />
+        ) : (
+          <ScrollView
+            ref={scrollViewRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleScrollEnd}
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContainer}
+          >
+            <View style={{ width: pageWidth }}>
+              <CardList
+                cards={cards}
+                onUnderstand={handleUnderstand}
+                onMoveToReview={handleMoveToReview}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+              />
+            </View>
+            <View style={{ width: pageWidth }}>
+              <CardList
+                cards={reviewCards}
+                onUnderstand={handleUnderstand}
+                onMoveToReview={handleMoveToReview}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+              />
+            </View>
+            <View style={{ width: pageWidth }}>
+              <CardList
+                cards={understoodCards}
+                onUnderstand={handleUnderstand}
+                onMoveToReview={handleMoveToReview}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+              />
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* ── Modals ── */}
@@ -196,7 +200,6 @@ const CardScreen: React.FC = () => {
         onClose={() => setTextbookUploadVisible(false)}
         onGenerate={fetchAiCards}
       />
-      <InitialLoadingModal visible={initialLoading} />
       <LoadingModal visible={loading} />
       <DeleteAllModal
         visible={deleteAllModalVisible}

@@ -32,6 +32,7 @@ import { useLibrary } from "../hooks/useLibrary";
 import AddFolderModal from "../components/AddFolderModal";
 import EmptyState from "../components/EmptyState";
 import FolderGrid from "../components/FolderGrid";
+import FolderSkeletonGrid from "../components/FolderSkeleton";
 import GreetingSection from "../components/GreetingSection";
 import SectionHeader from "../components/SectionHeader";
 
@@ -126,8 +127,10 @@ export default function LibraryScreen() {
         {/* ── "My Subjects" heading + folder count + Delete All ── */}
         <SectionHeader count={filteredFolders.length} onDeleteAll={handleDeleteAll} />
 
-        {/* ── Folder grid OR empty state ── */}
-        {filteredFolders.length > 0 ? (
+        {/* ── Folder grid OR skeleton loading OR empty state ── */}
+        {loading ? (
+          <FolderSkeletonGrid />
+        ) : filteredFolders.length > 0 ? (
           <FolderGrid
             folders={filteredFolders}
             onDelete={deleteFolder}

@@ -13,7 +13,7 @@
  * nothing outside this modal needs to know about it mid-edit.
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -41,6 +41,7 @@ interface Props {
 const AddFolderModal: React.FC<Props> = ({ visible, onClose, onAdd }) => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const inputRef = useRef<TextInput>(null);
 
   // ── Local form state ──────────────────────────────────────────────────────
   const [subject, setSubject] = useState<string>("");
@@ -70,10 +71,21 @@ const AddFolderModal: React.FC<Props> = ({ visible, onClose, onAdd }) => {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+      onShow={() => {
+        // Small delay ensures screen transitions finish completely before keyboard pops up
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 80);
+      }}
+    >
       {/* KeyboardAvoidingView pushes the sheet up when the keyboard opens */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.overlay}
       >
         {/* Tapping the dark backdrop dismisses the modal */}
@@ -93,12 +105,12 @@ const AddFolderModal: React.FC<Props> = ({ visible, onClose, onAdd }) => {
           {/* ── Subject name input ── */}
           <Text style={styles.fieldLabel}>Subject Name</Text>
           <TextInput
+            ref={inputRef}
             style={styles.input}
             placeholder="e.g. Chemistry, History..."
             placeholderTextColor={THEME.textMuted}
             value={subject}
             onChangeText={setSubject}
-            autoFocus
           />
 
           {/* ── Color swatch picker ── */}
@@ -155,6 +167,7 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.bgElevated,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 24, borderWidth: 1, borderColor: THEME.borderBright,
+    width: "100%", maxWidth: 600, alignSelf: "center",
   },
   handle: {
     width: 40, height: 4, backgroundColor: THEME.border,
