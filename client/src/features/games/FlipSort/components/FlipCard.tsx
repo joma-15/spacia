@@ -1,8 +1,8 @@
 /**
  * FlipCard.tsx
  * ─────────────────────────────────────────────
- * The main 3D-flipping flashcard. Swipe up to move to the next card,
- * swipe down to return to the previous card.
+ * The main 3D-flipping flashcard. Swipe left to mark as Review,
+ * swipe right to mark as Understood, swipe up to Skip.
  */
 
 import React, { useEffect, useRef } from "react";
@@ -19,9 +19,10 @@ import {
 import { COLORS } from "../colors";
 import type { Flashcard } from "../types";
 
-const CARD_HEIGHT = 320;
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const SWIPE_THRESHOLD = CARD_HEIGHT * 0.25;
+const CARD_HEIGHT = 440;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const SWIPE_THRESHOLD_X = SCREEN_WIDTH * 0.25;
+const SWIPE_THRESHOLD_Y = CARD_HEIGHT * 0.25;
 const SWIPE_OUT_DURATION = 220;
 
 interface Props {
@@ -34,8 +35,8 @@ interface Props {
   backInterpolate: Animated.AnimatedInterpolation<string>;
   /** Called when the card is tapped anywhere */
   onFlip: () => void;
-  /** Called when the card is swiped past the threshold. "up" = forward, "down" = back */
-  onSwipe: (direction: "up" | "down") => void;
+  /** Called when the card is swiped past the threshold. "left" = review, "right" = understood, "up" = skip */
+  onSwipe: (direction: "left" | "right" | "up") => void;
   /** True if this is the first card in the deck (disables swiping down) */
   isFirstCard: boolean;
 }
@@ -49,7 +50,7 @@ const FlipCard: React.FC<Props> = ({
   onSwipe,
   isFirstCard,
 }) => {
-  // Drives the swipe gesture — vertical drag
+  // Drives the swipe gesture — 2D drag
   const position = useRef(new Animated.ValueXY()).current;
 
   // Prevents a new swipe gesture from starting while the previous
@@ -65,49 +66,50 @@ const FlipCard: React.FC<Props> = ({
 
   const panResponder = useRef(
     PanResponder.create({
-      // Only claim the gesture once it's clearly a vertical drag,
-      // so a plain tap still reaches the flip Pressable underneath.
-      // Also blocked while the previous card is still animating out.
-      onMoveShouldSetPanResponder: (_evt, gesture) =>
-        !isAnimatingOutRef.current &&
-        Math.abs(gesture.dy) > 8 &&
-        Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.5,
+      // Claim the gesture if it's a significant drag in X or Y
+      onMoveShouldSetPanResponder: (_evt, gesture) => {
+        if (isAnimatingOutRef.current) return false;
+        const isHorizontal = Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2;
+        const isVerticalUp = gesture.dy < -8 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.2;
+        const isVerticalDown = gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.2;
+        return isHorizontal || isVerticalUp || isVerticalDown;
+      },
 
       onPanResponderMove: Animated.event(
-        [null, { dy: position.y }],
+        [null, { dx: position.x, dy: position.y }],
         {
           useNativeDriver: false,
         },
       ),
 
       onPanResponderRelease: (_evt, gesture) => {
-        const pastThreshold = Math.abs(gesture.dy) > SWIPE_THRESHOLD || Math.abs(gesture.vy) > 0.5;
+        const pastThresholdX = Math.abs(gesture.dx) > SWIPE_THRESHOLD_X || Math.abs(gesture.vx) > 0.5;
+        const pastThresholdY = gesture.dy < -SWIPE_THRESHOLD_Y || gesture.vy < -0.5; // only up is valid
 
-        if (pastThreshold) {
-          const direction = gesture.dy < 0 ? -1 : 1; // -1 = up (next), 1 = down (previous)
-          const isInvalidDown = direction > 0 && isFirstCard;
-
-          if (isInvalidDown) {
-            // Smoothly animate back to center with ease-out timing (no bounce)
-            Animated.timing(position, {
-              toValue: { x: 0, y: 0 },
-              duration: 200,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: false,
-            }).start();
-            return;
-          }
-
+        if (pastThresholdX) {
+          const isLeft = gesture.dx < 0;
           isAnimatingOutRef.current = true;
           Animated.timing(position, {
-            toValue: { x: 0, y: direction * SCREEN_HEIGHT * 1.2 },
+            toValue: { x: isLeft ? -SCREEN_WIDTH * 1.5 : SCREEN_WIDTH * 1.5, y: gesture.dy },
             duration: SWIPE_OUT_DURATION,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: false,
           }).start(() => {
             position.setValue({ x: 0, y: 0 });
             isAnimatingOutRef.current = false; // Reset to avoid freezing
-            onSwipe(direction < 0 ? "up" : "down");
+            onSwipe(isLeft ? "left" : "right");
+          });
+        } else if (pastThresholdY) {
+          isAnimatingOutRef.current = true;
+          Animated.timing(position, {
+            toValue: { x: gesture.dx, y: -SCREEN_HEIGHT * 1.5 },
+            duration: SWIPE_OUT_DURATION,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: false,
+          }).start(() => {
+            position.setValue({ x: 0, y: 0 });
+            isAnimatingOutRef.current = false;
+            onSwipe("up");
           });
         } else {
           // Smoothly animate back to center with ease-out timing (no bounce)
@@ -122,17 +124,45 @@ const FlipCard: React.FC<Props> = ({
     }),
   ).current;
 
-  // Fades a "BACK" badge in while dragging down (dy > 0)
-  const backBadgeOpacity = position.y.interpolate({
+  // Fades a "REVIEW" badge in while dragging left (dx < 0)
+  const reviewBadgeOpacity = position.x.interpolate({
+    inputRange: [-140, -40, 0],
+    outputRange: [1, 0, 0],
+    extrapolate: "clamp",
+  });
+
+  // Fades an "UNDERSTOOD" badge in while dragging right (dx > 0)
+  const understoodBadgeOpacity = position.x.interpolate({
     inputRange: [0, 40, 140],
     outputRange: [0, 0, 1],
     extrapolate: "clamp",
   });
 
-  // Fades a "NEXT" badge in while dragging up (dy < 0)
-  const nextBadgeOpacity = position.y.interpolate({
+  // Fades a "SKIP" badge in while dragging up (dy < 0)
+  const skipBadgeOpacity = position.y.interpolate({
     inputRange: [-140, -40, 0],
     outputRange: [1, 0, 0],
+    extrapolate: "clamp",
+  });
+
+  // Slight rotation based on horizontal drag distance
+  const rotation = position.x.interpolate({
+    inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+    outputRange: ["-10deg", "0deg", "10deg"],
+    extrapolate: "clamp",
+  });
+
+  // Fades the orange review border glow in quickly when dragging left
+  const reviewGlowOpacity = position.x.interpolate({
+    inputRange: [-120, -10, 0],
+    outputRange: [1, 0, 0],
+    extrapolate: "clamp",
+  });
+
+  // Fades the green understood border glow in quickly when dragging right
+  const understoodGlowOpacity = position.x.interpolate({
+    inputRange: [0, 10, 120],
+    outputRange: [0, 0, 1],
     extrapolate: "clamp",
   });
 
@@ -144,7 +174,9 @@ const FlipCard: React.FC<Props> = ({
         styles.container,
         {
           transform: [
+            { translateX: position.x },
             { translateY: position.y },
+            { rotate: rotation },
           ],
         },
       ]}
@@ -160,6 +192,24 @@ const FlipCard: React.FC<Props> = ({
           ]}
           pointerEvents={showBack ? "none" : "auto"}
         >
+          {/* Quizlet-style Glow Borders */}
+          <Animated.View
+            style={[
+              styles.glowBorder,
+              styles.reviewGlow,
+              { opacity: reviewGlowOpacity },
+            ]}
+            pointerEvents="none"
+          />
+          <Animated.View
+            style={[
+              styles.glowBorder,
+              styles.understoodGlow,
+              { opacity: understoodGlowOpacity },
+            ]}
+            pointerEvents="none"
+          />
+
           {card.status ? (
             <View
               style={[
@@ -179,7 +229,9 @@ const FlipCard: React.FC<Props> = ({
           ) : null}
           <Text style={styles.label}>QUESTION</Text>
           <Text style={styles.cardText}>{card.question}</Text>
-          <Text style={styles.tapHint}>Tap to reveal answer · Swipe up/down to navigate</Text>
+          <Text style={styles.tapHint}>
+            Tap to flip · Swipe left to Review · Swipe right to Understood
+          </Text>
         </Animated.View>
 
         {/* ── BACK FACE: the answer ── */}
@@ -192,6 +244,24 @@ const FlipCard: React.FC<Props> = ({
           ]}
           pointerEvents={showBack ? "auto" : "none"}
         >
+          {/* Quizlet-style Glow Borders */}
+          <Animated.View
+            style={[
+              styles.glowBorder,
+              styles.reviewGlow,
+              { opacity: reviewGlowOpacity },
+            ]}
+            pointerEvents="none"
+          />
+          <Animated.View
+            style={[
+              styles.glowBorder,
+              styles.understoodGlow,
+              { opacity: understoodGlowOpacity },
+            ]}
+            pointerEvents="none"
+          />
+
           {card.status ? (
             <View
               style={[
@@ -212,38 +282,50 @@ const FlipCard: React.FC<Props> = ({
           <Text style={[styles.label, styles.labelBack]}>ANSWER</Text>
           <Text style={styles.cardText}>{card.answer}</Text>
           <Text style={styles.tapHint}>
-            Tap to see question · Swipe up/down to navigate
+            Tap to flip · Swipe left to Review · Swipe right to Understood
           </Text>
         </Animated.View>
       </Pressable>
 
       {/* Swipe affordance — sits above both faces, ignores touches */}
       <View style={styles.swipeHintRow} pointerEvents="none">
-        <Text style={styles.swipeHintText}>Swipe up for next • down for back</Text>
+        <Text style={styles.swipeHintText}>Swipe Left to Review • Right for Understood</Text>
       </View>
 
-      {/* "BACK" badge — fades in while dragging down */}
+      {/* "REVIEW" badge — fades in while dragging left */}
       <Animated.View
         style={[
           styles.badge,
-          styles.backBadge,
-          { opacity: backBadgeOpacity },
+          styles.reviewBadge,
+          { opacity: reviewBadgeOpacity },
         ]}
         pointerEvents="none"
       >
-        <Text style={styles.backBadgeText}>BACK</Text>
+        <Text style={styles.reviewBadgeText}>REVIEW</Text>
       </Animated.View>
 
-      {/* "NEXT" badge — fades in while dragging up */}
+      {/* "UNDERSTOOD" badge — fades in while dragging right */}
       <Animated.View
         style={[
           styles.badge,
-          styles.forwardBadge,
-          { opacity: nextBadgeOpacity },
+          styles.understoodBadge,
+          { opacity: understoodBadgeOpacity },
         ]}
         pointerEvents="none"
       >
-        <Text style={styles.forwardBadgeText}>NEXT</Text>
+        <Text style={styles.understoodBadgeText}>UNDERSTOOD</Text>
+      </Animated.View>
+
+      {/* "SKIP" badge — fades in while dragging up */}
+      <Animated.View
+        style={[
+          styles.badge,
+          styles.skipBadge,
+          { opacity: skipBadgeOpacity },
+        ]}
+        pointerEvents="none"
+      >
+        <Text style={styles.skipBadgeText}>SKIP</Text>
       </Animated.View>
     </Animated.View>
   );
@@ -283,16 +365,18 @@ const styles = StyleSheet.create({
   labelBack: { color: COLORS.primary },
   cardText: {
     color: COLORS.textPrimary,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
     textAlign: "center",
-    lineHeight: 30,
+    lineHeight: 34,
   },
   tapHint: {
     position: "absolute",
     bottom: 18,
     color: COLORS.textDim,
     fontSize: 12,
+    textAlign: "center",
+    paddingHorizontal: 12,
   },
   swipeHintRow: {
     position: "absolute",
@@ -323,22 +407,32 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 6,
   },
-  backBadge: {
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-    borderColor: "rgba(255, 255, 255, 0.2)",
+  reviewBadge: {
+    backgroundColor: "rgba(58, 42, 20, 0.95)",
+    borderColor: COLORS.reviewBorder,
   },
-  backBadgeText: {
-    color: "#ffffff",
+  reviewBadgeText: {
+    color: COLORS.reviewText,
     fontSize: 18,
     fontWeight: "900",
     letterSpacing: 2,
   },
-  forwardBadge: {
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-    borderColor: "rgba(255, 255, 255, 0.2)",
+  understoodBadge: {
+    backgroundColor: "rgba(31, 122, 75, 0.95)",
+    borderColor: COLORS.understoodBorder,
   },
-  forwardBadgeText: {
-    color: "#ffffff",
+  understoodBadgeText: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
+  skipBadge: {
+    backgroundColor: "rgba(22, 41, 31, 0.95)",
+    borderColor: COLORS.textDim,
+  },
+  skipBadgeText: {
+    color: COLORS.textMuted,
     fontSize: 18,
     fontWeight: "900",
     letterSpacing: 2,
@@ -369,5 +463,22 @@ const styles = StyleSheet.create({
   },
   reviewPillText: {
     color: COLORS.reviewText,
+  },
+  glowBorder: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 24,
+    borderWidth: 4,
+  },
+  reviewGlow: {
+    borderColor: COLORS.reviewText,
+    backgroundColor: "rgba(240, 169, 59, 0.04)",
+  },
+  understoodGlow: {
+    borderColor: COLORS.primary,
+    backgroundColor: "rgba(52, 209, 123, 0.04)",
   },
 });

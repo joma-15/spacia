@@ -83,16 +83,14 @@ export function useFlipSortSession({ cards, onUpdateCardStatus, onComplete, rese
     resetFlip();
   };
 
-  const markForReview = (isFlipped: boolean): void => {
-    if (!isFlipped) return; // Cannot score an unflipped card
+  const markForReview = (isFlipped?: boolean): void => {
     if (currentCard) {
       onUpdateCardStatus(currentCard.id, "review");
       goToNextCard({ id: currentCard.id, status: "review" });
     }
   };
 
-  const markAsUnderstood = (isFlipped: boolean): void => {
-    if (!isFlipped) return; // Cannot score an unflipped card
+  const markAsUnderstood = (isFlipped?: boolean): void => {
     if (currentCard) {
       onUpdateCardStatus(currentCard.id, "understood");
       goToNextCard({ id: currentCard.id, status: "understood" });

@@ -142,6 +142,8 @@ const onUpdateCardStatus = useCallback(
     skipCard,
     goToPreviousCard,
     totalCards,
+    reviewCount,
+    understoodCount,
   } = useFlipSortSession({
     cards,
     onUpdateCardStatus,
@@ -178,6 +180,16 @@ const onUpdateCardStatus = useCallback(
 
       <ProgressBar percent={progressPercent} />
 
+      {/* Quizlet-style count indicators */}
+      <View style={styles.counterRow}>
+        <View style={[styles.counterPill, styles.reviewCounterPill]}>
+          <Text style={styles.reviewCounterText}>{reviewCount}</Text>
+        </View>
+        <View style={[styles.counterPill, styles.understoodCounterPill]}>
+          <Text style={styles.understoodCounterText}>{understoodCount}</Text>
+        </View>
+      </View>
+
       <View style={styles.cardContainer}>
         {currentCard ? (
           <FlipCard
@@ -186,9 +198,15 @@ const onUpdateCardStatus = useCallback(
             frontInterpolate={frontInterpolate}
             backInterpolate={backInterpolate}
             onFlip={flipCard}
-            onSwipe={(direction) =>
-              direction === "down" ? goToPreviousCard() : skipCard()
-            }
+            onSwipe={(direction) => {
+              if (direction === "left") {
+                markForReview(true);
+              } else if (direction === "right") {
+                markAsUnderstood(true);
+              } else if (direction === "up") {
+                skipCard();
+              }
+            }}
             isFirstCard={index === 0}
           />
         ) : null}
@@ -257,5 +275,45 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.textMuted,
     fontSize: 16,
+  },
+  counterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 14,
+    marginBottom: 6,
+    width: "100%",
+  },
+  counterPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    minWidth: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  reviewCounterPill: {
+    backgroundColor: "rgba(58, 42, 20, 0.4)",
+    borderColor: COLORS.reviewBorder,
+  },
+  reviewCounterText: {
+    color: COLORS.reviewText,
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  understoodCounterPill: {
+    backgroundColor: "rgba(31, 122, 75, 0.4)",
+    borderColor: COLORS.understoodBorder,
+  },
+  understoodCounterText: {
+    color: COLORS.primary,
+    fontWeight: "800",
+    fontSize: 14,
   },
 });

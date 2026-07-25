@@ -31,11 +31,9 @@ const ActionButtons: React.FC<Props> = ({
     {/* ── Review button — orange, means "I need to see this again" ── */}
     <Pressable
       onPress={onReviewPress}
-      disabled={!isFlipped}
       style={[
         styles.button,
         styles.reviewButton,
-        !isFlipped && styles.disabled,
         status === "review" && styles.reviewActive,
       ]}
     >
@@ -45,11 +43,9 @@ const ActionButtons: React.FC<Props> = ({
     {/* ── Understood button — green, means "I know this" ── */}
     <Pressable
       onPress={onUnderstoodPress}
-      disabled={!isFlipped}
       style={[
         styles.button,
         styles.understoodButton,
-        !isFlipped && styles.disabled,
         status === "understood" && styles.understoodActive,
       ]}
     >
