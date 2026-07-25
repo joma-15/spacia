@@ -14,6 +14,7 @@ import {
   updateFlashcardStatus,
   saveFlashcards,
   getFlashcardsBySyncStatus,
+  deleteAllFlashcardsForFolder,
 } from "@/shared/database/flashcardRepository";
 import { uuidv4 } from "@/shared/database/database";
 import * as FileSystem from "expo-file-system/legacy";
@@ -211,18 +212,27 @@ export function useFlashCards(folderId: string) {
 
   // Deletes every single flashcard inside this subject folder.
   const handleDeleteAll = useCallback(async () => {
+    // Eagerly update SQLite cache
+    try {
+      deleteAllFlashcardsForFolder(folderId);
+    } catch (e) {
+      console.error("Failed to delete all local flashcards:", e);
+    }
+
+    // Clear screen state and reset the tab back to 'all'
+    setCards([]); 
+    setActiveTab("all");
+
     try {
       const response = await fetch(`${BASE_URL}/flashcards/folder/${folderId}`, {
         method: "DELETE",
       }); 
 
-      if (response.ok) {
-        // Clear screen state and reset the tab back to 'all'
-        setCards([]); 
-        setActiveTab("all");
+      if (!response.ok) {
+        throw new Error("Failed to delete all flashcards on server");
       }
     } catch (error) {
-      console.log(error);
+      console.error("Delete all backend sync failed:", error);
     }
   }, [folderId]);
 

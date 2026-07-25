@@ -74,6 +74,20 @@ export function getFlashcardsBySyncStatus(status: string) {
   `, [status]);
 }
 
+
+/**
+ * Deletes all local flashcards in a folder immediately.
+ */
+export function deleteAllFlashcardsForFolder(folderId: string) {
+  db.runSync(
+    `
+    DELETE FROM flashcards
+    WHERE folder_id = ?
+    `,
+    [folderId],
+  );
+}
+
 /**
  * Removes a single card from local SQLite database cache.
  * If it is pending creation, we delete it directly. Otherwise, we flag it as pending delete.
