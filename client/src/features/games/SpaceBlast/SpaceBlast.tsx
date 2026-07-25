@@ -18,10 +18,16 @@ import {
   Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import * as Device from "expo-device";
 import { LinearGradient } from "expo-linear-gradient";
 import { Asset } from "expo-asset";
+import { BASE_URL } from "@/shared/config/api";
+import {
+  getFlashcardsByFolder,
+  updateFlashcardStatus,
+  replaceFlashcardsForFolder,
+} from "@/shared/database/flashcardRepository";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
@@ -109,7 +115,7 @@ interface SpaceBackgroundProps {
   // Library tab (`/(tabs)/library`).
   onGoToLibrary?: () => void;
 
-  onAnswer?: (correct: boolean, answerText: string) => void;
+  onAnswer?: (cardId: string, correct: boolean, answerText: string) => void;
 
   // Called when the player finishes every flashcard, right when the
   // "You Win" modal's OK button is pressed. If omitted, the default
@@ -245,45 +251,7 @@ const FLOAT_MAX_DURATION = 3800;
 const FLOAT_AMPLITUDE_Y = 14;
 const FLOAT_AMPLITUDE_X = 10;
 
-/* ═══════════════════════════════════════════════════════════════════════
- * DUMMY FLASHCARD DATASET
- * A 30-card dummy deck (well above the 10-card minimum) so the game is
- * playable/testable with zero wiring. Strictly matches the FlashCard
- * interface above. Every `answer` string is unique so the answer pool
- * never has to worry about two different cards sharing one answer.
- * ═══════════════════════════════════════════════════════════════════════ */
-const DUMMY_FLASHCARDS: FlashCard[] = [
-  { id: "c1", question: "What is the powerhouse of the cell?", answer: "Mitochondria", status: "review" },
-  { id: "c2", question: "Which organelle packages and ships proteins?", answer: "Golgi Apparatus", status: "understood" },
-  { id: "c3", question: "What planet is known as the Red Planet?", answer: "Mars", status: "review" },
-  { id: "c4", question: "What is the chemical symbol for gold?", answer: "Au", status: "understood" },
-  { id: "c5", question: "Who wrote 'Romeo and Juliet'?", answer: "William Shakespeare", status: "review" },
-  { id: "c6", question: "What is the largest ocean on Earth?", answer: "Pacific Ocean", status: "understood" },
-  { id: "c7", question: "How many bones are in the adult human body?", answer: "206", status: "review" },
-  { id: "c8", question: "What gas do plants absorb from the atmosphere?", answer: "Carbon Dioxide", status: "understood" },
-  { id: "c9", question: "What is the smallest prime number?", answer: "2", status: "review" },
-  { id: "c10", question: "Which layer of the Earth is mostly liquid iron and nickel?", answer: "Outer Core", status: "understood" },
-  { id: "c11", question: "What is the capital of France?", answer: "Paris", status: "review" },
-  { id: "c12", question: "What is the capital of Japan?", answer: "Tokyo", status: "understood" },
-  { id: "c13", question: "What is the capital of England?", answer: "London", status: "review" },
-  { id: "c14", question: "What is the capital of Germany?", answer: "Berlin", status: "understood" },
-  { id: "c15", question: "What is the freezing point of water in Celsius?", answer: "0", status: "review" },
-  { id: "c16", question: "What is the boiling point of water in Celsius?", answer: "100", status: "understood" },
-  { id: "c17", question: "Which planet has the most moons in our solar system?", answer: "Saturn", status: "review" },
-  { id: "c18", question: "What is the hardest natural substance on Earth?", answer: "Diamond", status: "understood" },
-  { id: "c19", question: "Who painted the Mona Lisa?", answer: "Leonardo da Vinci", status: "review" },
-  { id: "c20", question: "What is the longest river in the world?", answer: "Nile River", status: "understood" },
-  { id: "c21", question: "What is the currency of Japan?", answer: "Yen", status: "review" },
-  { id: "c22", question: "What is the square root of 64?", answer: "8", status: "understood" },
-  { id: "c23", question: "Which gas makes up most of Earth's atmosphere?", answer: "Nitrogen", status: "review" },
-  { id: "c24", question: "What is the largest mammal on Earth?", answer: "Blue Whale", status: "understood" },
-  { id: "c25", question: "Who developed the theory of relativity?", answer: "Albert Einstein", status: "review" },
-  { id: "c26", question: "What is the chemical formula for water?", answer: "H2O", status: "understood" },
-  { id: "c27", question: "What is the tallest mountain in the world?", answer: "Mount Everest", status: "review" },
-  { id: "c28", question: "How many continents are there?", answer: "7", status: "understood" },
-  { id: "c29", question: "What is the speed of light in a vacuum?", answer: "299,792 km/s", status: "review" },
-  { id: "c30", question: "Which element has the atomic number 1?", answer: "Hydrogen", status: "understood" },
-];
+
 
 let objectIdCounter = 0;
 let bulletIdCounter = 0;
@@ -1021,7 +989,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   studySets = [],
   currentStudySetId,
   onSelectStudySet,
-  flashcards = DUMMY_FLASHCARDS,
+  flashcards = [],
   minFlashcards = MIN_FLASHCARDS_REQUIRED,
   onGoToLibrary,
   onAnswer,
@@ -1296,8 +1264,10 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   }, [onBack, router]);
 
   const handleOpenFolderPicker = useCallback(() => {
-    // TODO: point this at your actual study-set picker screen/route
-    router.replace("/games/SelectionWizard");
+    router.replace({
+      pathname: "/games/SelectionWizard",
+      params: { gameRoute: "/games/SpaceBlast" }
+    });
   }, [router]);
 
   const handleWinModalOk = useCallback(() => {
@@ -1392,7 +1362,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
             },
           ]);
 
-          onAnswer?.(hitObject.isCorrect, hitObject.label);
+          onAnswer?.(currentCard.id, hitObject.isCorrect, hitObject.label);
 
           if (!hitObject.isCorrect) {
             setLives((prev) => {
@@ -2339,6 +2309,190 @@ const styles = StyleSheet.create({
     flex: 1,
     zIndex: 10,
   },
+  errorScreen: {
+    flex: 1,
+    backgroundColor: THEME.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorText: {
+    color: THEME.textMuted,
+    fontSize: 16,
+  },
 });
 
-export default SpaceBackground;
+interface GameContentProps {
+  folderId: string;
+  folderName: string;
+}
+
+const SpaceBlastGameContent: React.FC<GameContentProps> = ({ folderId, folderName }) => {
+  const [cards, setCards] = useState<FlashCard[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const isMountedRef = useRef(true);
+
+  // Load from local SQLite database first
+  const loadCachedCards = useCallback((): FlashCard[] => {
+    try {
+      const dbCards = getFlashcardsByFolder(folderId) as any[];
+      const mapped = dbCards.map((c) => ({
+        id: String(c.id),
+        question: c.question,
+        answer: c.answer,
+        status: (c.status as CardStatus) ?? "review",
+      }));
+      if (isMountedRef.current) {
+        setCards(mapped);
+      }
+      return mapped;
+    } catch (e) {
+      console.error("Failed to load cached cards:", e);
+      return [];
+    }
+  }, [folderId]);
+
+  // Sync with backend API
+  const syncFlashcards = useCallback(async () => {
+    try {
+      // 1. Retrieve local SQLite data first
+      const local = loadCachedCards();
+
+      // If we got cached cards, we can stop the main loading spinner early,
+      // so the game is ready instantly (faster startup).
+      if (local.length > 0 && isMountedRef.current) {
+        setIsDataLoading(false);
+      }
+
+      // 2. Fetch the backend data
+      const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch from backend");
+      }
+      const data = await response.json();
+      
+      const backend: FlashCard[] = data.map((item: any) => ({
+        id: String(item.id),
+        question: item.question,
+        answer: item.answer,
+        status: (item.status as CardStatus) ?? "review",
+      }));
+
+      if (!isMountedRef.current) return;
+
+      // 3. Compare local SQLite data with backend data
+      const isSynced = (localList: FlashCard[], backendList: FlashCard[]): boolean => {
+        if (localList.length !== backendList.length) return false;
+        const localMap = new Map(localList.map((c) => [c.id, c]));
+        for (const b of backendList) {
+          const l = localMap.get(b.id);
+          if (!l) return false;
+          if (l.question !== b.question || l.answer !== b.answer || l.status !== b.status) {
+            return false;
+          }
+        }
+        return true;
+      };
+
+      // 4. If synchronized, use SQLite directly (nothing to do, already loaded)
+      if (isSynced(local, backend)) {
+        setIsDataLoading(false);
+        return;
+      }
+
+      // 5. If not synchronized, update SQLite and refresh state
+      replaceFlashcardsForFolder(
+        folderId,
+        backend.map((card) => ({ ...card, folderId })),
+        "synced"
+      );
+
+      if (isMountedRef.current) {
+        setCards(backend);
+      }
+    } catch (error) {
+      console.error("Sync failed, falling back to local SQLite cache:", error);
+      // Fallback is automatic since we loaded local cards first
+    } finally {
+      if (isMountedRef.current) {
+        setIsDataLoading(false);
+      }
+    }
+  }, [folderId, loadCachedCards]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    void syncFlashcards();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [syncFlashcards]);
+
+  // Callback to update card status (correct / incorrect outcome)
+  const handleAnswer = useCallback(
+    async (cardId: string, correct: boolean, answerText: string) => {
+      const newStatus: CardStatus = correct ? "understood" : "review";
+      try {
+        // Update local SQLite
+        updateFlashcardStatus(cardId, newStatus);
+
+        // Update React state
+        setCards((prev) =>
+          prev.map((card) =>
+            card.id === cardId ? { ...card, status: newStatus } : card
+          )
+        );
+
+        // Sync to backend
+        const response = await fetch(`${BASE_URL}/flashcards/${cardId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: newStatus,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to update flashcard status on server");
+        }
+      } catch (error) {
+        console.error("Failed to update flashcard status:", error);
+      }
+    },
+    []
+  );
+
+  return (
+    <SpaceBackground
+      flashcards={cards}
+      isDataLoading={isDataLoading}
+      studySets={[{ id: folderId, name: folderName }]}
+      currentStudySetId={folderId}
+      onAnswer={handleAnswer}
+    />
+  );
+};
+
+const SpaceBlastScreen: React.FC = () => {
+  const { folderId, folderName } = useLocalSearchParams<{ folderId: string; folderName: string }>();
+
+  if (!folderId) {
+    return (
+      <View style={styles.errorScreen}>
+        <Text style={styles.errorText}>No folder selected.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <SpaceBlastGameContent
+      key={folderId}
+      folderId={folderId}
+      folderName={folderName ?? "Space Blast"}
+    />
+  );
+};
+
+export default SpaceBlastScreen;
