@@ -57,6 +57,10 @@ const FlipCard: React.FC<Props> = ({
   // card is still animating off-screen (avoids double-advance races).
   const isAnimatingOutRef = useRef(false);
 
+  // Keep a mutable ref of the latest onSwipe callback to avoid stale closure in PanResponder
+  const onSwipeRef = useRef(onSwipe);
+  onSwipeRef.current = onSwipe;
+
   // Snap the card back to center whenever a new card comes in
   useEffect(() => {
     if (!card) return;
@@ -97,7 +101,7 @@ const FlipCard: React.FC<Props> = ({
           }).start(() => {
             position.setValue({ x: 0, y: 0 });
             isAnimatingOutRef.current = false; // Reset to avoid freezing
-            onSwipe(isLeft ? "left" : "right");
+            onSwipeRef.current(isLeft ? "left" : "right");
           });
         } else if (pastThresholdY) {
           isAnimatingOutRef.current = true;
@@ -109,7 +113,7 @@ const FlipCard: React.FC<Props> = ({
           }).start(() => {
             position.setValue({ x: 0, y: 0 });
             isAnimatingOutRef.current = false;
-            onSwipe("up");
+            onSwipeRef.current("up");
           });
         } else {
           // Smoothly animate back to center with ease-out timing (no bounce)
