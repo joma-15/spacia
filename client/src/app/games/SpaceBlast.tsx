@@ -1,3 +1,3 @@
-import SpaceBlast from "@/features/games/SpaceBlast/SpaceBlast";
+import SpaceBlast from "@/features/games/SpaceBlast";
 
 export default SpaceBlast;
