@@ -1,5 +1,14 @@
 import React, { useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useAuth, AuthError } from '../hooks/useAuth';
 import AuthInput from './AuthInput';
 import AuthButton from './AuthButton';
@@ -56,67 +65,87 @@ export default function LoginForm({
   };
 
   return (
-    <View>
-      <Text style={styles.heading}>Welcome back</Text>
-      <Text style={styles.subheading}>Log in to keep your streak going.</Text>
-
-      {!!errors.general && (
-        <View style={styles.generalError}>
-          <Text style={styles.generalErrorText}>{errors.general}</Text>
-        </View>
-      )}
-
-      <AuthInput
-        label="Username or Email"
-        placeholder="e.g. jane_doe"
-        value={identifier}
-        onChangeText={(t) => {
-          setIdentifier(t);
-          if (errors.identifier) setErrors((e) => ({ ...e, identifier: undefined }));
-        }}
-        error={errors.identifier}
-        returnKeyType="next"
-        onSubmitEditing={() => passwordRef.current?.focus()}
-        editable={!submitting}
-      />
-
-      <AuthInput
-        ref={passwordRef}
-        label="Password"
-        placeholder="Enter your password"
-        value={password}
-        onChangeText={(t) => {
-          setPassword(t);
-          if (errors.password) setErrors((e) => ({ ...e, password: undefined }));
-        }}
-        error={errors.password}
-        isPassword
-        returnKeyType="go"
-        onSubmitEditing={handleSubmit}
-        editable={!submitting}
-      />
-
-      <TouchableOpacity
-        onPress={onSwitchToForgotPassword}
-        style={styles.forgotLink}
-        disabled={submitting}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // If this form lives inside a Modal whose header/handle takes up
+      // space at the top, tweak this offset to match that height.
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      style={styles.flex}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <Text style={styles.forgotLinkText}>Forgot Password?</Text>
-      </TouchableOpacity>
+        <Text style={styles.heading}>Welcome back</Text>
+        <Text style={styles.subheading}>Log in to keep your streak going.</Text>
 
-      <AuthButton title="Log In" onPress={handleSubmit} loading={submitting} style={styles.submitButton} />
+        {!!errors.general && (
+          <View style={styles.generalError}>
+            <Text style={styles.generalErrorText}>{errors.general}</Text>
+          </View>
+        )}
 
-      <View style={styles.footerRow}>
-        <Text style={styles.footerText}>Don&apos;t have an account? </Text>
-        <TouchableOpacity onPress={onSwitchToRegister} disabled={submitting}>
-          <Text style={styles.footerLink}>Create Account</Text>
+        <AuthInput
+          label="Username or Email"
+          placeholder="e.g. jane_doe"
+          value={identifier}
+          onChangeText={(t) => {
+            setIdentifier(t);
+            if (errors.identifier) setErrors((e) => ({ ...e, identifier: undefined }));
+          }}
+          error={errors.identifier}
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          editable={!submitting}
+        />
+
+        <AuthInput
+          ref={passwordRef}
+          label="Password"
+          placeholder="Enter your password"
+          value={password}
+          onChangeText={(t) => {
+            setPassword(t);
+            if (errors.password) setErrors((e) => ({ ...e, password: undefined }));
+          }}
+          error={errors.password}
+          isPassword
+          returnKeyType="go"
+          onSubmitEditing={handleSubmit}
+          editable={!submitting}
+        />
+
+        <TouchableOpacity
+          onPress={onSwitchToForgotPassword}
+          style={styles.forgotLink}
+          disabled={submitting}
+        >
+          <Text style={styles.forgotLinkText}>Forgot Password?</Text>
         </TouchableOpacity>
-      </View>
-    </View>
+
+        <AuthButton title="Log In" onPress={handleSubmit} loading={submitting} style={styles.submitButton} />
+
+        <View style={styles.footerRow}>
+          <Text style={styles.footerText}>Don&apos;t have an account? </Text>
+          <TouchableOpacity onPress={onSwitchToRegister} disabled={submitting}>
+            <Text style={styles.footerLink}>Create Account</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: spacing.xl ?? spacing.lg,
+  },
   heading: {
     ...typography.title,
     fontSize: 22,

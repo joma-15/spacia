@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -11,14 +11,14 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import LoginForm from './LoginForm';
-import RegisterForm from './RegisterForm';
-import ForgotPasswordForm from './ForgotPasswordForm';
-import { colors, radius, shadow, spacing } from '../styles/styles';
-import { MODAL_ANIM_DURATION_MS } from '../constants';
-import { AuthMode } from '../types';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import LoginForm from "./LoginForm";
+import RegisterForm from "./RegisterForm";
+import ForgotPasswordForm from "./ForgotPasswordForm";
+import { colors, radius, shadow, spacing } from "../styles/styles";
+import { MODAL_ANIM_DURATION_MS } from "../constants";
+import { AuthMode } from "../types";
 
 interface AuthModalProps {
   visible: boolean;
@@ -29,7 +29,7 @@ interface AuthModalProps {
 
 export default function AuthModal({
   visible,
-  initialMode = 'login',
+  initialMode = "login",
   onClose,
   onAuthenticated,
 }: AuthModalProps) {
@@ -77,9 +77,9 @@ export default function AuthModal({
   };
 
   const titleForMode: Record<AuthMode, string> = {
-    login: 'Log In',
-    register: 'Create Account',
-    forgotPassword: 'Forgot Password',
+    login: "Log In",
+    register: "Create Account",
+    forgotPassword: "Forgot Password",
   };
 
   return (
@@ -91,12 +91,16 @@ export default function AuthModal({
       onRequestClose={handleRequestClose}
     >
       <Animated.View style={[styles.backdrop, { opacity }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleRequestClose} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={handleRequestClose}
+        />
       </Animated.View>
 
       <KeyboardAvoidingView
         style={styles.centerWrap}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
         pointerEvents="box-none"
       >
         <Animated.View
@@ -106,7 +110,7 @@ export default function AuthModal({
             { opacity, transform: [{ translateY }] },
           ]}
         >
-          <SafeAreaView edges={['bottom']} style={styles.safeArea}>
+          <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
             <View style={styles.header}>
               <Text style={styles.headerTitle}>{titleForMode[mode]}</Text>
               <TouchableOpacity
@@ -125,18 +129,21 @@ export default function AuthModal({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
-              {mode === 'login' && (
+              {mode === "login" && (
                 <LoginForm
-                  onSwitchToRegister={() => setMode('register')}
-                  onSwitchToForgotPassword={() => setMode('forgotPassword')}
+                  onSwitchToRegister={() => setMode("register")}
+                  onSwitchToForgotPassword={() => setMode("forgotPassword")}
                   onSuccess={onAuthenticated}
                 />
               )}
-              {mode === 'register' && (
-                <RegisterForm onSwitchToLogin={() => setMode('login')} onSuccess={onAuthenticated} />
+              {mode === "register" && (
+                <RegisterForm
+                  onSwitchToLogin={() => setMode("login")}
+                  onSuccess={onAuthenticated}
+                />
               )}
-              {mode === 'forgotPassword' && (
-                <ForgotPasswordForm onBackToLogin={() => setMode('login')} />
+              {mode === "forgotPassword" && (
+                <ForgotPasswordForm onBackToLogin={() => setMode("login")} />
               )}
             </ScrollView>
           </SafeAreaView>
@@ -148,46 +155,46 @@ export default function AuthModal({
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay,
   },
   centerWrap: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   sheet: {
     backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    maxHeight: '88%',
+    maxHeight: "88%",
   },
   safeArea: {
     paddingHorizontal: spacing.lg,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
   },
   headerTitle: {
     color: colors.textPrimary,
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   closeIcon: {
     color: colors.textSecondary,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   scrollContent: {
     paddingBottom: spacing.xl,
