@@ -14,7 +14,7 @@ import React, {
   useState,
 } from 'react';
 import { SESSION_STORAGE_KEY } from '../constants';
-import { AuthUser, StoredSession } from '../types';
+import { AuthResponse, AuthUser, StoredSession } from '../types';
 import * as authApi from './authApi';
 import { AuthError } from './authApi';
 
@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const persistAndSetUser = useCallback(async (response: authApi.AuthResponse) => {
+  const persistAndSetUser = useCallback(async (response: AuthResponse) => {
     const session: StoredSession = {
       token: response.token,
       refreshToken: response.refreshToken,

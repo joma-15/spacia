@@ -4,7 +4,7 @@ import StreakAuthGate from "@/features/auth/StreakAuthGate";
 export default function ComingSoon(){
     return (
         <StreakAuthGate>
-            <ComingSoon/>
+            <ComingSoonScreen/>
         </StreakAuthGate>
     ); 
 }
