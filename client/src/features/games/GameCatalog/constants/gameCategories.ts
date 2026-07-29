@@ -7,14 +7,14 @@ export const GAME_CATEGORIES: GameCategory[] = [
   {
     id: 'flip-sort',
     title: 'Flip & Sort',
-    image: require(`${BASE_PATH}/flip-sort.png`),
+    image: require(`${BASE_PATH}/flip-sort.webp`),
     tint: '#3ED598',
     route: '/games/FlipSort' as any,
   },
   {
     id: '1',
     title: 'Space blast',
-    image: require(`${BASE_PATH}/spaceblast.png`),
+    image: require(`${BASE_PATH}/spaceblast.webp`),
     tint: '#5B8DEF',
     route: '/games/SpaceBlast'
   },

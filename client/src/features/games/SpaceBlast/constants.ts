@@ -41,9 +41,9 @@ export const EXPLOSION_DURATION_MS = 380;
 // One explosion image per outcome, plus the spaceship — swap these for
 // your actual files. All three are preloaded up front (see
 // useAssetPreload.ts) so nothing pops in blank the first time it renders.
-export const EXPLOSION_IMAGE_CORRECT = require("@/assets/images/explosion-correct.png");
-export const EXPLOSION_IMAGE_WRONG = require("@/assets/images/explosion-wrong.png");
-export const SPACESHIP_IMAGE = require("@/assets/images/spaceship.png");
+export const EXPLOSION_IMAGE_CORRECT = require("@/assets/images/explosion-correct.webp");
+export const EXPLOSION_IMAGE_WRONG = require("@/assets/images/explosion-wrong.webp");
+export const SPACESHIP_IMAGE = require("@/assets/images/spaceship.webp");
 
 // Every image module the game needs on screen. Passed to
 // `Asset.loadAsync` on mount so bitmaps are downloaded/decoded before
