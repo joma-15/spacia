@@ -1,9 +1,11 @@
+import { BASE_URL } from '../../shared/config/api';
 // constants.ts
 // Action limits, timeouts, storage keys, and API config for streak-auth.
 
+
 // --- Backend ---
-export const API_BASE_URL = 'https://api.yourapp.com'; // TODO: point at real backend
-export const USE_MOCK_BACKEND = true; // TODO: flip to false once API_BASE_URL is live
+export const API_BASE_URL = `${BASE_URL}`; // TODO: point at real backend
+export const USE_BACKEND = true; // TODO: flip to false once API_BASE_URL is live
 export const MOCK_NETWORK_DELAY_MS = 650;
 
 // --- Storage keys ---

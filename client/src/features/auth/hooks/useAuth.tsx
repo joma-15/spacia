@@ -17,6 +17,7 @@ import { SESSION_STORAGE_KEY } from '../constants';
 import { AuthResponse, AuthUser, StoredSession } from '../types';
 import * as authApi from './authApi';
 import { AuthError } from './authApi';
+import { BASE_URL } from '@/shared/config/api';
 
 interface AuthContextValue {
   user: AuthUser | null;

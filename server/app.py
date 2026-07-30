@@ -41,12 +41,14 @@ def create_app(test_config: dict | None = None) -> Flask:
     from routes.flashcard_routes import flashcards_bp
     from routes.folder_routes import folders_bp
     from routes.schedule_routes import schedules_bp
+    from routes.auth_routes import auth_bp
 
     # Register blueprints. Blueprints are just groups of routes.
     # For example, all /flashcards/... routes are grouped inside flashcards_bp.
     app.register_blueprint(flashcards_bp)
     app.register_blueprint(folders_bp)
     app.register_blueprint(schedules_bp)
+    app.register_blueprint(auth_bp)
 
     @app.get("/")
     def health_check():

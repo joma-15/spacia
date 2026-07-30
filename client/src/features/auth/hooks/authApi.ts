@@ -13,7 +13,7 @@ import {
   API_BASE_URL,
   MOCK_NETWORK_DELAY_MS,
   MOCK_USERS_STORAGE_KEY,
-  USE_MOCK_BACKEND,
+  USE_BACKEND,
 } from '../constants';
 import { AuthResponse, LoginPayload, RegisterPayload } from '../types';
 
@@ -33,17 +33,17 @@ export class AuthError extends Error {
 // ---------------------------------------------------------------------------
 
 export async function login(payload: LoginPayload): Promise<AuthResponse> {
-  if (USE_MOCK_BACKEND) return mockLogin(payload);
+  if (!USE_BACKEND) return mockLogin(payload);
   return request<AuthResponse>('/auth/login', payload);
 }
 
 export async function register(payload: RegisterPayload): Promise<AuthResponse> {
-  if (USE_MOCK_BACKEND) return mockRegister(payload);
+  if (!USE_BACKEND) return mockRegister(payload);
   return request<AuthResponse>('/auth/register', payload);
 }
 
 export async function requestPasswordReset(email: string): Promise<{ success: true }> {
-  if (USE_MOCK_BACKEND) return mockRequestPasswordReset(email);
+  if (!USE_BACKEND) return mockRequestPasswordReset(email);
   return request<{ success: true }>('/auth/forgot-password', { email });
 }
 
