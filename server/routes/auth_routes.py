@@ -19,8 +19,20 @@ class RegisterAPI(MethodView):
         password_hash = data["password"]
         email = data["email"]
 
-        auth_service.create(username, password_hash, email)
+        auth_service.register(username, password_hash, email)
         return {"message" : "received"}
+
+class LoginAPI(MethodView): 
+    def post(self): 
+        data = require_json_object(request.get_json())
+
+        identifier = data["identifier"]
+        password = data["password"]
+
+        result = auth_service.login(identifier, password)
+
+        return jsonify(result)
 
 #connect the route paths to our pluggalbe userview
 auth_bp.add_url_rule("/auth/register", view_func=RegisterAPI.as_view("register"))
+auth_bp.add_url_rule("/auth/login", view_func=LoginAPI.as_view("login"))
