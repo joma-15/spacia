@@ -15,8 +15,11 @@ class RegisterAPI(MethodView):
         print("post funcition was being triggered")
         data = request.get_json()
 
-        print(data)
+        username = data["username"]
+        password_hash = data["password"]
+        email = data["email"]
 
+        auth_service.create(username, password_hash, email)
         return {"message" : "received"}
 
 #connect the route paths to our pluggalbe userview
