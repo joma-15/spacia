@@ -3,6 +3,7 @@
 from extensions import db
 from errors import NotFoundError
 from models.folders import Folder
+from models.users import User
 
 
 class FolderService:
