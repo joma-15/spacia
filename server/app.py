@@ -6,7 +6,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 
 from config import Config
 from errors import ApiError
-from extensions import cors, db
+from extensions import cors, db, jwt
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -31,6 +31,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     # CORS allows our React Native app (running on a different port/device) to talk to this backend.
     db.init_app(app)
     cors.init_app(app)
+    jwt.init_app(app)
 
     # We import database models here before we register the blueprints/routes.
     # This tells the database tool (SQLAlchemy) what tables exist so it can map them properly.

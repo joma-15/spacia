@@ -1,6 +1,7 @@
 from extensions import db
 from models.users import User
 from sqlalchemy import or_
+from flask_jwt_extended import create_access_token
 import bcrypt
 
 class AuthService: 
@@ -45,8 +46,11 @@ class AuthService:
         ): 
             return {"message": "invalid password"}
 
+        access_token = create_access_token(identity=user.id)
+
         return{
             "message": "login successfully", 
+            "access_token" : access_token,
             "user": {
                 "id": user.id, 
                 "username": user.username, 

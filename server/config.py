@@ -21,3 +21,8 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = BASE_DIR / "uploads"
     MAX_CONTENT_LENGTH = 20 * 1024 * 1024  # 20 MB
+
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+
+    if JWT_SECRET_KEY is None:
+        raise RuntimeError("JWT_SECRET_KEY is not set in the .env file.")
