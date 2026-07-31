@@ -12,19 +12,24 @@ class FolderService:
     # TODO: replace this temporary owner with the authenticated user identity.
     DEFAULT_USER_ID = "66b851ba-e806-4eae-b109-ef676b9ca64b"
 
-    def create(self, subject: str, accent_color: str, folder_id: str | None = None) -> Folder:
+    def create(self, subject: str, accent_color: str,user_id : str, folder_id: str | None = None) -> Folder:
         folder = Folder(
             id=folder_id,
             subject=subject.strip(),
             accent_color=accent_color,
-            user_id=self.DEFAULT_USER_ID,
+            user_id=user_id,
         )
         db.session.add(folder)
         db.session.commit()
         return folder
 
-    def list_all(self) -> list[Folder]:
-        return Folder.query.order_by(Folder.created_at.desc()).all()
+    def list_all(self, user_id : str) -> list[Folder]: 
+        return(
+            Folder.query
+            .filter_by(user_id=user_id)
+            .order_by(Folder.created_at.desc())
+            .all()
+        )
 
     def delete(self, folder_id: str) -> None:
         folder = db.session.get(Folder, folder_id)
