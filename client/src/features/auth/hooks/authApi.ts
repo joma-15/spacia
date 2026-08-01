@@ -8,20 +8,20 @@
 // "email already exists" and "username already exists" — works end-to-end
 // with no server.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   API_BASE_URL,
   MOCK_NETWORK_DELAY_MS,
   MOCK_USERS_STORAGE_KEY,
   USE_BACKEND,
-} from '../constants';
-import { AuthResponse, LoginPayload, RegisterPayload } from '../types';
+} from "../constants";
+import { AuthResponse, LoginPayload, RegisterPayload } from "../types";
 
 export class AuthError extends Error {
   code: string;
-  field?: 'username' | 'email' | 'password' | 'confirmPassword' | 'general';
+  field?: "username" | "email" | "password" | "confirmPassword" | "general";
 
-  constructor(message: string, code: string, field?: AuthError['field']) {
+  constructor(message: string, code: string, field?: AuthError["field"]) {
     super(message);
     this.code = code;
     this.field = field;
@@ -34,17 +34,21 @@ export class AuthError extends Error {
 
 export async function login(payload: LoginPayload): Promise<AuthResponse> {
   if (!USE_BACKEND) return mockLogin(payload);
-  return request<AuthResponse>('/auth/login', payload);
+  return request<AuthResponse>("/auth/login", payload);
 }
 
-export async function register(payload: RegisterPayload): Promise<AuthResponse> {
+export async function register(
+  payload: RegisterPayload,
+): Promise<AuthResponse> {
   if (!USE_BACKEND) return mockRegister(payload);
-  return request<AuthResponse>('/auth/register', payload);
+  return request<AuthResponse>("/auth/register", payload);
 }
 
-export async function requestPasswordReset(email: string): Promise<{ success: true }> {
+export async function requestPasswordReset(
+  email: string,
+): Promise<{ success: true }> {
   if (!USE_BACKEND) return mockRequestPasswordReset(email);
-  return request<{ success: true }>('/auth/forgot-password', { email });
+  return request<{ success: true }>("/auth/forgot-password", { email });
 }
 
 // ---------------------------------------------------------------------------
@@ -55,14 +59,14 @@ async function request<T>(path: string, body: unknown): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   } catch {
     throw new AuthError(
       "Can't reach the server. Check your connection and try again.",
-      'network_error'
+      "network_error",
     );
   }
 
@@ -81,26 +85,38 @@ async function request<T>(path: string, body: unknown): Promise<T> {
 }
 
 function mapServerError(status: number, data: any): AuthError {
-  const code = data?.code ?? 'unknown_error';
+  const code = data?.code ?? "unknown_error";
   const message = data?.message;
 
   switch (code) {
-    case 'invalid_credentials':
-      return new AuthError('Incorrect username or password', code, 'general');
-    case 'username_taken':
-      return new AuthError('Username already exists', code, 'username');
-    case 'email_taken':
-      return new AuthError('An account with this email already exists', code, 'email');
-    case 'weak_password':
-      return new AuthError('Password must contain at least 8 characters', code, 'password');
+    case "invalid_credentials":
+      return new AuthError("Incorrect username or password", code, "general");
+    case "username_taken":
+      return new AuthError("Username already exists", code, "username");
+    case "email_taken":
+      return new AuthError(
+        "An account with this email already exists",
+        code,
+        "email",
+      );
+    case "weak_password":
+      return new AuthError(
+        "Password must contain at least 8 characters",
+        code,
+        "password",
+      );
     default:
       if (status >= 500) {
         return new AuthError(
           "Something went wrong on our end. Please try again shortly.",
-          'server_error'
+          "server_error",
         );
       }
-      return new AuthError(message || 'Something went wrong. Please try again.', code, 'general');
+      return new AuthError(
+        message || "Something went wrong. Please try again.",
+        code,
+        "general",
+      );
   }
 }
 
@@ -132,7 +148,10 @@ function fakeToken(userId: string) {
   return `mock.${userId}.${Date.now()}`;
 }
 
-async function mockLogin({ identifier, password }: LoginPayload): Promise<AuthResponse> {
+async function mockLogin({
+  identifier,
+  password,
+}: LoginPayload): Promise<AuthResponse> {
   await delay(MOCK_NETWORK_DELAY_MS);
 
   const users = await readMockDb();
@@ -140,29 +159,49 @@ async function mockLogin({ identifier, password }: LoginPayload): Promise<AuthRe
     (u) =>
       (u.username.toLowerCase() === identifier.trim().toLowerCase() ||
         u.email.toLowerCase() === identifier.trim().toLowerCase()) &&
-      u.password === password
+      u.password === password,
   );
 
   if (!match) {
-    throw new AuthError('Incorrect username or password', 'invalid_credentials', 'general');
+    throw new AuthError(
+      "Incorrect username or password",
+      "invalid_credentials",
+      "general",
+    );
   }
 
   return {
-    token: fakeToken(match.id),
+    access_token: fakeToken(match.id),
     user: { id: match.id, username: match.username, email: match.email },
   };
 }
 
-async function mockRegister({ username, email, password }: RegisterPayload): Promise<AuthResponse> {
+async function mockRegister({
+  username,
+  email,
+  password,
+}: RegisterPayload): Promise<AuthResponse> {
   await delay(MOCK_NETWORK_DELAY_MS);
 
   const users = await readMockDb();
 
-  if (users.some((u) => u.username.toLowerCase() === username.trim().toLowerCase())) {
-    throw new AuthError('Username already exists', 'username_taken', 'username');
+  if (
+    users.some(
+      (u) => u.username.toLowerCase() === username.trim().toLowerCase(),
+    )
+  ) {
+    throw new AuthError(
+      "Username already exists",
+      "username_taken",
+      "username",
+    );
   }
   if (users.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) {
-    throw new AuthError('An account with this email already exists', 'email_taken', 'email');
+    throw new AuthError(
+      "An account with this email already exists",
+      "email_taken",
+      "email",
+    );
   }
 
   const newUser: MockUserRecord = {
@@ -175,12 +214,14 @@ async function mockRegister({ username, email, password }: RegisterPayload): Pro
   await writeMockDb([...users, newUser]);
 
   return {
-    token: fakeToken(newUser.id),
+    access_token: fakeToken(newUser.id),
     user: { id: newUser.id, username: newUser.username, email: newUser.email },
   };
 }
 
-async function mockRequestPasswordReset(_email: string): Promise<{ success: true }> {
+async function mockRequestPasswordReset(
+  _email: string,
+): Promise<{ success: true }> {
   await delay(MOCK_NETWORK_DELAY_MS);
   // Intentionally always succeeds — never reveal whether the email exists.
   return { success: true };

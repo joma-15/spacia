@@ -10,7 +10,7 @@ class FolderService:
     """Coordinates folder persistence without leaking ORM details to routes."""
 
     # TODO: replace this temporary owner with the authenticated user identity.
-    DEFAULT_USER_ID = "66b851ba-e806-4eae-b109-ef676b9ca64b"
+    # DEFAULT_USER_ID = "66b851ba-e806-4eae-b109-ef676b9ca64b"
 
     def create(self, subject: str, accent_color: str,user_id : str, folder_id: str | None = None) -> Folder:
         folder = Folder(

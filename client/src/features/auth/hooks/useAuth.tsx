@@ -4,7 +4,7 @@
 // (or at minimum the Streak tab) in <AuthProvider> once, then call useAuth()
 // anywhere below it.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
   useCallback,
@@ -12,19 +12,23 @@ import React, {
   useEffect,
   useMemo,
   useState,
-} from 'react';
-import { SESSION_STORAGE_KEY } from '../constants';
-import { AuthResponse, AuthUser, StoredSession } from '../types';
-import * as authApi from './authApi';
-import { AuthError } from './authApi';
-import { BASE_URL } from '@/shared/config/api';
+} from "react";
+import { SESSION_STORAGE_KEY } from "../constants";
+import { AuthResponse, AuthUser, StoredSession } from "../types";
+import * as authApi from "./authApi";
+import { AuthError } from "./authApi";
+import { BASE_URL } from "@/shared/config/api";
 
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isRestoring: boolean; // true while checking for a persisted session on boot
   login: (identifier: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  register: (
+    username: string,
+    email: string,
+    password: string,
+  ) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -89,8 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const persistAndSetUser = useCallback(async (response: AuthResponse) => {
     const session: StoredSession = {
-      token: response.token,
-      refreshToken: response.refreshToken,
+      token: response.access_token,
       user: response.user,
     };
     await saveSession(session);
@@ -102,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await authApi.login({ identifier, password });
       await persistAndSetUser(response);
     },
-    [persistAndSetUser]
+    [persistAndSetUser],
   );
 
   const register = useCallback(
@@ -110,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await authApi.register({ username, email, password });
       await persistAndSetUser(response);
     },
-    [persistAndSetUser]
+    [persistAndSetUser],
   );
 
   const requestPasswordReset = useCallback(async (email: string) => {
@@ -132,7 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       requestPasswordReset,
       logout,
     }),
-    [user, isRestoring, login, register, requestPasswordReset, logout]
+    [user, isRestoring, login, register, requestPasswordReset, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -141,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error('useAuth must be used within an <AuthProvider>');
+    throw new Error("useAuth must be used within an <AuthProvider>");
   }
   return ctx;
 }

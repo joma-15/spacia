@@ -21,8 +21,7 @@ export interface RegisterPayload {
 }
 
 export interface AuthResponse {
-  token: string;
-  refreshToken?: string;
+  access_token: string;
   user: AuthUser;
 }
 

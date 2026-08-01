@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Folder } from "../types";
 import { BASE_URL } from "@/shared/config/api";
+import { getAccessToken } from "@/shared/components/auth/session";
 
 // const BASE_URL = "http://192.168.8.39:5000";
 
@@ -25,8 +26,16 @@ export function useFolders() {
     setLoading(true);
 
     const loadFolders = async (): Promise<void> => {
+      const token = await getAccessToken();
       try {
-        const res = await fetch(`${BASE_URL}/folders`);
+        const res = await fetch(`${BASE_URL}/folders`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          }
+        });
+        
+        console.log('token used:', token);
+        console.log('status:', res.status);
         const data: FoldersResponse = await res.json();
 
         if (!isMounted) return;

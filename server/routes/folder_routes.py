@@ -30,7 +30,7 @@ class FolderCollectionAPI(MethodView):
         return jsonify({"response": folders})
 
 
-    @jwt_required
+    @jwt_required()
     def post(self):
         # Extract folder settings from JSON request
         data = require_json_object(request.get_json(silent=True))
