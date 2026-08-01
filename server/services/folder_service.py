@@ -1,7 +1,7 @@
 """Business operations for subject folders."""
 
 from extensions import db
-from errors import NotFoundError
+from errors import NotFoundError, ApiError
 from models.folders import Folder
 from models.users import User
 
@@ -31,10 +31,13 @@ class FolderService:
             .all()
         )
 
-    def delete(self, folder_id: str) -> None:
+    def delete(self, folder_id: str, user_id: str) -> None:
         folder = db.session.get(Folder, folder_id)
         if folder is None:
             raise NotFoundError("Folder")
+
+        if folder.user_id != user_id:
+            raise ApiError("You do not have permission to delete this folder.", 403)
 
         db.session.delete(folder)
         db.session.commit()

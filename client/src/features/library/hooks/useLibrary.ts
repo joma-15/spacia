@@ -25,6 +25,7 @@ import {
 import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
 import { BASE_URL } from "@/shared/config/api";
 import { uuidv4 } from "@/shared/database/database";
+import { getAccessToken } from "@/shared/components/auth/session";
 
 export function useLibrary() {
   const isMountedRef = useRef(false);
@@ -78,12 +79,18 @@ export function useLibrary() {
   // background sync helper
   const syncPendingFolders = useCallback(async () => {
     try {
+      const token = await getAccessToken();
+      if (!token) return;
+
       // 1. Process pending creations
       const pendingCreates = getFoldersBySyncStatus("pending_create") as any[];
       for (const folder of pendingCreates) {
         const response = await fetch(`${BASE_URL}/folders`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({
             id: folder.id,
             subject: folder.subject,
@@ -109,6 +116,9 @@ export function useLibrary() {
       for (const folder of pendingDeletes) {
         const response = await fetch(`${BASE_URL}/folders/${folder.id}`, {
           method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
         if (response.ok) {
           deleteFolderCache(folder.id);
@@ -124,7 +134,17 @@ export function useLibrary() {
     try {
       if (isMountedRef.current) setLoading(true);
 
-      const response = await fetch(`${BASE_URL}/folders`);
+      const token = await getAccessToken();
+      if (!token) {
+        loadCachedFolders();
+        return;
+      }
+
+      const response = await fetch(`${BASE_URL}/folders`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (!response.ok) {
         throw new Error("failed to fetch folders");

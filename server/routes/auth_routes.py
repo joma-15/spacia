@@ -1,7 +1,6 @@
-"""HTTP controllers for users"""
-
 from flask import Blueprint, jsonify, request
 from flask.views import MethodView
+from flask_jwt_extended import create_access_token
 
 from services.auth_service import AuthService
 from validation import require_fields, require_json_object
@@ -12,15 +11,25 @@ auth_service = AuthService()
 
 class RegisterAPI(MethodView): 
     def post(self): 
-        print("post funcition was being triggered")
-        data = request.get_json()
+        data = require_json_object(request.get_json(silent=True))
+        require_fields(data, "username", "email", "password")
 
         username = data["username"]
-        password_hash = data["password"]
+        password = data["password"]
         email = data["email"]
 
-        auth_service.register(username, password_hash, email)
-        return {"message" : "received"}
+        user = auth_service.register(username, password, email)
+        access_token = create_access_token(identity=user.id)
+
+        return jsonify({
+            "message": "registered successfully",
+            "access_token": access_token,
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email
+            }
+        }), 201
 
 class LoginAPI(MethodView): 
     def post(self): 

@@ -48,8 +48,10 @@ class FolderItemAPI(MethodView):
     Handles operations on a single folder item:
     - DELETE: delete the folder from the database by its ID.
     """
+    @jwt_required()
     def delete(self, folder_id: str):
-        folder_service.delete(folder_id)
+        user_id = get_jwt_identity()
+        folder_service.delete(folder_id, user_id)
         return jsonify({"message": "Folder deleted successfully."})
 
 

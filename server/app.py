@@ -33,6 +33,27 @@ def create_app(test_config: dict | None = None) -> Flask:
     cors.init_app(app)
     jwt.init_app(app)
 
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return jsonify({
+            "code": "token_expired",
+            "message": "The token has expired."
+        }), 401
+
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error_string):
+        return jsonify({
+            "code": "token_invalid",
+            "message": f"Signature verification failed: {error_string}"
+        }), 401
+
+    @jwt.unauthorized_loader
+    def missing_token_callback(error_string):
+        return jsonify({
+            "code": "token_missing",
+            "message": f"Request does not contain an access token: {error_string}"
+        }), 401
+
     # We import database models here before we register the blueprints/routes.
     # This tells the database tool (SQLAlchemy) what tables exist so it can map them properly.
     from models.flashcard import Flashcard  # noqa: F401
@@ -66,7 +87,13 @@ def create_app(test_config: dict | None = None) -> Flask:
         If something goes wrong that we predicted, we send back a JSON response
         with a friendly message and a specific status code (e.g. 404 Not Found).
         """
-        return jsonify({"success": False, "error": error.message}), error.status_code
+        response_body = {
+            "success": False,
+            "message": error.message
+        }
+        if error.code:
+            response_body["code"] = error.code
+        return jsonify(response_body), error.status_code
 
     @app.errorhandler(ValueError)
     def handle_value_error(error: ValueError):

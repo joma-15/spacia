@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BASE_URL } from "@/shared/config/api";
 import { getFolders, saveFolders } from "@/shared/database/folderRepository";
 import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
+import { getAccessToken } from "@/shared/components/auth/session";
 
 export interface Folder {
   id: string;
@@ -76,7 +77,16 @@ export function useSelectionWizard() {
     }
 
     try {
-      const response = await fetch(`${BASE_URL}/folders`);
+      const token = await getAccessToken();
+      if (!token) {
+        loadCachedFolders();
+        return;
+      }
+      const response = await fetch(`${BASE_URL}/folders`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        }
+      });
       if (!response.ok) {
         throw new Error("Cannot fetch folders from backend");
       }

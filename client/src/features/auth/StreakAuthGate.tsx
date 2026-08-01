@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { AuthProvider, useAuth } from '../auth/hooks/useAuth';
+import { useAuth } from '../auth/hooks/useAuth';
 import AuthModal from '../auth/components/AuthModal';
 import AuthButton from '../auth/components/AuthButton';
 import { colors, spacing, typography } from '../auth/styles/styles';
@@ -25,17 +25,11 @@ interface StreakAuthGateProps {
  *     <CardScreen />
  *   </StreakAuthGate>
  *
- * StreakAuthGate owns its own <AuthProvider> so it can be adopted
- * incrementally without wiring auth into the whole app. If the app already
- * has a global AuthProvider higher up the tree, remove the inner provider
- * here and this component will pick up the ancestor's context instead.
+ * Authentication is provided by the app-level <AuthProvider>, allowing this
+ * gate and global account controls to update from the same session state.
  */
 export default function StreakAuthGate({ children }: StreakAuthGateProps) {
-  return (
-    <AuthProvider>
-      <StreakAuthGateInner>{children}</StreakAuthGateInner>
-    </AuthProvider>
-  );
+  return <StreakAuthGateInner>{children}</StreakAuthGateInner>;
 }
 
 function StreakAuthGateInner({ children }: StreakAuthGateProps) {
