@@ -31,8 +31,8 @@ interface GameContentProps {
 const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const userId = user?.id;
+  const { cacheOwnerId } = useAuth();
+  const userId = cacheOwnerId;
 
   // Load cards for this folder from database as state
   const [cards, setCards] = useState<Flashcard[]>([]);

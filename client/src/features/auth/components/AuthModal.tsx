@@ -36,13 +36,17 @@ export default function AuthModal({
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const translateY = useRef(new Animated.Value(40)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const isClosingRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
+      animationRef.current?.stop();
+      isClosingRef.current = false;
       setMode(initialMode);
       translateY.setValue(40);
       opacity.setValue(0);
-      Animated.parallel([
+      animationRef.current = Animated.parallel([
         Animated.timing(opacity, {
           toValue: 1,
           duration: MODAL_ANIM_DURATION_MS,
@@ -55,12 +59,17 @@ export default function AuthModal({
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      animationRef.current.start();
     }
+    return () => animationRef.current?.stop();
   }, [visible, initialMode, opacity, translateY]);
 
   const handleRequestClose = () => {
-    Animated.parallel([
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    animationRef.current?.stop();
+    animationRef.current = Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
         duration: MODAL_ANIM_DURATION_MS - 60,
@@ -73,7 +82,10 @@ export default function AuthModal({
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
-    ]).start(() => onClose());
+    ]);
+    animationRef.current.start(({ finished }) => {
+      if (finished) onClose();
+    });
   };
 
   const titleForMode: Record<AuthMode, string> = {
@@ -90,14 +102,15 @@ export default function AuthModal({
       statusBarTranslucent
       onRequestClose={handleRequestClose}
     >
-      <Animated.View style={[styles.backdrop, { opacity }]}>
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={handleRequestClose}
-        />
-      </Animated.View>
+      <View style={styles.modalRoot}>
+        <Animated.View style={[styles.backdrop, { opacity }]}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={handleRequestClose}
+          />
+        </Animated.View>
 
-      <KeyboardAvoidingView
+        <KeyboardAvoidingView
         style={styles.centerWrap}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
@@ -148,12 +161,14 @@ export default function AuthModal({
             </ScrollView>
           </SafeAreaView>
         </Animated.View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  modalRoot: { flex: 1 },
   backdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay,

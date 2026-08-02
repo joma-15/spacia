@@ -13,8 +13,8 @@ export interface Folder {
 }
 
 export function useSelectionWizard() {
-  const { user } = useAuth();
-  const userId = user?.id;
+  const { cacheOwnerId } = useAuth();
+  const userId = cacheOwnerId;
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,8 +85,12 @@ export function useSelectionWizard() {
 
     try {
       const token = await getAccessToken();
-      if (!token || !userId) {
+      if (!userId) {
         setFolders([]);
+        return;
+      }
+      if (!token) {
+        loadCachedFolders();
         return;
       }
       const response = await fetch(`${BASE_URL}/folders`, {

@@ -17,8 +17,8 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
  * pushes the change to the server without blocking the game.
  */
 export function useFlashcardSync(folderId: string) {
-  const { user } = useAuth();
-  const userId = user?.id;
+  const { cacheOwnerId } = useAuth();
+  const userId = cacheOwnerId;
   const [cards, setCards] = useState<FlashCard[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const isMountedRef = useRef(true);

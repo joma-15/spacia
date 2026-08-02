@@ -10,6 +10,7 @@ export const MOCK_NETWORK_DELAY_MS = 650;
 
 // --- Storage keys ---
 export const SESSION_STORAGE_KEY = '@streak_auth/session';
+export const GUEST_CACHE_OWNER_STORAGE_KEY = '@spacia/guest_cache_owner';
 export const MOCK_USERS_STORAGE_KEY = '@streak_auth/mock_users';
 
 // --- Validation rules ---

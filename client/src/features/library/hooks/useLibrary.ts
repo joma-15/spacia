@@ -29,8 +29,8 @@ import { getAccessToken } from "@/shared/components/auth/session";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 
 export function useLibrary() {
-  const { user } = useAuth();
-  const userId = user?.id;
+  const { cacheOwnerId } = useAuth();
+  const userId = cacheOwnerId;
   const isMountedRef = useRef(false);
   // ── State ────────────────────────────────────────────────────────────────
 
@@ -142,8 +142,12 @@ export function useLibrary() {
       if (isMountedRef.current) setLoading(true);
 
       const token = await getAccessToken();
-      if (!token || !userId) {
+      if (!userId) {
         if (isMountedRef.current) setFolders([]);
+        return;
+      }
+      if (!token) {
+        loadCachedFolders();
         return;
       }
 

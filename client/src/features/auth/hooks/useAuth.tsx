@@ -13,7 +13,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { SESSION_STORAGE_KEY } from "../constants";
+import { GUEST_CACHE_OWNER_STORAGE_KEY, SESSION_STORAGE_KEY } from "../constants";
 import { AuthResponse, AuthUser, StoredSession } from "../types";
 import * as authApi from "./authApi";
 import { AuthError } from "./authApi";
@@ -21,6 +21,8 @@ import { BASE_URL } from "@/shared/config/api";
 
 interface AuthContextValue {
   user: AuthUser | null;
+  /** Current cache namespace: authenticated account or this installation's guest space. */
+  cacheOwnerId: string | null;
   isAuthenticated: boolean;
   isRestoring: boolean; // true while checking for a persisted session on boot
   login: (identifier: string, password: string) => Promise<void>;
@@ -65,10 +67,20 @@ async function clearSession(): Promise<void> {
   await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
+async function loadOrCreateGuestCacheOwner(): Promise<string> {
+  const existing = await AsyncStorage.getItem(GUEST_CACHE_OWNER_STORAGE_KEY);
+  if (existing) return existing;
+
+  const guestId = `guest:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  await AsyncStorage.setItem(GUEST_CACHE_OWNER_STORAGE_KEY, guestId);
+  return guestId;
+}
+
 // --- Provider -------------------------------------------------------------
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [guestCacheOwnerId, setGuestCacheOwnerId] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
 
   // Restore a persisted session on app launch so the user isn't logged out
@@ -77,11 +89,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     (async () => {
-      const session = await loadSession();
+      const [session, guestId] = await Promise.all([
+        loadSession(),
+        loadOrCreateGuestCacheOwner(),
+      ]);
       if (!cancelled && session) {
         setUser(session.user);
       }
       if (!cancelled) {
+        setGuestCacheOwnerId(guestId);
         setIsRestoring(false);
       }
     })();
@@ -128,6 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      cacheOwnerId: user?.id ?? guestCacheOwnerId,
       isAuthenticated: !!user,
       isRestoring,
       login,
@@ -135,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       requestPasswordReset,
       logout,
     }),
-    [user, isRestoring, login, register, requestPasswordReset, logout],
+    [user, guestCacheOwnerId, isRestoring, login, register, requestPasswordReset, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

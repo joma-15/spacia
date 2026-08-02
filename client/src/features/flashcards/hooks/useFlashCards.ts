@@ -34,8 +34,8 @@ export interface TextbookUpload {
 }
 
 export function useFlashCards(folderId: string) {
-  const { user } = useAuth();
-  const userId = user?.id;
+  const { cacheOwnerId } = useAuth();
+  const userId = cacheOwnerId;
   // ── States ──
   // The list of flashcards in the folder
   const [cards, setCards] = useState<FlashCard[]>([]);
@@ -279,8 +279,13 @@ export function useFlashCards(folderId: string) {
   const loadSavedCards = useCallback(
     async (signal?: AbortSignal, loadCacheOnFailure = false) => {
       const token = await getAccessToken();
-      if (!token || !userId) {
+      if (!userId) {
         setCards([]);
+        return;
+      }
+      if (!token) {
+        loadCachedCards();
+        if (isMountedRef.current) setInitialLoading(false);
         return;
       }
       // Create a timeout controller to cancel the request if it takes longer than 8 seconds (FETCH_TIMEOUT_MS)
