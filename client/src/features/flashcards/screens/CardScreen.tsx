@@ -9,6 +9,8 @@ import React, { useCallback, useState, useRef, useEffect } from "react";
 import { View, Alert, StyleSheet, ScrollView, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
+import AuthModal from "@/features/auth/components/AuthModal";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 import { useFlashCards } from "../hooks/useFlashCards";
@@ -33,12 +35,14 @@ const CardScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const pageWidth = screenWidth - 32;
+  const { isAuthenticated } = useAuth();
 
   // ── Modal visibility state (UI-only, not business logic) ──────────────────
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [textbookUploadVisible, setTextbookUploadVisible] = useState(false);
   const [deleteAllModalVisible, setDeleteAllModalVisible] = useState(false);
+  const [authRequiredVisible, setAuthRequiredVisible] = useState(false);
 
   // ── Get folder id and name from URL params ──────────────────────────────
   const { folderId, folderName } = useLocalSearchParams<{ folderId: string; folderName: string }>();
@@ -99,6 +103,10 @@ const CardScreen: React.FC = () => {
 
   // ── AI button ──────────────────────────────────────────────────────────────
   const handleAiGenerate = () => {
+    if (!isAuthenticated) {
+      setAuthRequiredVisible(true);
+      return;
+    }
     setTextbookUploadVisible(true);
     // setPremiumModalVisible(true); // ← uncomment to gate behind paywall
   };
@@ -199,6 +207,17 @@ const CardScreen: React.FC = () => {
         visible={textbookUploadVisible}
         onClose={() => setTextbookUploadVisible(false)}
         onGenerate={fetchAiCards}
+      />
+      <AuthModal
+        key={authRequiredVisible ? "ai-auth-open" : "ai-auth-closed"}
+        visible={authRequiredVisible}
+        initialMode="login"
+        notice="Sign in or create an account to generate AI flashcards from a textbook."
+        onClose={() => setAuthRequiredVisible(false)}
+        onAuthenticated={() => {
+          setAuthRequiredVisible(false);
+          setTextbookUploadVisible(true);
+        }}
       />
       <LoadingModal visible={loading} />
       <DeleteAllModal

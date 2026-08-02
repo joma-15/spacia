@@ -23,6 +23,7 @@ import { AuthMode } from "../types";
 interface AuthModalProps {
   visible: boolean;
   initialMode?: AuthMode;
+  notice?: string;
   onClose: () => void;
   onAuthenticated: () => void;
 }
@@ -30,6 +31,7 @@ interface AuthModalProps {
 export default function AuthModal({
   visible,
   initialMode = "login",
+  notice,
   onClose,
   onAuthenticated,
 }: AuthModalProps) {
@@ -142,6 +144,7 @@ export default function AuthModal({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
+              {!!notice && <Text style={styles.notice}>{notice}</Text>}
               {mode === "login" && (
                 <LoginForm
                   onSwitchToRegister={() => setMode("register")}
@@ -213,5 +216,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: spacing.xl,
+  },
+  notice: {
+    color: colors.textSecondary,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+    textAlign: "center",
   },
 });
