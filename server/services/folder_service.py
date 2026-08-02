@@ -32,6 +32,13 @@ class FolderService:
         )
 
     def delete(self, folder_id: str, user_id: str) -> None:
+        folder = self.get_owned(folder_id, user_id)
+
+        db.session.delete(folder)
+        db.session.commit()
+
+    def get_owned(self, folder_id: str, user_id: str) -> Folder:
+        """Return a folder only when it belongs to the JWT subject."""
         folder = db.session.get(Folder, folder_id)
         if folder is None:
             raise NotFoundError("Folder")
@@ -39,5 +46,4 @@ class FolderService:
         if folder.user_id != user_id:
             raise ApiError("You do not have permission to delete this folder.", 403)
 
-        db.session.delete(folder)
-        db.session.commit()
+        return folder

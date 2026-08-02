@@ -26,8 +26,11 @@ import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
 import { BASE_URL } from "@/shared/config/api";
 import { uuidv4 } from "@/shared/database/database";
 import { getAccessToken } from "@/shared/components/auth/session";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 
 export function useLibrary() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const isMountedRef = useRef(false);
   // ── State ────────────────────────────────────────────────────────────────
 
@@ -58,10 +61,14 @@ export function useLibrary() {
   //load cache folders
   const loadCachedFolders = useCallback(() => {
     try {
-      const cachedFolders = getFolders();
+      if (!userId) {
+        if (isMountedRef.current) setFolders([]);
+        return;
+      }
+      const cachedFolders = getFolders(userId);
 
       // Single GROUP BY query — gets all folder card counts in one shot (offline-safe)
-      const cardCounts = getCardCountsPerFolder();
+      const cardCounts = getCardCountsPerFolder(userId);
 
       const parsedFolders: Folder[] = cachedFolders.map((folder: any) => ({
         id: folder.id,
@@ -74,16 +81,16 @@ export function useLibrary() {
     } catch (error) {
       console.error("SQLite load error:", error);
     }
-  }, []);
+  }, [userId]);
 
   // background sync helper
   const syncPendingFolders = useCallback(async () => {
     try {
       const token = await getAccessToken();
-      if (!token) return;
+      if (!token || !userId) return;
 
       // 1. Process pending creations
-      const pendingCreates = getFoldersBySyncStatus("pending_create") as any[];
+      const pendingCreates = getFoldersBySyncStatus(userId, "pending_create") as any[];
       for (const folder of pendingCreates) {
         const response = await fetch(`${BASE_URL}/folders`, {
           method: "POST",
@@ -98,7 +105,7 @@ export function useLibrary() {
           }),
         });
         if (response.ok) {
-          saveFolders(
+          saveFolders(userId,
             [
               {
                 id: folder.id,
@@ -112,7 +119,7 @@ export function useLibrary() {
       }
 
       // 2. Process pending deletions
-      const pendingDeletes = getFoldersBySyncStatus("pending_delete") as any[];
+      const pendingDeletes = getFoldersBySyncStatus(userId, "pending_delete") as any[];
       for (const folder of pendingDeletes) {
         const response = await fetch(`${BASE_URL}/folders/${folder.id}`, {
           method: "DELETE",
@@ -121,13 +128,13 @@ export function useLibrary() {
           },
         });
         if (response.ok) {
-          deleteFolderCache(folder.id);
+          deleteFolderCache(userId, folder.id);
         }
       }
     } catch (error) {
       console.error("Failed to sync folders with server:", error);
     }
-  }, []);
+  }, [userId]);
 
   //for fetching current folder data to database
   const fetchFolder = useCallback(async () => {
@@ -135,8 +142,8 @@ export function useLibrary() {
       if (isMountedRef.current) setLoading(true);
 
       const token = await getAccessToken();
-      if (!token) {
-        loadCachedFolders();
+      if (!token || !userId) {
+        if (isMountedRef.current) setFolders([]);
         return;
       }
 
@@ -155,7 +162,7 @@ export function useLibrary() {
       if (!isMountedRef.current) return;
 
       // Save server folders to cache
-      saveFolders(foldersFromDB.response, "synced");
+      saveFolders(userId, foldersFromDB.response, "synced");
 
       // Run background sync for pending actions
       void syncPendingFolders();
@@ -168,17 +175,22 @@ export function useLibrary() {
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
-  }, [loadCachedFolders, syncPendingFolders]);
+  }, [loadCachedFolders, syncPendingFolders, userId]);
 
   // ── Mount: set up ref and kick off server fetch ──────────────────────────
   useEffect(() => {
     isMountedRef.current = true;
+    if (!userId) {
+      setFolders([]);
+      setLoading(false);
+      return;
+    }
     void fetchFolder();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [fetchFolder]);
+  }, [fetchFolder, userId]);
 
   // ── Focus: re-read SQLite counts every time the screen is entered ─────────
   // This fires on initial mount AND every time the user navigates back here
@@ -195,6 +207,7 @@ export function useLibrary() {
     subject: string,
     accentColor: string,
   ): Promise<void> => {
+    if (!userId) return;
     const newId = uuidv4();
     const newFolder: Folder = {
       id: newId,
@@ -207,18 +220,19 @@ export function useLibrary() {
     setFolders((prev) => [newFolder, ...prev]);
 
     // Eagerly save to SQLite cache as pending
-    saveFolders([newFolder], "pending_create");
+    saveFolders(userId, [newFolder], "pending_create");
 
     // Perform background sync (non-blocking)
     void syncPendingFolders();
   };
 
   const deleteFolder = async (id: string) => {
+    if (!userId) return;
     // Eagerly update UI state
     setFolders((prev) => prev.filter((folder) => folder.id !== id));
 
     // Eagerly delete/mark pending deletion in SQLite cache
-    deleteFolderCache(id);
+    deleteFolderCache(userId, id);
 
     // Perform background sync (non-blocking)
     void syncPendingFolders();
@@ -226,23 +240,25 @@ export function useLibrary() {
 
   /** Delete every folder at once */
   const deleteAllFolders = async () => {
+    if (!userId) return;
     // Eagerly clear UI
     const ids = folders.map((f) => f.id);
     setFolders([]);
     // Mark each as deleted in SQLite
-    ids.forEach((id) => deleteFolderCache(id));
+    ids.forEach((id) => deleteFolderCache(userId, id));
     // Background sync
     void syncPendingFolders();
   };
 
   /** Rename a folder subject */
   const renameFolder = (id: string, newSubject: string) => {
+    if (!userId) return;
     // Eagerly update UI
     setFolders((prev) =>
       prev.map((f) => (f.id === id ? { ...f, subject: newSubject } : f))
     );
     // Update in SQLite
-    updateFolderCache(id, newSubject);
+    updateFolderCache(userId, id, newSubject);
     // Background sync
     void syncPendingFolders();
   };

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BASE_URL } from "@/shared/config/api";
 import { getFlashcardsByFolder, updateFlashcardStatus, replaceFlashcardsForFolder } from "@/shared/database/flashcardRepository";
 import { CardStatus, FlashCard } from "../types";
+import { getAccessToken } from "@/shared/components/auth/session";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 
 /**
  * Loads a folder's flashcards for gameplay, offline-first:
@@ -15,13 +17,19 @@ import { CardStatus, FlashCard } from "../types";
  * pushes the change to the server without blocking the game.
  */
 export function useFlashcardSync(folderId: string) {
+  const { user } = useAuth();
+  const userId = user?.id;
   const [cards, setCards] = useState<FlashCard[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const isMountedRef = useRef(true);
 
   const loadCachedCards = useCallback((): FlashCard[] => {
     try {
-      const dbCards = getFlashcardsByFolder(folderId) as any[];
+      if (!userId) {
+        setCards([]);
+        return [];
+      }
+      const dbCards = getFlashcardsByFolder(userId, folderId) as any[];
       const mapped: FlashCard[] = dbCards.map((c) => ({
         id: String(c.id),
         question: c.question,
@@ -34,7 +42,7 @@ export function useFlashcardSync(folderId: string) {
       console.error("Failed to load cached cards:", e);
       return [];
     }
-  }, [folderId]);
+  }, [folderId, userId]);
 
   const areDecksEqual = (local: FlashCard[], backend: FlashCard[]): boolean => {
     if (local.length !== backend.length) return false;
@@ -48,13 +56,20 @@ export function useFlashcardSync(folderId: string) {
   };
 
   const syncFlashcards = useCallback(async () => {
+    if (!userId) {
+      setCards([]);
+      setIsDataLoading(false);
+      return;
+    }
     try {
       // 1. Show local SQLite data immediately.
       const local = loadCachedCards();
       if (local.length > 0 && isMountedRef.current) setIsDataLoading(false);
 
       // 2. Fetch the latest data from the backend.
-      const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`);
+      const token = await getAccessToken();
+      if (!token) throw new Error("No authenticated session");
+      const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) throw new Error("Failed to fetch from backend");
       const data = await response.json();
 
@@ -74,7 +89,7 @@ export function useFlashcardSync(folderId: string) {
       }
 
       // 4. Otherwise, save the fresh data locally and update the screen.
-      replaceFlashcardsForFolder(folderId, backend.map((card) => ({ ...card, folderId })), "synced");
+      replaceFlashcardsForFolder(userId, folderId, backend.map((card) => ({ ...card, folderId })), "synced");
       if (isMountedRef.current) setCards(backend);
     } catch (error) {
       console.error("Sync failed, falling back to local SQLite cache:", error);
@@ -83,7 +98,7 @@ export function useFlashcardSync(folderId: string) {
     } finally {
       if (isMountedRef.current) setIsDataLoading(false);
     }
-  }, [folderId, loadCachedCards]);
+  }, [folderId, loadCachedCards, userId]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -94,23 +109,26 @@ export function useFlashcardSync(folderId: string) {
   }, [syncFlashcards]);
 
   const handleAnswer = useCallback(async (cardId: string, correct: boolean) => {
+    if (!userId) return;
     const newStatus: CardStatus = correct ? "understood" : "review";
     try {
       // Update local SQLite first (offline-first).
-      updateFlashcardStatus(cardId, newStatus);
+      updateFlashcardStatus(userId, cardId, newStatus);
       setCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, status: newStatus } : card)));
 
       // Then push the change to the server in the background.
+      const token = await getAccessToken();
+      if (!token) return;
       const response = await fetch(`${BASE_URL}/flashcards/${cardId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus }),
       });
       if (!response.ok) throw new Error("Failed to update flashcard status on server");
     } catch (error) {
       console.error("Failed to update flashcard status:", error);
     }
-  }, []);
+  }, [userId]);
 
   return { cards, isDataLoading, handleAnswer };
 }

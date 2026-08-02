@@ -17,6 +17,7 @@ export function initializeDatabase() {
     -- 1. Folders Table: Stores subject groups (e.g. "Physics", "Chemistry")
     CREATE TABLE IF NOT EXISTS folders (
       id TEXT PRIMARY KEY,           -- Unique identifier for the folder
+      user_id TEXT NOT NULL,         -- Owner of this cached row
       subject TEXT NOT NULL,         -- The name of the subject
       accent_color TEXT NOT NULL,    -- Color code used in the UI theme
       sync_status TEXT NOT NULL DEFAULT 'synced'
@@ -25,6 +26,7 @@ export function initializeDatabase() {
     -- 2. Flashcards Table: Stores individual study cards
     CREATE TABLE IF NOT EXISTS flashcards (
       id TEXT PRIMARY KEY,           -- Unique identifier for the card
+      user_id TEXT NOT NULL,         -- Owner of this cached row
       folder_id TEXT NOT NULL,       -- Links card to its parent folder (foreign key)
       question TEXT NOT NULL,        -- The question/front text
       answer TEXT NOT NULL,          -- The answer/back text
@@ -32,13 +34,6 @@ export function initializeDatabase() {
       sync_status TEXT NOT NULL DEFAULT 'synced',
       FOREIGN KEY (folder_id) REFERENCES folders(id) -- Connects to folders table
     );
-
-    -- Speed Optimizer: Creating an index on folder_id.
-    -- As a user's collection grows to hundreds of flashcards, search queries for a single folder 
-    -- would slow down because SQLite has to scan every row (full-table scan). An index acts like an
-    -- alphabetical book index, letting SQLite find the folder's cards instantly.
-    CREATE INDEX IF NOT EXISTS idx_flashcards_folder
-      ON flashcards(folder_id);
 
     -- 3. Schedules Table: Stores notification reminder times
     CREATE TABLE IF NOT EXISTS schedules (
@@ -72,6 +67,26 @@ export function initializeDatabase() {
   } catch (e) {
     // Column already exists
   }
+
+  // Caches created before ownership was introduced cannot be attributed safely.
+  // Delete only those legacy rows; correctly scoped caches remain available offline.
+  for (const table of ["folders", "flashcards"]) {
+    try {
+      db.execSync(`ALTER TABLE ${table} ADD COLUMN user_id TEXT;`);
+    } catch {
+      // Fresh databases already include the column; existing installs may
+      // already have completed this one-time migration.
+    }
+    db.execSync(`DELETE FROM ${table} WHERE user_id IS NULL;`);
+  }
+
+  // These must run after the migration. SQLite validates indexed columns when
+  // creating an index, so creating these before adding user_id breaks upgrades.
+  db.execSync(`
+    CREATE INDEX IF NOT EXISTS idx_flashcards_folder ON flashcards(folder_id);
+    CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_flashcards_user_folder ON flashcards(user_id, folder_id);
+  `);
 }
 
 export function uuidv4() {

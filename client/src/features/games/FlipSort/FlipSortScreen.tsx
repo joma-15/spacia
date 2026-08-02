@@ -20,6 +20,8 @@ import ProgressBar from "./components/ProgressBar";
 import FlipCard from "./components/FlipCard";
 import ActionButtons from "./components/ActionButtons";
 import { BASE_URL } from "@/shared/config/api";
+import { getAccessToken } from "@/shared/components/auth/session";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 
 interface GameContentProps {
   folderId: string;
@@ -29,13 +31,19 @@ interface GameContentProps {
 const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const userId = user?.id;
 
   // Load cards for this folder from database as state
   const [cards, setCards] = useState<Flashcard[]>([]);
 
   useEffect(() => {
     try {
-      const dbCards = getFlashcardsByFolder(folderId) as any[];
+      if (!userId) {
+        setCards([]);
+        return;
+      }
+      const dbCards = getFlashcardsByFolder(userId, folderId) as any[];
       const mapped = dbCards.map((c) => ({
         id: String(c.id),
         question: c.question,
@@ -49,7 +57,7 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
       console.error("Failed to load cards for Flip & Sort:", e);
       setCards([]);
     }
-  }, [folderId]);
+  }, [folderId, userId]);
 
 
 
@@ -69,7 +77,8 @@ const onUpdateCardStatus = useCallback(
   async (cardId: string, newStatus: "review" | "understood") => {
     try {
       // Update local SQLite
-      updateFlashcardStatus(cardId, newStatus);
+      if (!userId) return;
+      updateFlashcardStatus(userId, cardId, newStatus);
 
       // Update React state
       setCards((prev) =>
@@ -81,10 +90,13 @@ const onUpdateCardStatus = useCallback(
       );
 
       // Sync to backend
+      const token = await getAccessToken();
+      if (!token) return;
       const response = await fetch(`${BASE_URL}/flashcards/${cardId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           status: newStatus,
@@ -100,7 +112,7 @@ const onUpdateCardStatus = useCallback(
       console.error("Failed to update flashcard status:", error);
     }
   },
-  []
+  [userId]
 );
 
   // Hook 1: Visual flip animation state

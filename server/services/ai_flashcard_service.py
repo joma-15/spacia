@@ -31,7 +31,7 @@ class AiFlashcardService:
         self._document_extractor = document_extractor or DocumentTextExtractor()
         self._client = client
 
-    def generate_from_file(self, folder_id: str, file_path: str) -> list:
+    def generate_from_file(self, folder_id: str, user_id: str, file_path: str) -> list:
         """
         Main entry point for generating flashcards from a file upload:
         1. Breaks down the file text into readable chunks.
@@ -48,7 +48,7 @@ class AiFlashcardService:
         cards = self._parse_cards(raw_response)
         
         # Save the new cards to the database and return them
-        return self._flashcard_service.save_generated_cards(folder_id, cards)
+        return self._flashcard_service.save_generated_cards(folder_id, user_id, cards)
 
     def _generate_response(self, content: str) -> str:
         """

@@ -19,6 +19,8 @@ import {
 import { uuidv4 } from "@/shared/database/database";
 import * as FileSystem from "expo-file-system/legacy";
 import { BASE_URL } from "@/shared/config/api";
+import { getAccessToken } from "@/shared/components/auth/session";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 
 // const BASE_URL = "http://192.168.8.39:5000";
 const FETCH_TIMEOUT_MS = 8000;
@@ -32,6 +34,8 @@ export interface TextbookUpload {
 }
 
 export function useFlashCards(folderId: string) {
+  const { user } = useAuth();
+  const userId = user?.id;
   // ── States ──
   // The list of flashcards in the folder
   const [cards, setCards] = useState<FlashCard[]>([]);
@@ -63,15 +67,17 @@ export function useFlashCards(folderId: string) {
 
   const syncPendingFlashcards = useCallback(async (fId: string) => {
     try {
+      const token = await getAccessToken();
+      if (!token || !userId) return;
       // 1. Process pending creations
-      const pendingCreates = getFlashcardsBySyncStatus("pending_create") as any[];
+      const pendingCreates = getFlashcardsBySyncStatus(userId, "pending_create") as any[];
       const folderPendingCreates = pendingCreates.filter(c => c.folder_id === fId);
       for (const card of folderPendingCreates) {
         const response = await fetch(
           `${BASE_URL}/flashcards/${fId}/manualSaved`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
               id: card.id,
               question: card.question,
@@ -82,7 +88,7 @@ export function useFlashCards(folderId: string) {
           },
         );
         if (response.ok) {
-          saveFlashcards([
+          saveFlashcards(userId, [
             {
               id: card.id,
               folderId: fId,
@@ -95,20 +101,20 @@ export function useFlashCards(folderId: string) {
       }
 
       // 2. Process pending deletions
-      const pendingDeletes = getFlashcardsBySyncStatus("pending_delete") as any[];
+      const pendingDeletes = getFlashcardsBySyncStatus(userId, "pending_delete") as any[];
       const folderPendingDeletes = pendingDeletes.filter(c => c.folder_id === fId);
       for (const card of folderPendingDeletes) {
         const response = await fetch(`${BASE_URL}/flashcards/${card.id}`, {
-          method: "DELETE",
+          method: "DELETE", headers: { Authorization: `Bearer ${token}` },
         });
         if (response.ok) {
-          deleteFlashcard(card.id);
+          deleteFlashcard(userId, card.id);
         }
       }
     } catch (error) {
       console.error("Failed to sync flashcards with server:", error);
     }
-  }, []);
+  }, [userId]);
 
   // Helper function: Converts card data received from the backend API structure 
   // into the standard TypeScript format used inside our React Native screens.
@@ -158,13 +164,16 @@ export function useFlashCards(folderId: string) {
     );
 
     // Save changes to local database cache for offline availability immediately
-    updateFlashcardStatus(id, newStatus);
+    if (!userId) return;
+    updateFlashcardStatus(userId, id, newStatus);
 
     try {
       // Send changes to the backend
+      const token = await getAccessToken();
+      if (!token) return;
       const response = await fetch(`${BASE_URL}/flashcards/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus }),
       });
 
@@ -172,7 +181,7 @@ export function useFlashCards(folderId: string) {
     } catch (error) {
       console.error("Status update failed:", error);
     }
-  }, []);
+  }, [userId]);
 
   const handleUnderstand = useCallback(
     (id: string) => updateCardStatus(id, "understood"),
@@ -185,15 +194,16 @@ export function useFlashCards(folderId: string) {
   );
 
   const handleDelete = useCallback(async (id: string) => {
+    if (!userId) return;
     // Eagerly update UI state
     setCards((prev) => prev.filter((c) => c.id !== id));
 
     // Eagerly update SQLite cache
-    deleteFlashcard(id);
+    deleteFlashcard(userId, id);
 
     // Perform sync in background
     void syncPendingFlashcards(folderId);
-  }, [folderId, syncPendingFlashcards]);
+  }, [folderId, syncPendingFlashcards, userId]);
 
   /** Update question/answer for an existing card */
   const handleEdit = useCallback(
@@ -212,9 +222,10 @@ export function useFlashCards(folderId: string) {
 
   // Deletes every single flashcard inside this subject folder.
   const handleDeleteAll = useCallback(async () => {
+    if (!userId) return;
     // Eagerly update SQLite cache
     try {
-      deleteAllFlashcardsForFolder(folderId);
+      deleteAllFlashcardsForFolder(userId, folderId);
     } catch (e) {
       console.error("Failed to delete all local flashcards:", e);
     }
@@ -224,8 +235,10 @@ export function useFlashCards(folderId: string) {
     setActiveTab("all");
 
     try {
+      const token = await getAccessToken();
+      if (!token) return;
       const response = await fetch(`${BASE_URL}/flashcards/folder/${folderId}`, {
-        method: "DELETE",
+        method: "DELETE", headers: { Authorization: `Bearer ${token}` },
       }); 
 
       if (!response.ok) {
@@ -234,7 +247,7 @@ export function useFlashCards(folderId: string) {
     } catch (error) {
       console.error("Delete all backend sync failed:", error);
     }
-  }, [folderId]);
+  }, [folderId, userId]);
 
   // ── Data Syncing and Cache Loading ──────────────────────────────────────────
 
@@ -242,7 +255,11 @@ export function useFlashCards(folderId: string) {
   // This is used if the server is offline or loading too slowly.
   const loadCachedCards = useCallback((): boolean => {
     try {
-      const cached = getFlashcardsByFolder(folderId);
+      if (!userId) {
+        setCards([]);
+        return false;
+      }
+      const cached = getFlashcardsByFolder(userId, folderId);
 
       const parsedCards: FlashCard[] = cached.map((card: any) => ({
         id: card.id,
@@ -257,10 +274,15 @@ export function useFlashCards(folderId: string) {
       console.error("Failed to load cached cards:", error);
       return false;
     }
-  }, [folderId]);
+  }, [folderId, userId]);
 
   const loadSavedCards = useCallback(
     async (signal?: AbortSignal, loadCacheOnFailure = false) => {
+      const token = await getAccessToken();
+      if (!token || !userId) {
+        setCards([]);
+        return;
+      }
       // Create a timeout controller to cancel the request if it takes longer than 8 seconds (FETCH_TIMEOUT_MS)
       const timeoutController = new AbortController();
       const timeoutId = setTimeout(() => timeoutController.abort(), FETCH_TIMEOUT_MS);
@@ -271,6 +293,7 @@ export function useFlashCards(folderId: string) {
 
       try {
         const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`, {
+          headers: { Authorization: `Bearer ${token}` },
           signal: timeoutController.signal, // Link abort signal
         });
 
@@ -284,7 +307,7 @@ export function useFlashCards(folderId: string) {
         if (!isMountedRef.current) return;
 
         // Save server cards to cache (only replacing synced cards)
-        replaceFlashcardsForFolder(folderId, saved.map((card) => ({ ...card, folderId })), "synced");
+        replaceFlashcardsForFolder(userId, folderId, saved.map((card) => ({ ...card, folderId })), "synced");
 
         // Run background sync for pending creations/deletes
         void syncPendingFlashcards(folderId);
@@ -309,11 +332,12 @@ export function useFlashCards(folderId: string) {
         }
       }
     },
-    [folderId, loadCachedCards, syncPendingFlashcards],
+    [folderId, loadCachedCards, syncPendingFlashcards, userId],
   );
 
   const handleAddCard = useCallback(
     async (question: string, answer: string) => {
+      if (!userId) return;
       const newId = uuidv4();
       const newCard: FlashCard = {
         id: newId,
@@ -326,7 +350,7 @@ export function useFlashCards(folderId: string) {
       setCards((prev) => [...prev, newCard]);
 
       // Eagerly save to SQLite cache as pending
-      saveFlashcards(
+      saveFlashcards(userId,
         [
           {
             id: newId,
@@ -342,7 +366,7 @@ export function useFlashCards(folderId: string) {
       // Perform background sync (non-blocking)
       void syncPendingFlashcards(folderId);
     },
-    [folderId, syncPendingFlashcards],
+    [folderId, syncPendingFlashcards, userId],
   );
 
   // ── Load existing cards on mount / folder change ───────────────────────────
@@ -350,7 +374,8 @@ export function useFlashCards(folderId: string) {
   useEffect(() => {
     isMountedRef.current = true;
 
-    if (!folderId) {
+    if (!folderId || !userId) {
+      setCards([]);
       setInitialLoading(false);
       return () => {
         isMountedRef.current = false;
@@ -388,14 +413,14 @@ export function useFlashCards(folderId: string) {
       controller.abort();   // Cancel running fetch request
       clearPoll();          // Stop active timers
     };
-  }, [folderId, clearPoll, loadCachedCards, loadSavedCards]);
+  }, [folderId, clearPoll, loadCachedCards, loadSavedCards, userId]);
 
   /** 
    * Uploads a textbook document (PDF/Word) to the backend server and triggers 
    * the AI generation service. Once completed, it reloads the new flashcards list.
    */
   const fetchAiCards = useCallback(async (file: TextbookUpload): Promise<boolean> => {
-    if (!folderId || !isMountedRef.current) return false;
+    if (!folderId || !isMountedRef.current || !userId) return false;
 
     setLoading(true);
     clearPoll();
@@ -403,6 +428,8 @@ export function useFlashCards(folderId: string) {
     try {
       // Upload the PDF or DOCX file using Expo's legacy FileSystem utility.
       // Uses "MULTIPART" format (similar to an HTML form file upload).
+      const token = await getAccessToken();
+      if (!token) return false;
       const uploadResult = await FileSystem.uploadAsync(
         `${BASE_URL}/flashcards/${folderId}`,
         file.uri,
@@ -411,6 +438,7 @@ export function useFlashCards(folderId: string) {
           httpMethod: "POST",
           uploadType: FileSystem.FileSystemUploadType.MULTIPART,
           mimeType: file.mimeType ?? "application/pdf",
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
@@ -440,7 +468,7 @@ export function useFlashCards(folderId: string) {
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
-  }, [folderId, clearPoll, loadSavedCards]);
+  }, [folderId, clearPoll, loadSavedCards, userId]);
 
   return {
     // state

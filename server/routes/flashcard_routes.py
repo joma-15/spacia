@@ -11,6 +11,7 @@ from errors import ApiError
 from services.ai_flashcard_service import AiFlashcardService
 from services.flashcard_services import FlashcardService
 from validation import require_fields, require_json_object
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
 # Blueprints let us split our application routing into multiple files.
 # All routes related to flashcards are bundled here.
@@ -34,7 +35,9 @@ class FlashcardGenerationAPI(MethodView):
     """
     ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
+    @jwt_required()
     def post(self, folder_id: str):
+        user_id = get_jwt_identity()
         # Extract the uploaded file from the request form
         uploaded_file = request.files.get("file")
         if uploaded_file is None or not uploaded_file.filename:
@@ -58,7 +61,7 @@ class FlashcardGenerationAPI(MethodView):
 
         try:
             # Generate flashcards using our AI service
-            flashcards = ai_flashcard_service.generate_from_file(folder_id, str(source_file))
+            flashcards = ai_flashcard_service.generate_from_file(folder_id, user_id, str(source_file))
         finally:
             # The 'finally' block always runs, even if generate_from_file crashes!
             # This is crucial so we never leave temporary PDF files lying around on the server.
@@ -73,8 +76,9 @@ class SavedFlashcardsAPI(MethodView):
     View for fetching already-saved cards.
     If a GET request comes in, return a list of all cards in the folder.
     """
+    @jwt_required()
     def get(self, folder_id: str):
-        flashcards = flashcard_service.list_for_folder(folder_id)
+        flashcards = flashcard_service.list_for_folder(folder_id, get_jwt_identity())
         return jsonify([flashcard.to_dict() for flashcard in flashcards])
 
 
@@ -84,6 +88,7 @@ class ManualFlashcardAPI(MethodView):
     If a POST request comes in, extract the question and answer from the JSON body
     and create it.
     """
+    @jwt_required()
     def post(self, folder_id: str):
         # Ensure the client sent actual JSON
         data = require_json_object(request.get_json(silent=True))
@@ -92,6 +97,7 @@ class ManualFlashcardAPI(MethodView):
         
         flashcard = flashcard_service.create(
             folder_id, 
+            get_jwt_identity(),
             data["question"], 
             data["answer"], 
             data["status"],
@@ -106,14 +112,16 @@ class FlashcardItemAPI(MethodView):
     - PATCH requests update the study status (e.g. marking it 'understood').
     - DELETE requests remove the card permanently.
     """
+    @jwt_required()
     def patch(self, flashcard_id: str):
         data = require_json_object(request.get_json(silent=True))
         require_fields(data, "status")
-        flashcard = flashcard_service.update_status(flashcard_id, data["status"])
+        flashcard = flashcard_service.update_status(flashcard_id, get_jwt_identity(), data["status"])
         return jsonify({"message": "Flashcard updated.", "data": flashcard.to_dict()})
 
+    @jwt_required()
     def delete(self, flashcard_id: str):
-        flashcard_service.delete(flashcard_id)
+        flashcard_service.delete(flashcard_id, get_jwt_identity())
         return jsonify({"message": "Flashcard deleted successfully."})
 
 
@@ -122,8 +130,9 @@ class FolderFlashcardsAPI(MethodView):
     View for operations on a whole folder's collection of cards.
     - DELETE requests delete every card in the deck.
     """
+    @jwt_required()
     def delete(self, folder_id: str):
-        deleted_count = flashcard_service.delete_for_folder(folder_id)
+        deleted_count = flashcard_service.delete_for_folder(folder_id, get_jwt_identity())
         return jsonify({"message": "Flashcards deleted successfully.", "deletedCount": deleted_count})
 
 

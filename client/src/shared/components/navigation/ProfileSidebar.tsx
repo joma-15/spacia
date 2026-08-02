@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePathname } from "expo-router";
 import AuthModal from "@/features/auth/components/AuthModal";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { colors, radius, shadow, spacing } from "@/features/auth/styles/styles";
@@ -23,6 +24,7 @@ const ANIMATION_DURATION = 260;
 
 export default function ProfileSidebar() {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const { user, isRestoring, logout } = useAuth();
   const { isSidebarOpen, openSidebar, closeSidebar } = useSidebar();
   const [isMounted, setIsMounted] = useState(false);
@@ -30,6 +32,20 @@ export default function ProfileSidebar() {
   const [openLoginAfterClose, setOpenLoginAfterClose] = useState(false);
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  // This component is mounted by the Tabs layout, but tabs may contain helper
+  // routes. Keep both the trigger and its modal out of every non-main screen.
+  const isMainTab = ["/library", "/game", "/streakcomingsoon", "/payment"].some(
+    (route) => pathname === route || pathname.endsWith(`(tabs)${route}`),
+  );
+
+  useEffect(() => {
+    if (!isMainTab) {
+      closeSidebar();
+      setLoginVisible(false);
+      setOpenLoginAfterClose(false);
+    }
+  }, [closeSidebar, isMainTab]);
 
   useEffect(() => {
     if (isSidebarOpen) {
@@ -94,6 +110,8 @@ export default function ProfileSidebar() {
     closeSidebar();
   };
 
+  if (!isMainTab) return null;
+
   return (
     <>
       <TouchableOpacity
@@ -122,7 +140,11 @@ export default function ProfileSidebar() {
             style={[
               styles.drawer,
               shadow.card,
-              { paddingTop: insets.top + spacing.lg, transform: [{ translateX }] },
+              {
+                paddingTop: insets.top + spacing.lg,
+                paddingBottom: insets.bottom + spacing.lg,
+                transform: [{ translateX }],
+              },
             ]}
           >
             <View style={styles.drawerHeader}>
@@ -174,6 +196,7 @@ export default function ProfileSidebar() {
       </Modal>
 
       <AuthModal
+        key={loginVisible ? "auth-open" : "auth-closed"}
         visible={loginVisible}
         onClose={() => setLoginVisible(false)}
         onAuthenticated={() => setLoginVisible(false)}

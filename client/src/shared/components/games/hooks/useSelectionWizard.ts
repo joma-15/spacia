@@ -3,6 +3,7 @@ import { BASE_URL } from "@/shared/config/api";
 import { getFolders, saveFolders } from "@/shared/database/folderRepository";
 import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
 import { getAccessToken } from "@/shared/components/auth/session";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 
 export interface Folder {
   id: string;
@@ -12,6 +13,8 @@ export interface Folder {
 }
 
 export function useSelectionWizard() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,8 +41,12 @@ export function useSelectionWizard() {
   // Loads folders from the local SQLite database cache
   const loadCachedFolders = useCallback(() => {
     try {
-      const cached = getFolders();
-      const cardCounts = getCardCountsPerFolder();
+      if (!userId) {
+        setFolders([]);
+        return [];
+      }
+      const cached = getFolders(userId);
+      const cardCounts = getCardCountsPerFolder(userId);
 
       const parsed: Folder[] = cached.map((folder: any) => ({
         id: folder.id,
@@ -60,7 +67,7 @@ export function useSelectionWizard() {
       console.error("Failed to load cached folders:", error);
       return [];
     }
-  }, []);
+  }, [userId]);
 
   // Fetches folders from the backend and updates the cache
   const fetchFolders = useCallback(async (isARefresh = false) => {
@@ -78,8 +85,8 @@ export function useSelectionWizard() {
 
     try {
       const token = await getAccessToken();
-      if (!token) {
-        loadCachedFolders();
+      if (!token || !userId) {
+        setFolders([]);
         return;
       }
       const response = await fetch(`${BASE_URL}/folders`, {
@@ -96,7 +103,7 @@ export function useSelectionWizard() {
 
       // Save server folders to cache
       if (data && Array.isArray(data.response)) {
-        saveFolders(data.response, "synced");
+        saveFolders(userId, data.response, "synced");
       }
 
       // Reload the updated data from SQLite cache
@@ -111,7 +118,7 @@ export function useSelectionWizard() {
         setRefreshing(false);
       }
     }
-  }, [loadCachedFolders]);
+  }, [loadCachedFolders, userId]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -130,4 +137,4 @@ export function useSelectionWizard() {
     folders,
     fetchFolders,
   };
-}
+}

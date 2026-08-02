@@ -5,21 +5,23 @@ import { db } from "./database";
  * Uses "INSERT OR REPLACE" to update existing folders or create new ones 
  * without causing primary key constraint conflicts.
  */
-export function saveFolders(folders: any[], syncStatus: string = 'synced') {
+export function saveFolders(userId: string, folders: any[], syncStatus: string = 'synced') {
   for (const folder of folders) {
     db.runSync(
       `
       INSERT OR REPLACE INTO folders
       (
         id,
+        user_id,
         subject,
         accent_color,
         sync_status
       )
-      VALUES (?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?)
       `,
       [
         folder.id,
+        userId,
         folder.subject,
         folder.accentColor || folder.accent_color,
         syncStatus
@@ -31,33 +33,33 @@ export function saveFolders(folders: any[], syncStatus: string = 'synced') {
 /**
  * Returns all active subject folders saved in the local database (excluding pending deletes).
  */
-export function getFolders() {
+export function getFolders(userId: string) {
   return db.getAllSync(`
     SELECT *
     FROM folders
-    WHERE sync_status != 'pending_delete'
-  `);
+    WHERE user_id = ? AND sync_status != 'pending_delete'
+  `, [userId]);
 }
 
 /**
  * Returns all folders matching a specific sync status (e.g. 'pending_create' or 'pending_delete').
  */
-export function getFoldersBySyncStatus(status: string) {
+export function getFoldersBySyncStatus(userId: string, status: string) {
   return db.getAllSync(`
     SELECT *
     FROM folders
-    WHERE sync_status = ?
-  `, [status]);
+    WHERE user_id = ? AND sync_status = ?
+  `, [userId, status]);
 }
 
 /**
  * Updates the subject name of a folder in the local database.
  * Marks the folder as 'pending_update' so the background sync will push the change to the server.
  */
-export function updateFolder(folderId: string, newSubject: string) {
+export function updateFolder(userId: string, folderId: string, newSubject: string) {
   db.runSync(
-    `UPDATE folders SET subject = ?, sync_status = 'pending_update' WHERE id = ?`,
-    [newSubject, folderId]
+    `UPDATE folders SET subject = ?, sync_status = 'pending_update' WHERE id = ? AND user_id = ?`,
+    [newSubject, folderId, userId]
   );
 }
 
@@ -65,24 +67,24 @@ export function updateFolder(folderId: string, newSubject: string) {
  * Deletes a subject folder from local database by its ID.
  * If it is pending creation, we delete it directly. Otherwise, we flag it as pending delete.
  */
-export function deleteFolder(folderId: string) {
-  const row = db.getFirstSync(`SELECT sync_status FROM folders WHERE id = ?`, [folderId]) as any;
+export function deleteFolder(userId: string, folderId: string) {
+  const row = db.getFirstSync(`SELECT sync_status FROM folders WHERE id = ? AND user_id = ?`, [folderId, userId]) as any;
   if (row && row.sync_status === 'pending_create') {
     db.runSync(
       `
       DELETE FROM folders
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
       `,
-      [folderId]
+      [folderId, userId]
     );
   } else {
     db.runSync(
       `
       UPDATE folders
       SET sync_status = 'pending_delete'
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
       `,
-      [folderId]
+      [folderId, userId]
     );
   }
 }

@@ -1,7 +1,5 @@
 import React, { useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -65,13 +63,7 @@ export default function LoginForm({
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      // If this form lives inside a Modal whose header/handle takes up
-      // space at the top, tweak this offset to match that height.
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      style={styles.flex}
-    >
+    <View style={styles.flex}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -134,7 +126,7 @@ export default function LoginForm({
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

@@ -1,8 +1,10 @@
 import { Tabs } from "expo-router";
 import BottomNav from "@/shared/components/navigation/BottomNav";
+import ProfileSidebar from "@/shared/components/navigation/ProfileSidebar";
 
 export default function TabsLayout() {
   return (
+    <>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -15,5 +17,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="streakcomingsoon" />
       <Tabs.Screen name="game" />
     </Tabs>
+    <ProfileSidebar />
+    </>
   );
 }
