@@ -27,7 +27,9 @@ export default function ProfileSidebar() {
   const { isSidebarOpen, openSidebar, closeSidebar } = useSidebar();
   const [loginVisible, setLoginVisible] = useState(false);
   const [openLoginAfterClose, setOpenLoginAfterClose] = useState(false);
+  const [pendingLogout, setPendingLogout] = useState(false);
   const loginTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isMainTab = ["/library", "/game", "/streakcomingsoon", "/payment"].some(
     (route) => pathname === route || pathname.endsWith(`(tabs)${route}`),
@@ -36,8 +38,13 @@ export default function ProfileSidebar() {
   useEffect(() => {
     if (!isMainTab) {
       closeSidebar();
-      setLoginVisible(false);
-      setOpenLoginAfterClose(false);
+      // Defer state resets to the next microtask tick to avoid triggering cascading synchronous renders.
+      Promise.resolve().then(() => {
+        setLoginVisible(false);
+        setOpenLoginAfterClose(false);
+        setPendingLogout(false);
+      });
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
     }
   }, [closeSidebar, isMainTab]);
 
@@ -55,6 +62,19 @@ export default function ProfileSidebar() {
     };
   }, [isSidebarOpen, openLoginAfterClose]);
 
+  // Delay logout state changes until the native sidebar has fully finished
+  // its close transition to prevent overlay rendering conflicts on the native stack.
+  useEffect(() => {
+    if (isSidebarOpen || !pendingLogout) return;
+    logoutTimerRef.current = setTimeout(async () => {
+      setPendingLogout(false);
+      await logout();
+    }, DRAWER_DISMISS_MS);
+    return () => {
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+    };
+  }, [isSidebarOpen, pendingLogout, logout]);
+
   useEffect(() => {
     if (!isSidebarOpen || Platform.OS === "web") return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -69,8 +89,8 @@ export default function ProfileSidebar() {
     closeSidebar();
   };
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    setPendingLogout(true);
     closeSidebar();
   };
 
@@ -131,6 +151,7 @@ export default function ProfileSidebar() {
                 activeOpacity={0.85}
                 onPress={user ? handleLogout : handleLogin}
                 style={[styles.actionButton, user ? styles.logoutButton : styles.loginButton]}
+                disabled={pendingLogout}
               >
                 <MaterialCommunityIcons name={user ? "logout" : "login"} size={20} color={user ? colors.danger : colors.background} />
                 <Text style={[styles.actionText, user ? styles.logoutText : styles.loginText]}>{user ? "Log Out" : "Log In"}</Text>
