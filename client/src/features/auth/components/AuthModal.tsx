@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -68,6 +69,7 @@ export default function AuthModal({
   }, [visible, initialMode, opacity, translateY]);
 
   const handleRequestClose = () => {
+    Keyboard.dismiss();
     if (isClosingRef.current) return;
     isClosingRef.current = true;
     animationRef.current?.stop();
@@ -87,6 +89,30 @@ export default function AuthModal({
     ]);
     animationRef.current.start(({ finished }) => {
       if (finished) onClose();
+    });
+  };
+
+  const handleSuccess = () => {
+    Keyboard.dismiss();
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    animationRef.current?.stop();
+    animationRef.current = Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: MODAL_ANIM_DURATION_MS - 60,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 40,
+        duration: MODAL_ANIM_DURATION_MS - 60,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]);
+    animationRef.current.start(({ finished }) => {
+      if (finished) onAuthenticated();
     });
   };
 
@@ -114,7 +140,7 @@ export default function AuthModal({
 
         <KeyboardAvoidingView
         style={styles.centerWrap}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={0}
         pointerEvents="box-none"
       >
@@ -149,13 +175,13 @@ export default function AuthModal({
                 <LoginForm
                   onSwitchToRegister={() => setMode("register")}
                   onSwitchToForgotPassword={() => setMode("forgotPassword")}
-                  onSuccess={onAuthenticated}
+                  onSuccess={handleSuccess}
                 />
               )}
               {mode === "register" && (
                 <RegisterForm
                   onSwitchToLogin={() => setMode("login")}
-                  onSuccess={onAuthenticated}
+                  onSuccess={handleSuccess}
                 />
               )}
               {mode === "forgotPassword" && (
