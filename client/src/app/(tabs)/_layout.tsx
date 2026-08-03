@@ -14,7 +14,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="library" />
       <Tabs.Screen name="payment" />
-      <Tabs.Screen name="streakcomingsoon" />
+      <Tabs.Screen name="streak" />
       <Tabs.Screen name="game" />
     </Tabs>
     <ProfileSidebar />

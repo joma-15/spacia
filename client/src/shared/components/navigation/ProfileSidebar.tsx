@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePathname } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   BackHandler,
   Modal,
   Platform,
@@ -31,9 +32,49 @@ export default function ProfileSidebar() {
   const loginTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isMainTab = ["/library", "/game", "/streakcomingsoon", "/payment"].some(
+  const [slideAnim] = useState(() => new Animated.Value(DRAWER_WIDTH));
+  const [fadeAnim] = useState(() => new Animated.Value(0));
+
+  const isMainTab = ["/library", "/game", "/streak", "/streakcomingsoon", "/payment"].some(
     (route) => pathname === route || pathname.endsWith(`(tabs)${route}`),
   );
+
+  const handleClose = React.useCallback(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: DRAWER_WIDTH,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      closeSidebar();
+    });
+  }, [closeSidebar, slideAnim, fadeAnim]);
+
+  // Trigger slide-in animation when the sidebar opens
+  useEffect(() => {
+    if (isSidebarOpen) {
+      slideAnim.setValue(DRAWER_WIDTH);
+      fadeAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isSidebarOpen, slideAnim, fadeAnim]);
 
   useEffect(() => {
     if (!isMainTab) {
@@ -78,20 +119,20 @@ export default function ProfileSidebar() {
   useEffect(() => {
     if (!isSidebarOpen || Platform.OS === "web") return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      closeSidebar();
+      handleClose();
       return true;
     });
     return () => subscription.remove();
-  }, [closeSidebar, isSidebarOpen]);
+  }, [isSidebarOpen, handleClose]);
 
   const handleLogin = () => {
     setOpenLoginAfterClose(true);
-    closeSidebar();
+    handleClose();
   };
 
   const handleLogout = () => {
     setPendingLogout(true);
-    closeSidebar();
+    handleClose();
   };
 
   if (!isMainTab) return null;
@@ -112,24 +153,28 @@ export default function ProfileSidebar() {
       <Modal
         visible={isSidebarOpen}
         transparent
-        animationType="slide"
+        animationType="none"
         statusBarTranslucent
-        onRequestClose={closeSidebar}
+        onRequestClose={handleClose}
       >
         <View style={styles.modalRoot}>
-          <View style={styles.backdrop}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={closeSidebar} />
-          </View>
-          <View
+          <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+          </Animated.View>
+          <Animated.View
             style={[
               styles.drawer,
               shadow.card,
-              { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg },
+              {
+                paddingTop: insets.top + spacing.lg,
+                paddingBottom: insets.bottom + spacing.lg,
+                transform: [{ translateX: slideAnim }],
+              },
             ]}
           >
             <View style={styles.drawerHeader}>
               <Text style={styles.drawerTitle}>Profile</Text>
-              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close profile menu" onPress={closeSidebar} style={styles.closeButton}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close profile menu" onPress={handleClose} style={styles.closeButton}>
                 <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -157,7 +202,7 @@ export default function ProfileSidebar() {
                 <Text style={[styles.actionText, user ? styles.logoutText : styles.loginText]}>{user ? "Log Out" : "Log In"}</Text>
               </TouchableOpacity>
             )}
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -173,9 +218,9 @@ export default function ProfileSidebar() {
 
 const styles = StyleSheet.create({
   profileButton: { position: "absolute", right: spacing.md, zIndex: 100, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(13, 31, 23, 0.9)", borderWidth: 1, borderColor: colors.border, elevation: 6 },
-  modalRoot: { flex: 1 },
+  modalRoot: { flex: 1, flexDirection: "row", justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.overlay },
-  drawer: { width: DRAWER_WIDTH, height: "100%", backgroundColor: colors.surfaceElevated, borderTopRightRadius: radius.lg, borderBottomRightRadius: radius.lg, paddingHorizontal: spacing.lg },
+  drawer: { width: DRAWER_WIDTH, height: "100%", backgroundColor: colors.surfaceElevated, borderTopLeftRadius: radius.lg, borderBottomLeftRadius: radius.lg, paddingHorizontal: spacing.lg },
   drawerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   drawerTitle: { color: colors.textPrimary, fontSize: 20, fontWeight: "800" },
   closeButton: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(255,255,255,0.06)" },
