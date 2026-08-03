@@ -1,10 +1,10 @@
-import { StreakDashboardScreen } from "@/features/streak/Streakdashboard.single";
 import StreakAuthGate from "@/features/auth/StreakAuthGate";
+import StreakDashboardScreen from "../StreakScreen";
 
-export default function Streak(){
-    return(
-        <StreakAuthGate>
-            <StreakDashboardScreen/>
-        </StreakAuthGate>
-    );
+export default function Streak() {
+  return (
+    <StreakAuthGate>
+      <StreakDashboardScreen />
+    </StreakAuthGate>
+  );
 }

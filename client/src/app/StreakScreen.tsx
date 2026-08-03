@@ -1,1 +1,1 @@
-export {default} from "@/features/streak/Streakdashboard.single"
+export {default} from "@/features/streak/StreakDashboardScreen"
