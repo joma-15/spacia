@@ -100,8 +100,9 @@ export default function StreakDashboardScreen() {
           {dailyGoal.loading ? (
             <SkeletonCard height={160} />
           ) : (
-            dailyGoal.data && (
+            dailyGoal.data && challenge.data && (
               <DailyGoalCard
+                challenge={challenge.data}   // <-- ADD THIS
                 target={dailyGoal.data.target}
                 completed={dailyGoal.data.completed}
                 percent={dailyGoal.percent}

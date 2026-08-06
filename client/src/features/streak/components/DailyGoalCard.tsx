@@ -3,8 +3,10 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, radii, shadow, spacing, typography } from "../constants/theme";
 import { ProgressBar } from "./ProgressBar";
+import { Challenge } from "../types";
 
 interface DailyGoalCardProps {
+  challenge: Challenge;
   target: number;
   completed: number;
   percent: number;
@@ -14,6 +16,7 @@ interface DailyGoalCardProps {
 }
 
 export function DailyGoalCard({
+  challenge,
   target,
   completed,
   percent,
@@ -33,7 +36,7 @@ export function DailyGoalCard({
         </View>
         <View style={styles.headerText}>
           <Text style={styles.eyebrow}>TODAY'S GOAL</Text>
-          <Text style={styles.title}>Review {target} flashcards</Text>
+          <Text style={styles.title}>{challenge.description}</Text>
         </View>
         <Text style={styles.percentLabel}>{percent}%</Text>
       </View>

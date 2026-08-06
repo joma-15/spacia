@@ -108,7 +108,7 @@ export const weeklyChallenges: Record<number, Challenge[]> = {
     {
       id: "thu-2",
       title: "Review Difficult Cards",
-      description: "Review 20 difficult flashcards.",
+      description: "Review 30 difficult flashcards.",
       rewardXP: 150,
       completed: false,
       progress: 0,
