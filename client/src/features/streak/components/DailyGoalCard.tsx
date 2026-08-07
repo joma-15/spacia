@@ -1,5 +1,4 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, radii, shadow, spacing, typography } from "../constants/theme";
 import { ProgressBar } from "./ProgressBar";
