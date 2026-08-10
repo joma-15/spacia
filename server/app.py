@@ -60,6 +60,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     from models.folders import Folder  # noqa: F401
     from models.schedules import Schedule  # noqa: F401
     from models.users import User  # noqa: F401
+    from models.studysessions import StudySession #noqa: F401
     from routes.flashcard_routes import flashcards_bp
     from routes.folder_routes import folders_bp
     from routes.schedule_routes import schedules_bp

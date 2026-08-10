@@ -38,3 +38,9 @@ class User(db.Model):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    study_sessions = db.relationship(
+        "StudySession",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
