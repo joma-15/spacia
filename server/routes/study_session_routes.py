@@ -1,27 +1,22 @@
-"""HTTP controllers for study sessions."""
-
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
+from flask.views import MethodView
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from services.study_session_service import StudySessionService
 
 
-# Blueprint
 studysession_bp = Blueprint(
     "studySessions",
     __name__
 )
 
-studysession_service = StudySessionService
 
+class StudySessionStartAPI(MethodView):
 
-class StudySessionController:
-
-    @staticmethod
     @jwt_required()
-    def start_session():
+    def post(self):
         data = request.get_json()
 
         if not data:
@@ -69,9 +64,11 @@ class StudySessionController:
                 "message": "Failed to start study session"
             }), 500
 
-    @staticmethod
+
+class StudySessionEndAPI(MethodView):
+
     @jwt_required()
-    def end_session():
+    def post(self):
         data = request.get_json()
 
         if not data:
@@ -128,12 +125,16 @@ class StudySessionController:
             }), 500
 
 
-# Routes
-@studysession_bp.route("/study-session/start", methods=["POST"])
-def start_study_session():
-    return StudySessionController.start_session()
+studysession_bp.add_url_rule(
+    "/study-sessions/start",
+    view_func=StudySessionStartAPI.as_view(
+        "study_session_start"
+    )
+)
 
-
-@studysession_bp.route("/study-session/end", methods=["POST"])
-def end_study_session():
-    return StudySessionController.end_session()
+studysession_bp.add_url_rule(
+    "/study-sessions/end",
+    view_func=StudySessionEndAPI.as_view(
+        "study_session_end"
+    )
+)
