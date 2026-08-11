@@ -1,17 +1,3 @@
-/**
- * useLibrary.ts
- * ─────────────────────────────────────────────
- * Custom hook — the "brain" of the Library screen.
- *
- * WHAT IS A HOOK?
- * A hook is just a function that starts with "use" and can hold
- * React state (useState) and logic. By moving all state here,
- * the screen component only handles what things LOOK like,
- * while this hook handles what things DO.
- *
- * This makes both files much shorter and easier to test.
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import type { Folder } from "../types";
@@ -27,46 +13,30 @@ import { uuidv4 } from "@/shared/database/database";
 import { ApiRequestError, authenticatedFetch } from "@/shared/services/authenticatedFetch";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 
+// Stable key used to store/read folders for a user who hasn't logged in yet.
+// Everything is scoped under this id until they sign in.
+const GUEST_ID = "guest_local";
+
 export function useLibrary() {
   const { cacheOwnerId } = useAuth();
-  const userId = cacheOwnerId;
+  const isGuest = !cacheOwnerId;
+  const userId = cacheOwnerId ?? GUEST_ID; // always have something to key cache with
   const isMountedRef = useRef(false);
-  // ── State ────────────────────────────────────────────────────────────────
 
-  /** The master list of all subject folders */
   const [folders, setFolders] = useState<Folder[]>([]);
-
-  /** Whether the "flash on unlock" notification feature is turned on */
   const [popupEnabled, setPopupEnabled] = useState<boolean>(true);
-
-  /** What the user has typed in the search bar */
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-  //loading for modals
   const [loading, setLoading] = useState<boolean>(true);
 
-  // ── Derived data (computed from state, not stored separately) ─────────────
-
-  /**
-   * Folders that match the current search query.
-   * We compute this every render instead of storing it in state —
-   * that way it's always in sync with both `folders` and `searchQuery`.
-   */
   const filteredFolders = folders.filter((folder) =>
     folder.subject.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   // ── Folder actions ────────────────────────────────────────────────────────
-  //load cache folders
+
   const loadCachedFolders = useCallback(() => {
     try {
-      if (!userId) {
-        if (isMountedRef.current) setFolders([]);
-        return;
-      }
       const cachedFolders = getFolders(userId);
-
-      // Single GROUP BY query — gets all folder card counts in one shot (offline-safe)
       const cardCounts = getCardCountsPerFolder(userId);
 
       const parsedFolders: Folder[] = cachedFolders.map((folder: any) => ({
@@ -82,22 +52,16 @@ export function useLibrary() {
     }
   }, [userId]);
 
-  // background sync helper
   const syncPendingFolders = useCallback(async () => {
-    try {
-      if (!userId) return;
+    // Guests have no account to sync to — everything just lives locally.
+    if (isGuest) return;
 
-      // 1. Process pending creations
-      const pendingCreates = getFoldersBySyncStatus(
-        userId,
-        "pending_create",
-      ) as any[];
+    try {
+      const pendingCreates = getFoldersBySyncStatus(userId, "pending_create") as any[];
       for (const folder of pendingCreates) {
         const response = await authenticatedFetch("/folders", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             id: folder.id,
             subject: folder.subject,
@@ -107,27 +71,15 @@ export function useLibrary() {
         if (response.ok) {
           saveFolders(
             userId,
-            [
-              {
-                id: folder.id,
-                subject: folder.subject,
-                accentColor: folder.accent_color || folder.accentColor,
-              },
-            ],
+            [{ id: folder.id, subject: folder.subject, accentColor: folder.accent_color || folder.accentColor }],
             "synced",
           );
         }
       }
 
-      // 2. Process pending deletions
-      const pendingDeletes = getFoldersBySyncStatus(
-        userId,
-        "pending_delete",
-      ) as any[];
+      const pendingDeletes = getFoldersBySyncStatus(userId, "pending_delete") as any[];
       for (const folder of pendingDeletes) {
-        const response = await authenticatedFetch(`/folders/${folder.id}`, {
-          method: "DELETE",
-        });
+        const response = await authenticatedFetch(`/folders/${folder.id}`, { method: "DELETE" });
         if (response.ok) {
           deleteFolderCache(userId, folder.id);
         }
@@ -135,145 +87,92 @@ export function useLibrary() {
     } catch (error) {
       console.error("Failed to sync folders with server:", error);
     }
-  }, [userId]);
+  }, [userId, isGuest]);
 
-  //for fetching current folder data to database
   const fetchFolder = useCallback(async () => {
     try {
       if (isMountedRef.current) setLoading(true);
 
-      if (!userId) {
-        if (isMountedRef.current) setFolders([]);
+      // Guests can't hit the server — just read whatever's cached locally.
+      if (isGuest) {
+        loadCachedFolders();
         return;
       }
-      const response = await authenticatedFetch("/folders");
 
+      const response = await authenticatedFetch("/folders");
       const foldersFromDB = await response.json();
 
       if (!isMountedRef.current) return;
 
-      // Save server folders to cache
       saveFolders(userId, foldersFromDB.response, "synced");
-
-      // Run background sync for pending actions
       void syncPendingFolders();
-
-      // Read final list from SQLite (which merges fetched server folders + any pending folder creations)
       loadCachedFolders();
     } catch (error) {
-      if (error instanceof ApiRequestError) {
-        console.error("Folder request failed; using cached folders:", {
-          status: error.status,
-          code: error.code,
-        });
-      } else {
-        console.error("Folder request failed; using cached folders:", error);
-      }
+      // if (error instanceof ApiRequestError) {
+      //   console.error("Folder request failed; using cached folders:", {
+      //     status: error.status,
+      //     code: error.code,
+      //   });
+      // } else {
+      //   console.error("Folder request failed; using cached folders:", error);
+      // }
+      // Fallback for logged-in users whose request failed (offline, timeout, etc.)
       loadCachedFolders();
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
-  }, [loadCachedFolders, syncPendingFolders, userId]);
+  }, [isGuest, loadCachedFolders, syncPendingFolders, userId]);
 
-  // ── Mount: set up ref and kick off server fetch ──────────────────────────
   useEffect(() => {
     isMountedRef.current = true;
-    if (!userId) {
-      setFolders([]);
-      setLoading(false);
-      return;
-    }
     void fetchFolder();
-
     return () => {
       isMountedRef.current = false;
     };
-  }, [fetchFolder, userId]);
+  }, [fetchFolder]);
 
-  // ── Focus: re-read SQLite counts every time the screen is entered ─────────
-  // This fires on initial mount AND every time the user navigates back here
-  // (e.g. returning from a folder after adding/deleting cards).
-  // SQLite is always up-to-date because cards are written there immediately,
-  // so this is instant and works fully offline.
   useFocusEffect(
     useCallback(() => {
       loadCachedFolders();
     }, [loadCachedFolders]),
   );
 
-  const addFolder = async (
-    subject: string,
-    accentColor: string,
-  ): Promise<void> => {
-    if (!userId) return;
+  const addFolder = async (subject: string, accentColor: string): Promise<void> => {
     const newId = uuidv4();
-    const newFolder: Folder = {
-      id: newId,
-      subject: subject.trim(),
-      accentColor,
-      cardCount: 0,
-    };
+    const newFolder: Folder = { id: newId, subject: subject.trim(), accentColor, cardCount: 0 };
 
-    // Eagerly update UI state
     setFolders((prev) => [newFolder, ...prev]);
-
-    // Eagerly save to SQLite cache as pending
     saveFolders(userId, [newFolder], "pending_create");
-
-    // Perform background sync (non-blocking)
     void syncPendingFolders();
   };
 
   const deleteFolder = async (id: string) => {
-    if (!userId) return;
-    // Eagerly update UI state
     setFolders((prev) => prev.filter((folder) => folder.id !== id));
-
-    // Eagerly delete/mark pending deletion in SQLite cache
     deleteFolderCache(userId, id);
-
-    // Perform background sync (non-blocking)
     void syncPendingFolders();
   };
 
-  /** Delete every folder at once */
   const deleteAllFolders = async () => {
-    if (!userId) return;
-    // Eagerly clear UI
     const ids = folders.map((f) => f.id);
     setFolders([]);
-    // Mark each as deleted in SQLite
     ids.forEach((id) => deleteFolderCache(userId, id));
-    // Background sync
     void syncPendingFolders();
   };
 
-  /** Rename a folder subject */
   const renameFolder = (id: string, newSubject: string) => {
-    if (!userId) return;
-    // Eagerly update UI
-    setFolders((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, subject: newSubject } : f)),
-    );
-    // Update in SQLite
+    setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, subject: newSubject } : f)));
     updateFolderCache(userId, id, newSubject);
-    // Background sync
     void syncPendingFolders();
   };
 
-  /** Clear the search bar text */
   const clearSearch = (): void => setSearchQuery("");
 
-  // ── Return everything the screen needs ───────────────────────────────────
   return {
-    // state
     folders,
     popupEnabled,
     searchQuery,
-    // derived
     filteredFolders,
     loading,
-    // actions
     setPopupEnabled,
     setSearchQuery,
     clearSearch,
