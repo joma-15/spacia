@@ -11,7 +11,10 @@ import { View, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { COLORS } from "./colors";
-import { getFlashcardsByFolder, updateFlashcardStatus } from "@/shared/database/flashcardRepository";
+import {
+  getFlashcardsByFolder,
+  updateFlashcardStatus,
+} from "@/shared/database/flashcardRepository";
 import type { Flashcard } from "./types";
 import { useCardFlip } from "./hooks/useCardFlip";
 import { useFlipSortSession } from "./hooks/useFlipSortSession";
@@ -22,13 +25,20 @@ import ActionButtons from "./components/ActionButtons";
 import { BASE_URL } from "@/shared/config/api";
 import { getAccessToken } from "@/shared/components/auth/session";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import {
+  startStudySession,
+  endStudySession,
+} from "@/shared/services/StudySessionsService";
 
 interface GameContentProps {
   folderId: string;
   folderName: string;
 }
 
-const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName }) => {
+const FlipSortGameContent: React.FC<GameContentProps> = ({
+  folderId,
+  folderName,
+}) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { cacheOwnerId } = useAuth();
@@ -37,6 +47,30 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
   // Load cards for this folder from database as state
   const [cards, setCards] = useState<Flashcard[]>([]);
 
+  //study session
+  useEffect(() => {
+    let sessionStarted = false;
+
+    const startSession = async () => {
+      try {
+        await startStudySession();
+        sessionStarted = true;
+      } catch (error) {
+        console.error("Failed to start study session:", error);
+      }
+    };
+
+    startSession();
+
+    return () => {
+      if (sessionStarted) {
+        endStudySession().catch((error) => {
+          console.error("Failed to end study session:", error);
+        });
+      }
+    };
+  }, []);
+
   useEffect(() => {
     try {
       if (!userId) {
@@ -44,22 +78,21 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
         return;
       }
       const dbCards = getFlashcardsByFolder(userId, folderId) as any[];
-      const mapped = dbCards.map((c) => ({
-        id: String(c.id),
-        question: c.question,
-        answer: c.answer,
-        status: c.status,
-      })).
-      filter((card) => card.status === 'review');
-      
+      const mapped = dbCards
+        .map((c) => ({
+          id: String(c.id),
+          question: c.question,
+          answer: c.answer,
+          status: c.status,
+        }))
+        .filter((card) => card.status === "review");
+
       setCards(mapped);
     } catch (e) {
       console.error("Failed to load cards for Flip & Sort:", e);
       setCards([]);
     }
   }, [folderId, userId]);
-
-
 
   // Callback to update status immediately in SQLite and state
   // const onUpdateCardStatus = useCallback((cardId: string, newStatus: 'review' | 'understood') => {
@@ -73,47 +106,45 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({ folderId, folderName 
   //   }
   // }, []);
 
-const onUpdateCardStatus = useCallback(
-  async (cardId: string, newStatus: "review" | "understood") => {
-    try {
-      // Update local SQLite
-      if (!userId) return;
-      updateFlashcardStatus(userId, cardId, newStatus);
+  const onUpdateCardStatus = useCallback(
+    async (cardId: string, newStatus: "review" | "understood") => {
+      try {
+        // Update local SQLite
+        if (!userId) return;
+        updateFlashcardStatus(userId, cardId, newStatus);
 
-      // Update React state
-      setCards((prev) =>
-        prev.map((card) =>
-          card.id === cardId
-            ? { ...card, status: newStatus }
-            : card
-        )
-      );
+        // Update React state
+        setCards((prev) =>
+          prev.map((card) =>
+            card.id === cardId ? { ...card, status: newStatus } : card,
+          ),
+        );
 
-      // Sync to backend
-      const token = await getAccessToken();
-      if (!token) return;
-      const response = await fetch(`${BASE_URL}/flashcards/${cardId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status: newStatus,
-        }),
-      });
+        // Sync to backend
+        const token = await getAccessToken();
+        if (!token) return;
+        const response = await fetch(`${BASE_URL}/flashcards/${cardId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            status: newStatus,
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to update flashcard");
+        if (!response.ok) {
+          throw new Error("Failed to update flashcard");
+        }
+
+        return await response.json();
+      } catch (error) {
+        console.error("Failed to update flashcard status:", error);
       }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Failed to update flashcard status:", error);
-    }
-  },
-  [userId]
-);
+    },
+    [userId],
+  );
 
   // Hook 1: Visual flip animation state
   const {
@@ -132,15 +163,15 @@ const onUpdateCardStatus = useCallback(
   //     params: { gameRoute: "/games/FlipSort" }
   //   });
   // }, [router]);
-  const handleBackPress = (() => {
+  const handleBackPress = () => {
     router.replace("/(tabs)/game");
-  });
+  };
 
   const handleChangeFolderPress = useCallback(() => {
     // Navigate back to selection wizard to choose another folder
     router.navigate({
       pathname: "/games/SelectionWizard",
-      params: { gameRoute: "/games/FlipSort" }
+      params: { gameRoute: "/games/FlipSort" },
     });
   }, [router]);
 
@@ -236,7 +267,10 @@ const onUpdateCardStatus = useCallback(
 };
 
 const FlipSortScreen: React.FC = () => {
-  const { folderId, folderName } = useLocalSearchParams<{ folderId: string; folderName: string }>();
+  const { folderId, folderName } = useLocalSearchParams<{
+    folderId: string;
+    folderName: string;
+  }>();
 
   if (!folderId) {
     return (

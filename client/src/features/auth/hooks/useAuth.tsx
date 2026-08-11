@@ -17,7 +17,7 @@ import { GUEST_CACHE_OWNER_STORAGE_KEY, SESSION_STORAGE_KEY } from "../constants
 import { AuthResponse, AuthUser, StoredSession } from "../types";
 import * as authApi from "./authApi";
 import { AuthError } from "./authApi";
-import { BASE_URL } from "@/shared/config/api";
+import { clearTokens, subscribeToSessionCleared } from "@/shared/components/auth/session";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -64,7 +64,7 @@ async function loadSession(): Promise<StoredSession | null> {
 }
 
 async function clearSession(): Promise<void> {
-  await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
+  await clearTokens();
 }
 
 async function loadOrCreateGuestCacheOwner(): Promise<string> {
@@ -110,11 +110,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const persistAndSetUser = useCallback(async (response: AuthResponse) => {
     const session: StoredSession = {
       token: response.access_token,
+      refreshToken: response.refresh_token,
       user: response.user,
     };
     await saveSession(session);
     setUser(response.user);
   }, []);
+
+  useEffect(() => subscribeToSessionCleared(() => setUser(null)), []);
 
   const login = useCallback(
     async (identifier: string, password: string) => {

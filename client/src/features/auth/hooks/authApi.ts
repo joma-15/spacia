@@ -172,6 +172,7 @@ async function mockLogin({
 
   return {
     access_token: fakeToken(match.id),
+    refresh_token: fakeToken(match.id),
     user: { id: match.id, username: match.username, email: match.email },
   };
 }
@@ -215,6 +216,7 @@ async function mockRegister({
 
   return {
     access_token: fakeToken(newUser.id),
+    refresh_token: fakeToken(newUser.id),
     user: { id: newUser.id, username: newUser.username, email: newUser.email },
   };
 }

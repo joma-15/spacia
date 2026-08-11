@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
@@ -23,6 +24,10 @@ class Config:
     MAX_CONTENT_LENGTH = 20 * 1024 * 1024  # 20 MB
 
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    # Access credentials are deliberately short-lived; refresh credentials keep
+    # a session alive without making normal API tokens long-lived.
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
 
     if JWT_SECRET_KEY is None:
         raise RuntimeError("JWT_SECRET_KEY is not set in the .env file.")

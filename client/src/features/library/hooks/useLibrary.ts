@@ -23,9 +23,8 @@ import {
   getFoldersBySyncStatus,
 } from "@/shared/database/folderRepository";
 import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
-import { BASE_URL } from "@/shared/config/api";
 import { uuidv4 } from "@/shared/database/database";
-import { getAccessToken } from "@/shared/components/auth/session";
+import { ApiRequestError, authenticatedFetch } from "@/shared/services/authenticatedFetch";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 
 export function useLibrary() {
@@ -86,17 +85,18 @@ export function useLibrary() {
   // background sync helper
   const syncPendingFolders = useCallback(async () => {
     try {
-      const token = await getAccessToken();
-      if (!token || !userId) return;
+      if (!userId) return;
 
       // 1. Process pending creations
-      const pendingCreates = getFoldersBySyncStatus(userId, "pending_create") as any[];
+      const pendingCreates = getFoldersBySyncStatus(
+        userId,
+        "pending_create",
+      ) as any[];
       for (const folder of pendingCreates) {
-        const response = await fetch(`${BASE_URL}/folders`, {
+        const response = await authenticatedFetch("/folders", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             id: folder.id,
@@ -105,7 +105,8 @@ export function useLibrary() {
           }),
         });
         if (response.ok) {
-          saveFolders(userId,
+          saveFolders(
+            userId,
             [
               {
                 id: folder.id,
@@ -113,19 +114,19 @@ export function useLibrary() {
                 accentColor: folder.accent_color || folder.accentColor,
               },
             ],
-            "synced"
+            "synced",
           );
         }
       }
 
       // 2. Process pending deletions
-      const pendingDeletes = getFoldersBySyncStatus(userId, "pending_delete") as any[];
+      const pendingDeletes = getFoldersBySyncStatus(
+        userId,
+        "pending_delete",
+      ) as any[];
       for (const folder of pendingDeletes) {
-        const response = await fetch(`${BASE_URL}/folders/${folder.id}`, {
+        const response = await authenticatedFetch(`/folders/${folder.id}`, {
           method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
         });
         if (response.ok) {
           deleteFolderCache(userId, folder.id);
@@ -141,25 +142,11 @@ export function useLibrary() {
     try {
       if (isMountedRef.current) setLoading(true);
 
-      const token = await getAccessToken();
       if (!userId) {
         if (isMountedRef.current) setFolders([]);
         return;
       }
-      if (!token) {
-        loadCachedFolders();
-        return;
-      }
-
-      const response = await fetch(`${BASE_URL}/folders`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("failed to fetch folders");
-      }
+      const response = await authenticatedFetch("/folders");
 
       const foldersFromDB = await response.json();
 
@@ -174,7 +161,14 @@ export function useLibrary() {
       // Read final list from SQLite (which merges fetched server folders + any pending folder creations)
       loadCachedFolders();
     } catch (error) {
-      console.error("fetchFolder failed, using cached:", error);
+      if (error instanceof ApiRequestError) {
+        console.error("Folder request failed; using cached folders:", {
+          status: error.status,
+          code: error.code,
+        });
+      } else {
+        console.error("Folder request failed; using cached folders:", error);
+      }
       loadCachedFolders();
     } finally {
       if (isMountedRef.current) setLoading(false);
@@ -204,7 +198,7 @@ export function useLibrary() {
   useFocusEffect(
     useCallback(() => {
       loadCachedFolders();
-    }, [loadCachedFolders])
+    }, [loadCachedFolders]),
   );
 
   const addFolder = async (
@@ -259,7 +253,7 @@ export function useLibrary() {
     if (!userId) return;
     // Eagerly update UI
     setFolders((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, subject: newSubject } : f))
+      prev.map((f) => (f.id === id ? { ...f, subject: newSubject } : f)),
     );
     // Update in SQLite
     updateFolderCache(userId, id, newSubject);

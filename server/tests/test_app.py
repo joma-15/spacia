@@ -1,6 +1,7 @@
 """Smoke tests for the application factory and request validation."""
 
 import unittest
+from datetime import timedelta
 
 from app import create_app
 from extensions import db
@@ -119,6 +120,7 @@ class ApplicationTestCase(unittest.TestCase):
         self.assertEqual(register_response.status_code, 201)
         reg_json = register_response.get_json()
         self.assertIn("access_token", reg_json)
+        self.assertIn("refresh_token", reg_json)
         self.assertEqual(reg_json["user"]["username"], "testuser")
 
         login_response = self.client.post(
@@ -131,7 +133,26 @@ class ApplicationTestCase(unittest.TestCase):
         self.assertEqual(login_response.status_code, 200)
         login_json = login_response.get_json()
         self.assertIn("access_token", login_json)
+        self.assertIn("refresh_token", login_json)
         self.assertEqual(login_json["user"]["username"], "testuser")
+
+    def test_refresh_returns_a_new_access_token(self):
+        register_response = self.client.post(
+            "/auth/register",
+            json={"username": "refreshuser", "email": "refresh@example.com", "password": "password123"},
+        )
+        refresh_token = register_response.get_json()["refresh_token"]
+        response = self.client.post("/auth/refresh", headers={"Authorization": f"Bearer {refresh_token}"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access_token", response.get_json())
+
+    def test_expired_access_token_returns_machine_readable_error(self):
+        from flask_jwt_extended import create_access_token
+        with self.app.app_context():
+            expired_token = create_access_token(identity="expired-user", expires_delta=timedelta(seconds=-1))
+        response = self.client.get("/folders", headers={"Authorization": f"Bearer {expired_token}"})
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.get_json()["code"], "token_expired")
 
     def test_login_invalid_credentials(self):
         self.client.post(

@@ -1,7 +1,7 @@
 from extensions import db
 from models.users import User
 from sqlalchemy import or_
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import create_access_token, create_refresh_token
 import bcrypt
 from errors import ApiError
 
@@ -58,10 +58,12 @@ class AuthService:
             raise ApiError("Incorrect username or password", 401, code="invalid_credentials")
 
         access_token = create_access_token(identity=user.id)
+        refresh_token = create_refresh_token(identity=user.id)
 
         return {
             "message": "login successfully", 
             "access_token" : access_token,
+            "refresh_token": refresh_token,
             "user": {
                 "id": user.id, 
                 "username": user.username, 

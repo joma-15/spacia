@@ -1,6 +1,11 @@
 from flask import Blueprint, jsonify, request
 from flask.views import MethodView
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import (
+    create_access_token,
+    create_refresh_token,
+    get_jwt_identity,
+    jwt_required,
+)
 
 from services.auth_service import AuthService
 from validation import require_fields, require_json_object
@@ -20,10 +25,12 @@ class RegisterAPI(MethodView):
 
         user = auth_service.register(username, password, email)
         access_token = create_access_token(identity=user.id)
+        refresh_token = create_refresh_token(identity=user.id)
 
         return jsonify({
             "message": "registered successfully",
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -42,6 +49,13 @@ class LoginAPI(MethodView):
 
         return jsonify(result)
 
+
+class RefreshAPI(MethodView):
+    @jwt_required(refresh=True)
+    def post(self):
+        return jsonify({"access_token": create_access_token(identity=get_jwt_identity())})
+
 #connect the route paths to our pluggalbe userview
 auth_bp.add_url_rule("/auth/register", view_func=RegisterAPI.as_view("register"))
 auth_bp.add_url_rule("/auth/login", view_func=LoginAPI.as_view("login"))
+auth_bp.add_url_rule("/auth/refresh", view_func=RefreshAPI.as_view("refresh"))

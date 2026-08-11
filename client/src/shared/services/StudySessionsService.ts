@@ -1,9 +1,9 @@
 import { BASE_URL } from "../config/api";
 
-async function startStudySession(){
+export async function startStudySession(){
     console.log("study session has been start");
     const startTime = new Date();
-    const response = await fetch(`${BASE_URL}/`,{
+    const response = await fetch(`${BASE_URL}/study-session/start`,{
         method: "POST", 
         headers: {
              "Content-Type": "application/json",
@@ -16,7 +16,7 @@ async function startStudySession(){
     return data;
 }
 
-async function endStudySession() {
+export async function endStudySession() {
   console.log("study session has been end");
   const endTime = new Date();
 
