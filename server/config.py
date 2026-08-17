@@ -28,6 +28,9 @@ class Config:
         "pool_timeout": 30,
         "pool_recycle": 1800,
         "pool_pre_ping": True,
+        "connect_args": {
+            "ca": str(BASE_DIR / "ca.pem")
+        },
     }
 
     UPLOAD_FOLDER = BASE_DIR / "uploads"
