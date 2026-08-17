@@ -1,0 +1,68 @@
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+**/!.env.example
+
+# =========================
+# Node / Expo
+# =========================
+node_modules/
+**/node_modules/
+
+.expo/
+**/.expo/
+
+dist/
+**/dist/
+
+web-build/
+**/web-build/
+
+# =========================
+# Python
+# =========================
+venv/
+.venv/
+**/venv/
+**/.venv/
+
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =========================
+# Android
+# =========================
+.gradle/
+**/.gradle/
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Backend uploads
+# =========================
+server/uploads/*
