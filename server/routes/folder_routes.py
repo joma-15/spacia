@@ -1,6 +1,6 @@
 """HTTP controllers for folders."""
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask.views import MethodView
 
 from services.folder_service import FolderService
@@ -51,8 +51,33 @@ class FolderItemAPI(MethodView):
     @jwt_required()
     def delete(self, folder_id: str):
         user_id = get_jwt_identity()
-        folder_service.delete(folder_id, user_id)
+        # Temporary sync diagnostics. Never log JWTs or request headers.
+        current_app.logger.info("DELETE folder requested: folder_id=%s current_user.id=%s", folder_id, user_id)
+        try:
+            folder = folder_service.get_owned(folder_id, user_id)
+        except Exception:
+            current_app.logger.info("DELETE folder lookup: folder_id=%s found=false", folder_id)
+            raise
+        current_app.logger.info(
+            "DELETE folder lookup: folder_id=%s found=true folder_owner=%s",
+            folder_id,
+            folder.user_id,
+        )
+        folder_service.delete(folder_id, user_id, folder)
         return jsonify({"message": "Folder deleted successfully."})
+
+    @jwt_required()
+    def patch(self, folder_id: str):
+        data = require_json_object(request.get_json(silent=True))
+        require_fields(data, "subject", "accentColor")
+        user_id = get_jwt_identity()
+        folder = folder_service.update(
+            folder_id,
+            user_id,
+            subject=data["subject"],
+            accent_color=data["accentColor"],
+        )
+        return jsonify({"folder": folder.to_dict()})
 
 
 # Connect the route paths to our pluggable Folder views

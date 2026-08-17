@@ -61,6 +61,30 @@ class ApplicationTestCase(unittest.TestCase):
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]["subject"], "Chemistry")
 
+    def test_folder_can_be_updated_and_deleted_by_its_owner(self):
+        folder_id = self.client.post(
+            "/folders",
+            json={"subject": "Chemistry", "accentColor": "#FF3366"},
+            headers=self.headers,
+        ).get_json()["folder"]
+
+        update_response = self.client.patch(
+            f"/folders/{folder_id}",
+            json={"subject": "Organic Chemistry", "accentColor": "#112233"},
+            headers=self.headers,
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(update_response.get_json()["folder"]["subject"], "Organic Chemistry")
+
+        delete_response = self.client.delete(f"/folders/{folder_id}", headers=self.headers)
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(self.client.get("/folders", headers=self.headers).get_json()["response"], [])
+
+    def test_deleting_a_missing_folder_returns_404(self):
+        response = self.client.delete("/folders/missing-folder-id", headers=self.headers)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json()["message"], "Folder not found.")
+
     def test_flashcard_can_be_created_with_custom_id(self):
         folder_response = self.client.post(
             "/folders",

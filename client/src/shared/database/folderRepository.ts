@@ -88,3 +88,44 @@ export function deleteFolder(userId: string, folderId: string) {
     );
   }
 }
+
+/** Returns all cached rows, including intentionally hidden pending deletions. */
+export function getAllFolders(userId: string) {
+  return db.getAllSync("SELECT * FROM folders WHERE user_id = ?", [userId]);
+}
+
+/**
+ * Reconciles a successful GET /folders snapshot without overwriting a local
+ * mutation that still needs to be sent.  In particular, a pending deletion is
+ * not turned back into a synced row simply because the server still returned
+ * it in a snapshot taken before the delete was sent.
+ */
+export function reconcileFoldersFromServer(userId: string, folders: any[]) {
+  db.withTransactionSync(() => {
+    for (const folder of folders) {
+      const existing = db.getFirstSync(
+        "SELECT sync_status FROM folders WHERE id = ? AND user_id = ?",
+        [folder.id, userId],
+      ) as { sync_status: string } | null;
+
+      if (existing?.sync_status === "pending_delete" || existing?.sync_status === "pending_update") {
+        continue;
+      }
+
+      saveFolders(userId, [folder], "synced");
+    }
+
+    const remoteIds = folders.map((folder) => folder.id);
+    if (remoteIds.length === 0) {
+      db.runSync("DELETE FROM folders WHERE user_id = ? AND sync_status = 'synced'", [userId]);
+      return;
+    }
+
+    const placeholders = remoteIds.map(() => "?").join(", ");
+    db.runSync(
+      `DELETE FROM folders
+       WHERE user_id = ? AND sync_status IN ('synced', 'pending_delete') AND id NOT IN (${placeholders})`,
+      [userId, ...remoteIds],
+    );
+  });
+}

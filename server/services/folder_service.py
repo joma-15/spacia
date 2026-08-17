@@ -31,11 +31,18 @@ class FolderService:
             .all()
         )
 
-    def delete(self, folder_id: str, user_id: str) -> None:
-        folder = self.get_owned(folder_id, user_id)
+    def delete(self, folder_id: str, user_id: str, folder: Folder | None = None) -> None:
+        folder = folder or self.get_owned(folder_id, user_id)
 
         db.session.delete(folder)
         db.session.commit()
+
+    def update(self, folder_id: str, user_id: str, subject: str, accent_color: str) -> Folder:
+        folder = self.get_owned(folder_id, user_id)
+        folder.subject = subject.strip()
+        folder.accent_color = accent_color
+        db.session.commit()
+        return folder
 
     def get_owned(self, folder_id: str, user_id: str) -> Folder:
         """Return a folder only when it belongs to the JWT subject."""
