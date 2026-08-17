@@ -29,7 +29,9 @@ class Config:
         "pool_recycle": 1800,
         "pool_pre_ping": True,
         "connect_args": {
-            "ca": str(BASE_DIR / "ca.pem")
+            "ssl": {
+                "ca": str(BASE_DIR / "ca.pem")
+            }
         },
     }
 

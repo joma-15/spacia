@@ -7,6 +7,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from config import Config
 from errors import ApiError
 from extensions import cors, db, jwt
+from sqlalchemy import text
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -87,6 +88,27 @@ def create_app(test_config: dict | None = None) -> Flask:
         If the app is running and healthy, going to '/' will return a friendly message.
         """
         return jsonify({"message": "Spacia Backend Running"})
+
+    @app.get("/health/db")
+    def database_health():
+        """
+        Checks whether the backend can connect to the database.
+        """
+        try:
+            db.session.execute(text("SELECT 1"))
+
+            return jsonify({
+                "status": "ok",
+                "database": "connected"
+        }), 200
+
+        except Exception:
+            app.logger.exception("Database connection failed")
+
+            return jsonify({
+                "status": "error",
+                "database": "disconnected"
+        }), 500
 
     @app.errorhandler(ApiError)
     def handle_api_error(error: ApiError):
