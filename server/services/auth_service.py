@@ -45,24 +45,26 @@ class AuthService:
 
         start = time.perf_counter()
 
-        # user = User.query.filter(
-        #     or_(
-        #         User.username == identifier,
-        #         User.email == identifier
-        #     )
-        # ).first()
+    #     user = User.query.with_entities(
+    #         User.id,
+    #         User.username,
+    #         User.email,
+    #         User.password_hash
+    #     ).filter(
+    #         or_(
+    #             User.username == identifier,
+    #             User.email == identifier
+    #     )
+    # ).first()
 
-        user = User.query.with_entities(
-            User.id,
-            User.username,
-            User.email,
-            User.password_hash
-        ).filter(
-            or_(
-                User.username == identifier,
-                User.email == identifier
-        )
-    ).first()
+        user = User.query.filter_by(
+            username=identifier
+        ).first()
+
+        if user is None:
+            user = User.query.filter_by(
+                email=identifier
+            ).first()
 
         #added for performance calculation 
         after_db = time.perf_counter()
