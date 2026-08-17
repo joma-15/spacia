@@ -6,10 +6,10 @@
  * and rendering components like custom header, progress bar, 3D card, and actions.
  */
 
-import React, { useCallback, useState, useEffect } from "react";
+import React, { useCallback, useRef, useState, useEffect } from "react";
 import { View, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { COLORS } from "./colors";
 import {
   getFlashcardsByFolder,
@@ -29,6 +29,7 @@ import {
   startStudySession,
   endStudySession,
 } from "@/shared/services/StudySessionsService";
+import { formatStudyDuration } from "@/shared/services/formatStudyDuration";
 
 interface GameContentProps {
   folderId: string;
@@ -43,33 +44,57 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
   const insets = useSafeAreaInsets();
   const { cacheOwnerId } = useAuth();
   const userId = cacheOwnerId;
+  const activeStudySessionId = useRef<number | null>(null);
+  const endingStudySession = useRef<Promise<void> | null>(null);
 
   // Load cards for this folder from database as state
   const [cards, setCards] = useState<Flashcard[]>([]);
 
-  //study session
-  useEffect(() => {
-    let sessionStarted = false;
+  const finishStudySession = useCallback(async () => {
+    if (endingStudySession.current) return endingStudySession.current;
+    const sessionId = activeStudySessionId.current;
+    if (sessionId === null) return;
 
-    const startSession = async () => {
-      try {
-        await startStudySession();
-        sessionStarted = true;
-      } catch (error) {
-        console.error("Failed to start study session:", error);
-      }
-    };
-
-    startSession();
-
-    return () => {
-      if (sessionStarted) {
-        endStudySession().catch((error) => {
-          console.error("Failed to end study session:", error);
-        });
-      }
-    };
+    // Clear first so duplicate blur/unmount cleanups cannot end the session twice.
+    activeStudySessionId.current = null;
+    endingStudySession.current = endStudySession(sessionId)
+      .then((result) => {
+        console.log("⏱ Formatted duration:", formatStudyDuration(result.duration_seconds));
+      })
+      .catch((error) => {
+        console.error("Failed to end study session:", error);
+      })
+      .finally(() => {
+        endingStudySession.current = null;
+      });
+    return endingStudySession.current;
   }, []);
+
+  // Expo Router may keep a screen mounted in its navigation stack. Using focus
+  // rather than a component-only effect ends the session when this activity is left.
+  useFocusEffect(
+    useCallback(() => {
+      let isFocused = true;
+      const startSession = async () => {
+        try {
+          const result = await startStudySession();
+          if (!isFocused) {
+            await endStudySession(result.session_id);
+            return;
+          }
+          activeStudySessionId.current = result.session_id;
+        } catch (error) {
+          console.error("Failed to start study session:", error);
+        }
+      };
+      void startSession();
+
+      return () => {
+        isFocused = false;
+        void finishStudySession();
+      };
+    }, [finishStudySession]),
+  );
 
   useEffect(() => {
     try {

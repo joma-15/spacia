@@ -1,42 +1,45 @@
-import { BASE_URL } from "../config/api";
+import { authenticatedFetch } from "@/shared/services/authenticatedFetch";
 
-export async function startStudySession() {
-  console.log("study session has been start");
-  const startTime = new Date();
-  const response = await fetch(`${BASE_URL}/study-sessions/start`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      startTime: startTime.toISOString(),
-    }),
-  });
-  // const data = await response.text();
-
-  // console.log("STATUS:", response.status);
-  // console.log("CONTENT-TYPE:", response.headers.get("content-type"));
-  // console.log("RESPONSE:", data);
-  const data = await response.json(); 
-
-  return data;
+export interface StudySessionStartResponse {
+  success: true;
+  message: string;
+  session_id: number;
+  started_at: string;
+  /** False when an already-active session was safely reused. */
+  created: boolean;
 }
 
-export async function endStudySession() {
-  console.log("study session has been end");
-  const endTime = new Date();
+export interface StudySessionEndResponse {
+  success: true;
+  message: string;
+  session_id: number;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+}
 
-  const response = await fetch(`${BASE_URL}/study-sessions/end`, {
+export async function startStudySession(): Promise<StudySessionStartResponse> {
+  console.log("📚 START STUDY SESSION");
+  const response = await authenticatedFetch("/study-sessions/start", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      endTime: endTime.toISOString(),
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ startTime: new Date().toISOString() }),
   });
+  const result = (await response.json()) as StudySessionStartResponse;
+  console.log("📡 Start status:", response.status);
+  console.log("📚 Session ID:", result.session_id);
+  return result;
+}
 
-  const data = await response.json();
-
-  return data;
+export async function endStudySession(sessionId: number): Promise<StudySessionEndResponse> {
+  console.log("📚 END STUDY SESSION");
+  const response = await authenticatedFetch("/study-sessions/end", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endTime: new Date().toISOString(), sessionId }),
+  });
+  const result = (await response.json()) as StudySessionEndResponse;
+  console.log("📡 End status:", response.status);
+  console.log("⏱ Duration seconds:", result.duration_seconds);
+  return result;
 }

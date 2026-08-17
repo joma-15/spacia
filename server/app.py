@@ -35,6 +35,7 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
+        app.logger.warning("JWT rejected: expired token")
         return jsonify({
             "code": "token_expired",
             "message": "The token has expired."
@@ -42,16 +43,18 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @jwt.invalid_token_loader
     def invalid_token_callback(error_string):
+        app.logger.warning("JWT rejected: invalid token (%s)", error_string)
         return jsonify({
             "code": "token_invalid",
-            "message": f"Signature verification failed: {error_string}"
+            "message": "The token is invalid."
         }), 401
 
     @jwt.unauthorized_loader
     def missing_token_callback(error_string):
+        app.logger.warning("JWT rejected: missing or malformed token (%s)", error_string)
         return jsonify({
             "code": "token_missing",
-            "message": f"Request does not contain an access token: {error_string}"
+            "message": "Request does not contain a valid access token."
         }), 401
 
     # We import database models here before we register the blueprints/routes.
@@ -66,6 +69,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     from routes.schedule_routes import schedules_bp
     from routes.auth_routes import auth_bp
     from routes.study_session_routes import studysession_bp
+    from routes.streak_routes import streak_bp
 
     # Register blueprints. Blueprints are just groups of routes.
     # For example, all /flashcards/... routes are grouped inside flashcards_bp.
@@ -74,6 +78,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(schedules_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(studysession_bp)
+    app.register_blueprint(streak_bp)
 
     @app.get("/")
     def health_check():

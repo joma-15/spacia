@@ -82,7 +82,17 @@ class StreakService:
             .scalar()
             or 0
         )
-        total_minutes = sum(session.duration_seconds for session in completed) // 60
+        total_seconds = (
+            db.session.query(func.coalesce(func.sum(StudySession.duration_seconds), 0))
+            .filter(
+                StudySession.user_id == user_id,
+                StudySession.ended_at.isnot(None),
+                StudySession.duration_seconds.isnot(None),
+            )
+            .scalar()
+            or 0
+        )
+        total_minutes = total_seconds // 60
 
         achievements = [
             {

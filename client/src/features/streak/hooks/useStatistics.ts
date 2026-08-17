@@ -2,7 +2,8 @@
 // Spacia — useStatistics
 // ============================================================================
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import { StatisticsService } from "../services/StatisticsService";
 import { AsyncResource, Statistics } from "../types";
 
@@ -25,9 +26,13 @@ export function useStatistics(): AsyncResource<Statistics> {
     }
   }, []);
 
-  useEffect(() => {
-    load(false);
-  }, [load]);
+  // Refresh whenever the dashboard becomes visible so sessions completed in a
+  // game screen are reflected without maintaining a duplicate global store.
+  useFocusEffect(
+    useCallback(() => {
+      void load(false);
+    }, [load]),
+  );
 
   const refresh = useCallback(async () => {
     await load(true);

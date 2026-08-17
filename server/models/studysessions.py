@@ -25,12 +25,12 @@ class StudySession(db.Model):
 
     ended_at = db.Column(
         db.DateTime(timezone=True),
-        nullable=False
+        nullable=True
     )
 
     duration_seconds = db.Column(
         db.Integer,
-        nullable=False
+        nullable=True
     )
 
     created_at = db.Column(
