@@ -38,7 +38,7 @@ export function FolderCard({ folder, onPressMenu }: FolderCardProps) {
         {folder.title}
       </Text>
       <Text style={styles.subtitle}>
-        {folder.totalCards} cards · {relativeDayLabel(folder.lastStudied)}
+        {folder.totalCards} cards · {folder.lastStudied ? relativeDayLabel(folder.lastStudied) : "No recent study"}
       </Text>
 
       <View style={styles.progressRow}>

@@ -45,9 +45,14 @@ class Folder(db.Model):
     )
 
     def to_dict(self) -> dict:
+        total_cards = len(self.flashcards)
+        review_cards = sum(card.status == "review" for card in self.flashcards)
+        understood_cards = sum(card.status == "understood" for card in self.flashcards)
         return {
             "id": self.id,
             "subject": self.subject,
             "accentColor": self.accent_color,
-            "cardCount": len(self.flashcards),
+            "cardCount": total_cards,
+            "reviewCardCount": review_cards,
+            "understoodCardCount": understood_cards,
         }

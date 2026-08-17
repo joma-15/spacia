@@ -4,4 +4,4 @@
 // feature root, e.g. `import { StreakDashboardScreen } from "@/features/.../StreakDashboard"`.
 // ============================================================================
 
-export { StreakDashboardScreen } from "./StreakDashboardScreen";
+export { default as StreakDashboardScreen } from "./StreakDashboardScreen";

@@ -153,3 +153,38 @@ export function getCardCountsPerFolder(userId: string): Record<string, number> {
   }
   return map;
 }
+
+/** Returns active flashcard totals by learning status for dashboard folder cards. */
+export function getCardStatsPerFolder(userId: string): Record<string, {
+  totalCards: number;
+  reviewCards: number;
+  understoodCards: number;
+}> {
+  const rows = db.getAllSync(`
+    SELECT folder_id, COUNT(*) AS total_cards,
+      SUM(CASE WHEN status = 'review' THEN 1 ELSE 0 END) AS review_cards,
+      SUM(CASE WHEN status = 'understood' THEN 1 ELSE 0 END) AS understood_cards
+    FROM flashcards
+    WHERE user_id = ? AND sync_status != 'pending_delete'
+    GROUP BY folder_id
+  `, [userId]) as {
+    folder_id: string;
+    total_cards: number;
+    review_cards: number;
+    understood_cards: number;
+  }[];
+
+  const stats: Record<string, {
+    totalCards: number;
+    reviewCards: number;
+    understoodCards: number;
+  }> = {};
+  for (const row of rows) {
+    stats[row.folder_id] = {
+      totalCards: row.total_cards,
+      reviewCards: row.review_cards,
+      understoodCards: row.understood_cards,
+    };
+  }
+  return stats;
+}

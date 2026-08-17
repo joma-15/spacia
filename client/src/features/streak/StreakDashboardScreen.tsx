@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AchievementCard } from "./components/AchievementCard";
@@ -202,11 +202,15 @@ export default function StreakDashboardScreen() {
             </View>
           ) : (
             folders.data && (
-              <View style={styles.foldersGrid}>
-                {folders.data.map((folder) => (
-                  <FolderCard key={folder.id} folder={folder} />
-                ))}
-              </View>
+              folders.data.length > 0 ? (
+                <View style={styles.foldersGrid}>
+                  {folders.data.map((folder) => (
+                    <FolderCard key={folder.id} folder={folder} />
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyFoldersText}>No folders yet. Create one in Library to start studying.</Text>
+              )
             )
           )}
         </View>
@@ -264,6 +268,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm,
+  },
+  emptyFoldersText: {
+    color: colors.textTertiary,
   },
   bottomSpacer: {
     height: 96,

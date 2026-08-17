@@ -42,7 +42,11 @@ class ApplicationTestCase(unittest.TestCase):
 
         list_response = self.client.get("/folders", headers=self.headers)
         self.assertEqual(list_response.status_code, 200)
-        self.assertEqual(list_response.get_json()["response"][0]["subject"], "Physics")
+        folder = list_response.get_json()["response"][0]
+        self.assertEqual(folder["subject"], "Physics")
+        self.assertEqual(folder["cardCount"], 0)
+        self.assertEqual(folder["reviewCardCount"], 0)
+        self.assertEqual(folder["understoodCardCount"], 0)
 
     def test_folder_can_be_created_with_custom_id(self):
         custom_id = "test-folder-uuid-12345"
