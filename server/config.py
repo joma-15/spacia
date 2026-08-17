@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Config:
     BASE_DIR = Path(__file__).resolve().parent
     DB_USER = os.getenv("DB_USER")
@@ -20,10 +21,20 @@ class Config:
     )
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_timeout": 30,
+        "pool_recycle": 1800,
+        "pool_pre_ping": True,
+    }
+
     UPLOAD_FOLDER = BASE_DIR / "uploads"
     MAX_CONTENT_LENGTH = 20 * 1024 * 1024  # 20 MB
 
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+
     # Access credentials are deliberately short-lived; refresh credentials keep
     # a session alive without making normal API tokens long-lived.
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
