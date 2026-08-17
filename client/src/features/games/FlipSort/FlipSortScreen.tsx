@@ -22,6 +22,7 @@ import FlipSortHeader from "./components/FlipSortHeader";
 import ProgressBar from "./components/ProgressBar";
 import FlipCard from "./components/FlipCard";
 import ActionButtons from "./components/ActionButtons";
+import { CompletionProgressModal } from "./components/CompletionProgressModal";
 import { BASE_URL } from "@/shared/config/api";
 import { getAccessToken } from "@/shared/components/auth/session";
 import { useAuth } from "@/features/auth/hooks/useAuth";
@@ -208,10 +209,13 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
     markForReview,
     markAsUnderstood,
     skipCard,
-    goToPreviousCard,
     totalCards,
     reviewCount,
     understoodCount,
+    completionReviewCount,
+    completionUnderstoodCount,
+    isComplete,
+    dismissCompletion,
   } = useFlipSortSession({
     cards,
     onUpdateCardStatus,
@@ -268,9 +272,9 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
             onFlip={flipCard}
             onSwipe={(direction) => {
               if (direction === "left") {
-                markForReview(true);
+                markForReview();
               } else if (direction === "right") {
-                markAsUnderstood(true);
+                markAsUnderstood();
               } else if (direction === "up") {
                 skipCard();
               }
@@ -282,10 +286,16 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
 
       <ActionButtons
         isFlipped={isFlipped}
-        onReviewPress={() => markForReview(isFlipped)}
-        onUnderstoodPress={() => markAsUnderstood(isFlipped)}
+        onReviewPress={markForReview}
+        onUnderstoodPress={markAsUnderstood}
         bottomInset={insets.bottom}
         status={currentCard?.status}
+      />
+      <CompletionProgressModal
+        visible={isComplete}
+        understoodCount={completionUnderstoodCount}
+        reviewCount={completionReviewCount}
+        onDone={dismissCompletion}
       />
     </View>
   );
