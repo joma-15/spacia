@@ -29,7 +29,7 @@ class AuthService:
 
         # hash the password first before storing it to the database
         password_hash = bcrypt.hashpw(
-            password.encode("utf-8"), bcrypt.gensalt()
+            password.encode("utf-8"), bcrypt.gensalt(rounds=10)
         ).decode("utf-8")
 
         user = User(username=username, password_hash=password_hash, email=email)
