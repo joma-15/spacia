@@ -57,13 +57,32 @@ export async function requestPasswordReset(
 
 async function request<T>(path: string, body: unknown): Promise<T> {
   let response: Response;
+  const requestUrl = `${API_BASE_URL}${path}`;
+  console.log("🌐 Auth API Request starting:");
+  console.log("   API URL (API_BASE_URL):", API_BASE_URL);
+  console.log("   Request URL:", requestUrl);
+  console.log("   HTTP Method: POST");
+  // Redact password from payload logs if present
+  let safeBody = { ...(body as Record<string, any>) };
+  if (safeBody && typeof safeBody === "object") {
+    if ("password" in safeBody) safeBody.password = "[REDACTED]";
+    if ("confirmPassword" in safeBody) safeBody.confirmPassword = "[REDACTED]";
+  }
+  console.log("   Request Body:", JSON.stringify(safeBody));
+
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(requestUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-  } catch {
+    console.log("📥 Auth API Response received:");
+    console.log("   Status:", response.status);
+  } catch (error: any) {
+    console.log("🚨 Auth API Request caught network/fetch error:");
+    console.log("   Error Name:", error?.name);
+    console.log("   Error Message:", error?.message);
+    console.log("   Error Details:", error);
     throw new AuthError(
       "Can't reach the server. Check your connection and try again.",
       "network_error",
@@ -73,7 +92,9 @@ async function request<T>(path: string, body: unknown): Promise<T> {
   let data: any = null;
   try {
     data = await response.json();
-  } catch {
+    console.log("   Response Data:", JSON.stringify(data));
+  } catch (err: any) {
+    console.log("   Response parser caught non-JSON error or empty body:", err?.message);
     // Non-JSON response — fall through to status-based handling below.
   }
 

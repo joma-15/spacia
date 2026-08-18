@@ -14,7 +14,7 @@ class AiFlashcardService:
     This service coordinates with Groq's AI API (Llama 3) to convert 
     extracted document text into a neat list of ready-to-study flashcard questions and answers.
     """
-    MODEL = "llama-3.1-8b-instant"
+    MODEL = os.getenv("GROQ_MODEL")
 
     def __init__(
         self,
