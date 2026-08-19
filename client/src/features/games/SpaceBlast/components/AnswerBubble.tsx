@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { THEME, ROCK_PALETTES } from "../colors";
@@ -13,6 +13,16 @@ import { SpaceObject, HitState } from "../types";
  * game rules. It's just told "here's a bubble" and "here's whether it
  * was just hit, and how".
  */
+
+// Tuning knobs for text-driven sizing. Kept local since this is purely
+// a rendering concern — the underlying obj.size (used elsewhere for
+// things like hit-testing/collision) is left untouched.
+const MIN_GROWTH_LEN = 6; // labels shorter than this don't grow the bubble
+const GROWTH_PER_CHAR = 3.2; // px of extra diameter per character over MIN_GROWTH_LEN
+const MAX_GROWTH_FACTOR = 1.8; // never grow past 1.8x the base size
+const MIN_FONT_SIZE = 9;
+const BASE_FONT_SIZE = 12;
+
 const AnswerBubble: React.FC<{
   obj: SpaceObject;
   hitState: "none" | HitState;
@@ -38,11 +48,33 @@ const AnswerBubble: React.FC<{
   const palette = ROCK_PALETTES[obj.laneIndex % ROCK_PALETTES.length];
   const isHit = hitState !== "none";
 
+  // Grow the rendered bubble based on how long the answer text is, so
+  // longer answers don't get clipped or squeezed. `obj.size` stays the
+  // baseline/minimum — we only ever scale up from it, and cap the
+  // growth so extremely long strings don't produce a huge circle.
+  const { displaySize, fontSize, offset } = useMemo(() => {
+    const len = obj.label.length;
+    const extraChars = Math.max(0, len - MIN_GROWTH_LEN);
+    const maxSize = obj.size * MAX_GROWTH_FACTOR;
+    const grown = obj.size + extraChars * GROWTH_PER_CHAR;
+    const size = Math.round(Math.min(grown, maxSize));
+
+    // Slightly shrink the font for longer labels so more text fits
+    // per line before wrapping/truncating.
+    const fontScale = Math.max(MIN_FONT_SIZE / BASE_FONT_SIZE, 1 - extraChars * 0.015);
+    const font = Math.round(BASE_FONT_SIZE * fontScale);
+
+    // Keep the bubble centered on its original anchor point instead of
+    // growing only to the bottom-right.
+    const diff = size - obj.size;
+
+    return { displaySize: size, fontSize: font, offset: diff / 2 };
+  }, [obj.size, obj.label]);
+
   const overlayColor =
     hitState === "correct" ? THEME.correctGlow : hitState === "wrong" ? THEME.wrongGlow : "transparent";
   const borderColor =
     hitState === "correct" ? THEME.correct : hitState === "wrong" ? THEME.wrong : palette.border;
-  const shadowColor = isHit ? (hitState === "correct" ? THEME.correct : THEME.wrong) : palette.glow;
 
   return (
     <Animated.View
@@ -50,13 +82,12 @@ const AnswerBubble: React.FC<{
       style={[
         styles.spaceObject,
         {
-          left: obj.x,
-          top: obj.y,
-          width: obj.size,
-          height: obj.size,
-          borderRadius: obj.size / 2,
+          left: obj.x - offset,
+          top: obj.y - offset,
+          width: displaySize,
+          height: displaySize,
+          borderRadius: displaySize / 2,
           borderColor,
-          shadowColor,
           opacity,
           transform: [{ translateX }, { translateY }, { scale }],
         },
@@ -66,7 +97,7 @@ const AnswerBubble: React.FC<{
         colors={palette.colors as unknown as [string, string]}
         start={{ x: 0.25, y: 0.2 }}
         end={{ x: 0.8, y: 1 }}
-        style={[styles.rockGradient, { width: obj.size, height: obj.size, borderRadius: obj.size / 2 }]}
+        style={[styles.rockGradient, { width: displaySize, height: displaySize, borderRadius: displaySize / 2 }]}
       >
         {/* Decorative crater dots so each rock looks a little rougher */}
         <View
@@ -75,11 +106,11 @@ const AnswerBubble: React.FC<{
             styles.crater,
             {
               backgroundColor: palette.craterColor,
-              width: obj.size * 0.22,
-              height: obj.size * 0.22,
-              borderRadius: obj.size * 0.11,
-              top: obj.size * 0.18,
-              left: obj.size * 0.62,
+              width: displaySize * 0.22,
+              height: displaySize * 0.22,
+              borderRadius: displaySize * 0.11,
+              top: displaySize * 0.18,
+              left: displaySize * 0.62,
             },
           ]}
         />
@@ -89,11 +120,11 @@ const AnswerBubble: React.FC<{
             styles.crater,
             {
               backgroundColor: palette.craterColor,
-              width: obj.size * 0.15,
-              height: obj.size * 0.15,
-              borderRadius: obj.size * 0.075,
-              top: obj.size * 0.6,
-              left: obj.size * 0.18,
+              width: displaySize * 0.15,
+              height: displaySize * 0.15,
+              borderRadius: displaySize * 0.075,
+              top: displaySize * 0.6,
+              left: displaySize * 0.18,
             },
           ]}
         />
@@ -103,11 +134,11 @@ const AnswerBubble: React.FC<{
             styles.crater,
             {
               backgroundColor: palette.craterColor,
-              width: obj.size * 0.12,
-              height: obj.size * 0.12,
-              borderRadius: obj.size * 0.06,
-              top: obj.size * 0.68,
-              left: obj.size * 0.6,
+              width: displaySize * 0.12,
+              height: displaySize * 0.12,
+              borderRadius: displaySize * 0.06,
+              top: displaySize * 0.68,
+              left: displaySize * 0.6,
             },
           ]}
         />
@@ -115,11 +146,11 @@ const AnswerBubble: React.FC<{
         {isHit && (
           <View
             pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor, borderRadius: obj.size / 2 }]}
+            style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor, borderRadius: displaySize / 2 }]}
           />
         )}
 
-        <Text style={styles.spaceObjectLabel} numberOfLines={3}>
+        <Text style={[styles.spaceObjectLabel, { fontSize }]} numberOfLines={3}>
           {obj.label}
         </Text>
       </LinearGradient>
@@ -131,10 +162,6 @@ const styles = StyleSheet.create({
   spaceObject: {
     position: "absolute",
     borderWidth: 2,
-    shadowOpacity: 0.9,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
   },
   rockGradient: {
     alignItems: "center",
@@ -147,7 +174,6 @@ const styles = StyleSheet.create({
   },
   spaceObjectLabel: {
     color: THEME.textWhite,
-    fontSize: 12,
     fontWeight: "700",
     textAlign: "center",
     textShadowColor: "rgba(0,0,0,0.6)",

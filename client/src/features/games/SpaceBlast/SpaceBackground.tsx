@@ -77,8 +77,15 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   // Where does the ship sit, and what's the safe vertical zone floating
   // answers are allowed to drift inside (between the header and the ship)?
   const questionCardBottom = insets.bottom + 16;
-  const SHIP_OVERLAP = isTablet ? shipSize * 0.31 : shipSize * 0.75;
-  const shipBottomOffset = questionCardBottom + QUESTION_CARD_HEIGHT - SHIP_OVERLAP;
+  const questionCardTop = questionCardBottom + QUESTION_CARD_HEIGHT;
+
+  // Fixed visual breathing room between the ship's bottom edge and the
+  // question card's top edge. This is ADDED on top of the card's own
+  // geometry (never subtracted), so the ship can never overlap the
+  // card regardless of screen size, safe-area insets, or device type —
+  // there's no overlap amount to accidentally under/over-tune per device.
+  const SHIP_QUESTION_GAP = isTablet ? 20 : 14;
+  const shipBottomOffset = questionCardTop + SHIP_QUESTION_GAP;
   const shipX = SCREEN_W / 2 - shipSize / 2;
   const shipY = SCREEN_H - shipSize - shipBottomOffset;
   const topSafeZone = insets.top + HEADER_HEIGHT + QUESTION_CARD_MARGIN;
