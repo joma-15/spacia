@@ -21,6 +21,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { BASE_URL } from "@/shared/config/api";
 import { getAccessToken } from "@/shared/components/auth/session";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { authenticatedFetch } from "@/shared/services/authenticatedFetch";
 
 // const BASE_URL = "http://192.168.8.39:5000";
 const FETCH_TIMEOUT_MS = 8000;
@@ -73,11 +74,11 @@ export function useFlashCards(folderId: string) {
       const pendingCreates = getFlashcardsBySyncStatus(userId, "pending_create") as any[];
       const folderPendingCreates = pendingCreates.filter(c => c.folder_id === fId);
       for (const card of folderPendingCreates) {
-        const response = await fetch(
-          `${BASE_URL}/flashcards/${fId}/manualSaved`,
+        const response = await authenticatedFetch(
+          `/flashcards/${fId}/manualSaved`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               id: card.id,
               question: card.question,
@@ -104,9 +105,7 @@ export function useFlashCards(folderId: string) {
       const pendingDeletes = getFlashcardsBySyncStatus(userId, "pending_delete") as any[];
       const folderPendingDeletes = pendingDeletes.filter(c => c.folder_id === fId);
       for (const card of folderPendingDeletes) {
-        const response = await fetch(`${BASE_URL}/flashcards/${card.id}`, {
-          method: "DELETE", headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await authenticatedFetch(`/flashcards/${card.id}`, { method: "DELETE" });
         if (response.ok) {
           deleteFlashcard(userId, card.id);
         }
@@ -171,9 +170,9 @@ export function useFlashCards(folderId: string) {
       // Send changes to the backend
       const token = await getAccessToken();
       if (!token) return;
-      const response = await fetch(`${BASE_URL}/flashcards/${id}`, {
+      const response = await authenticatedFetch(`/flashcards/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
 
@@ -237,9 +236,7 @@ export function useFlashCards(folderId: string) {
     try {
       const token = await getAccessToken();
       if (!token) return;
-      const response = await fetch(`${BASE_URL}/flashcards/folder/${folderId}`, {
-        method: "DELETE", headers: { Authorization: `Bearer ${token}` },
-      }); 
+      const response = await authenticatedFetch(`/flashcards/folder/${folderId}`, { method: "DELETE" });
 
       if (!response.ok) {
         throw new Error("Failed to delete all flashcards on server");
@@ -297,8 +294,7 @@ export function useFlashCards(folderId: string) {
       signal?.addEventListener("abort", onExternalAbort);
 
       try {
-        const response = await fetch(`${BASE_URL}/flashcards/${folderId}/saved`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const response = await authenticatedFetch(`/flashcards/${folderId}/saved`, {
           signal: timeoutController.signal, // Link abort signal
         });
 

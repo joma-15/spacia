@@ -14,6 +14,8 @@ import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
 import { uuidv4 } from "@/shared/database/database";
 import { ApiRequestError, authenticatedFetch } from "@/shared/services/authenticatedFetch";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { loadFolders as loadFolderResource, recordFolderMutation } from "@/shared/services/folderDataService";
+import { subscribeResource } from "@/shared/services/resourceStore";
 
 // Stable key used to store/read folders for a user who hasn't logged in yet.
 // Everything is scoped under this id until they sign in.
@@ -179,13 +181,8 @@ export function useLibrary() {
         return;
       }
 
-      const response = await authenticatedFetch("/folders");
-      const foldersFromDB = await response.json();
-
+      const remoteFolders = await loadFolderResource(userId);
       if (!isMountedRef.current) return;
-
-      const remoteFolders = foldersFromDB.response ?? [];
-      reconcileFoldersFromServer(userId, remoteFolders);
       logSyncState(remoteFolders);
       void syncPendingFolders();
       loadCachedFolders();
@@ -219,18 +216,24 @@ export function useLibrary() {
     }, [loadCachedFolders]),
   );
 
+  useEffect(() => {
+    return subscribeResource(userId, "folders", loadCachedFolders);
+  }, [userId, loadCachedFolders]);
+
   const addFolder = async (subject: string, accentColor: string): Promise<void> => {
     const newId = uuidv4();
     const newFolder: Folder = { id: newId, subject: subject.trim(), accentColor, cardCount: 0 };
 
     setFolders((prev) => [newFolder, ...prev]);
     saveFolders(userId, [newFolder], "pending_create");
+    recordFolderMutation(userId);
     void syncPendingFolders();
   };
 
   const deleteFolder = async (id: string) => {
     setFolders((prev) => prev.filter((folder) => folder.id !== id));
     deleteFolderCache(userId, id);
+    recordFolderMutation(userId);
     void syncPendingFolders();
   };
 
@@ -238,12 +241,14 @@ export function useLibrary() {
     const ids = folders.map((f) => f.id);
     setFolders([]);
     ids.forEach((id) => deleteFolderCache(userId, id));
+    recordFolderMutation(userId);
     void syncPendingFolders();
   };
 
   const renameFolder = (id: string, newSubject: string) => {
     setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, subject: newSubject } : f)));
     updateFolderCache(userId, id, newSubject);
+    recordFolderMutation(userId);
     void syncPendingFolders();
   };
 

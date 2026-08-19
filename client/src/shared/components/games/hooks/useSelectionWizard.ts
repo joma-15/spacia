@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BASE_URL } from "@/shared/config/api";
-import { getFolders, saveFolders } from "@/shared/database/folderRepository";
+import { getFolders } from "@/shared/database/folderRepository";
 import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
-import { getAccessToken } from "@/shared/components/auth/session";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { loadFolders as loadFolderResource } from "@/shared/services/folderDataService";
 
 export interface Folder {
   id: string;
@@ -84,33 +83,13 @@ export function useSelectionWizard() {
     }
 
     try {
-      const token = await getAccessToken();
       if (!userId) {
         setFolders([]);
         return;
       }
-      if (!token) {
-        loadCachedFolders();
-        return;
-      }
-      const response = await fetch(`${BASE_URL}/folders`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        }
-      });
-      if (!response.ok) {
-        throw new Error("Cannot fetch folders from backend");
-      }
-      const data = await response.json();
+      await loadFolderResource(userId, isARefresh ? "network-only" : "stale-while-revalidate");
 
       if (!isMountedRef.current) return;
-
-      // Save server folders to cache
-      if (data && Array.isArray(data.response)) {
-        saveFolders(userId, data.response, "synced");
-      }
-
-      // Reload the updated data from SQLite cache
       loadCachedFolders();
     } catch (error) {
       console.error("fetchFolders failed, using offline cache:", error);

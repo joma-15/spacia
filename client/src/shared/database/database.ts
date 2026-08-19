@@ -53,6 +53,16 @@ export function initializeDatabase() {
       updated_at INTEGER,            -- Timestamp when modified
       sync_status TEXT NOT NULL DEFAULT 'pending_create' -- Offline sync status (e.g. pending save to backend)
     );
+
+    -- Metadata and small JSON snapshots for resources that do not have a
+    -- dedicated relational table (for example the streak dashboard).
+    CREATE TABLE IF NOT EXISTS resource_cache (
+      user_id TEXT NOT NULL,
+      resource_key TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, resource_key)
+    );
   `);
 
   // Run migrations to add sync_status to existing tables

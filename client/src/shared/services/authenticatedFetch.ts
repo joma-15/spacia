@@ -19,6 +19,9 @@ export class ApiRequestError extends Error {
 }
 
 let refreshInFlight: Promise<string | null> | null = null;
+// A Response body can only be consumed once. Store the original response and
+// hand each concurrent caller a clone, so all consumers may safely call json().
+const getRequestsInFlight = new Map<string, Promise<Response>>();
 
 /**
  * Converts an HTTP error response into an ApiRequestError.
@@ -188,7 +191,7 @@ function hasExpiredAccessToken(
  * 1. Clear the stored tokens.
  * 2. Throw an authentication error.
  */
-export async function authenticatedFetch(
+async function sendAuthenticatedRequest(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
@@ -367,4 +370,33 @@ export async function authenticatedFetch(
   );
 
   throw await responseError(response);
+}
+
+/**
+ * The single gateway for authenticated HTTP. Concurrent GETs for the same URL
+ * share one network request; mutations deliberately remain independent.
+ */
+export async function authenticatedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  if (method !== "GET") return sendAuthenticatedRequest(path, init);
+
+  // The token namespaces an in-flight request to its authenticated session.
+  // This prevents a fast account switch from sharing another user's response.
+  const token = await getAccessToken();
+  const key = `${token ?? "anonymous"}:${method}:${path}`;
+  const existing = getRequestsInFlight.get(key);
+  if (existing) {
+    console.log(`[API] ${path} [DEDUP] Existing request found`);
+    return (await existing).clone();
+  }
+
+  const startedAt = Date.now();
+  const request = sendAuthenticatedRequest(path, init)
+    .then((response) => {
+      console.log(`[API] ${path} [NETWORK] ${response.status} [DURATION] ${Date.now() - startedAt}ms`);
+      return response;
+    })
+    .finally(() => getRequestsInFlight.delete(key));
+  getRequestsInFlight.set(key, request);
+  return (await request).clone();
 }

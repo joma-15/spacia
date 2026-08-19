@@ -1,6 +1,6 @@
-import { getFolders } from "@/shared/database/folderRepository";
 import { getCardStatsPerFolder } from "@/shared/database/flashcardRepository";
-import { authenticatedFetch } from "@/shared/services/authenticatedFetch";
+import { getCachedFolders, loadFolders } from "@/shared/services/folderDataService";
+import { FetchPolicy } from "@/shared/services/resourceStore";
 import { Folder } from "../types";
 
 interface SourceFolder {
@@ -33,14 +33,12 @@ function toDashboardFolder(folder: SourceFolder, counts?: {
 export const FolderService = {
   getLocalFolders(userId: string): Folder[] {
     const cardStats = getCardStatsPerFolder(userId);
-    return (getFolders(userId) as SourceFolder[]).map((folder) =>
+    return (getCachedFolders(userId) as SourceFolder[]).map((folder) =>
       toDashboardFolder(folder, cardStats[String(folder.id)]),
     );
   },
 
-  async getRemoteFolders(): Promise<Folder[]> {
-    const response = await authenticatedFetch("/folders");
-    const body = (await response.json()) as { response?: SourceFolder[] };
-    return (body.response ?? []).map((folder) => toDashboardFolder(folder));
+  async getRemoteFolders(userId: string, policy: FetchPolicy = "stale-while-revalidate"): Promise<Folder[]> {
+    return (await loadFolders(userId, policy)).map((folder) => toDashboardFolder(folder));
   },
 };

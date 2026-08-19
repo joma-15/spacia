@@ -18,6 +18,8 @@ import { AuthResponse, AuthUser, StoredSession } from "../types";
 import * as authApi from "./authApi";
 import { AuthError } from "./authApi";
 import { clearTokens, subscribeToSessionCleared } from "@/shared/components/auth/session";
+import { removeUserResources } from "@/shared/database/resourceCacheRepository";
+import { clearUserDataMemory, initializeUserData } from "@/shared/services/userDataBootstrap";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -94,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadOrCreateGuestCacheOwner(),
       ]);
       if (!cancelled && session) {
+        await initializeUserData(session.user.id);
         setUser(session.user);
       }
       if (!cancelled) {
@@ -114,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user: response.user,
     };
     await saveSession(session);
+    await initializeUserData(response.user.id);
     setUser(response.user);
   }, []);
 
@@ -140,9 +144,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    const ownerId = user?.id;
     setUser(null);
     await clearSession();
-  }, []);
+    if (ownerId) {
+      clearUserDataMemory(ownerId);
+      removeUserResources(ownerId);
+    }
+  }, [user?.id]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

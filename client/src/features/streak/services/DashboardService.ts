@@ -1,4 +1,6 @@
 import { authenticatedFetch } from "@/shared/services/authenticatedFetch";
+import { readResource, writeResource } from "@/shared/database/resourceCacheRepository";
+import { FetchPolicy, loadResource } from "@/shared/services/resourceStore";
 import type { Achievement, CalendarDay, Challenge, DailyGoal, Folder, Statistics, StreakInfo } from "../types";
 import { daysInMonth, toISODate } from "../utils/date";
 
@@ -53,8 +55,15 @@ function mapDashboard(response: DashboardResponse): DashboardData {
 }
 
 export const DashboardService = {
-  async getDashboard(): Promise<DashboardData> {
-    const response = await authenticatedFetch("/streak/dashboard");
-    return mapDashboard((await response.json()) as DashboardResponse);
+  async getDashboard(userId: string, policy: FetchPolicy = "stale-while-revalidate"): Promise<DashboardData> {
+    return loadResource({
+      userId, resource: "streak-dashboard", staleTime: 2 * 60 * 1000, policy,
+      readLocal: () => readResource<DashboardData>(userId, "streak-dashboard"),
+      writeLocal: (data, updatedAt) => writeResource(userId, "streak-dashboard", data, updatedAt),
+      fetchRemote: async () => {
+        const response = await authenticatedFetch("/streak/dashboard");
+        return mapDashboard((await response.json()) as DashboardResponse);
+      },
+    });
   },
 };

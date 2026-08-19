@@ -2,11 +2,12 @@
 // Spacia — useFolders
 // ============================================================================
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { FolderService } from "../services/FolderService";
 import { AsyncResource, Folder } from "../types";
+import { subscribeResource } from "@/shared/services/resourceStore";
 
 export function useFolders(): AsyncResource<Folder[]> {
   const { cacheOwnerId, isAuthenticated, isRestoring } = useAuth();
@@ -21,7 +22,7 @@ export function useFolders(): AsyncResource<Folder[]> {
       isRefresh ? setRefreshing(true) : setLoading(true);
       setError(null);
       const result = isAuthenticated
-        ? await FolderService.getRemoteFolders()
+        ? await FolderService.getRemoteFolders(cacheOwnerId, isRefresh ? "network-only" : "stale-while-revalidate")
         : FolderService.getLocalFolders(cacheOwnerId);
       setData(result);
     } catch (err) {
@@ -44,6 +45,11 @@ export function useFolders(): AsyncResource<Folder[]> {
       void load(false);
     }, [load]),
   );
+
+  useEffect(() => {
+    if (!cacheOwnerId) return;
+    return subscribeResource(cacheOwnerId, "folders", () => { void load(false); });
+  }, [cacheOwnerId, load]);
 
   const refresh = useCallback(async () => {
     await load(true);
