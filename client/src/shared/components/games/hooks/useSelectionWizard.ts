@@ -92,7 +92,7 @@ export function useSelectionWizard() {
       if (!isMountedRef.current) return;
       loadCachedFolders();
     } catch (error) {
-      console.error("fetchFolders failed, using offline cache:", error);
+      // console.error("fetchFolders failed, using offline cache:", error);
       // Fallback to offline cache
       loadCachedFolders();
     } finally {
