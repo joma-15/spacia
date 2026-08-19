@@ -49,9 +49,13 @@ const AnswerBubble: React.FC<{
   const palette = ROCK_PALETTES[obj.laneIndex % ROCK_PALETTES.length];
   const isHit = hitState !== "none";
 
-  // The same text sizing utility is used by spawning and rendering, so
-  // the measured collision footprint always matches the visible bubble.
-  const { fontSize } = useMemo(() => getBubbleDimensions(obj.label, obj.width), [obj.label, obj.width]);
+  // Use pre-calculated fontSize and formattedLabel from the object, falling back to getBubbleDimensions if missing.
+  const { fontSize: fallbackFontSize, formattedLabel: fallbackFormattedLabel } = useMemo(
+    () => getBubbleDimensions(obj.label, obj.width),
+    [obj.label, obj.width]
+  );
+  const fontSize = obj.fontSize ?? fallbackFontSize;
+  const formattedLabel = obj.formattedLabel ?? fallbackFormattedLabel ?? obj.label;
 
   const overlayColor =
     hitState === "correct"
@@ -151,7 +155,7 @@ const AnswerBubble: React.FC<{
         )}
 
         <Text style={[styles.spaceObjectLabel, { fontSize }]}>
-          {obj.label}
+          {formattedLabel}
         </Text>
       </LinearGradient>
     </Animated.View>

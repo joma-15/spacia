@@ -98,6 +98,8 @@ export interface SpaceObject {
   label: string;
   isCorrect: boolean;
   laneIndex: number;
+  fontSize?: number;
+  formattedLabel?: string;
 }
 
 export interface RockPalette {

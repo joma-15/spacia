@@ -23,13 +23,24 @@ function velocity(speedMultiplier: number) {
 }
 
 export function createAnswer(label: string, isCorrect: boolean, laneIndex: number, area: PlayArea, occupied: SpaceObject[], speedMultiplier = 1): SpaceObject {
-  const { width, height } = getBubbleDimensions(label, area.width);
+  const { width, height, fontSize, formattedLabel } = getBubbleDimensions(label, area.width);
   const minX = BUBBLE_EDGE_GAP;
   const maxX = Math.max(minX, area.width - width - BUBBLE_EDGE_GAP);
   const minY = area.top + BUBBLE_EDGE_GAP;
   const maxY = Math.max(minY, area.bottom - height - BUBBLE_EDGE_GAP);
   const candidate = (x: number, y: number): SpaceObject => ({
-    id: nextObjectId(), x, y, width, height, ...velocity(speedMultiplier), stop: () => {}, label, isCorrect, laneIndex,
+    id: nextObjectId(),
+    x,
+    y,
+    width,
+    height,
+    fontSize,
+    formattedLabel,
+    ...velocity(speedMultiplier),
+    stop: () => {},
+    label,
+    isCorrect,
+    laneIndex,
   });
 
   for (let attempt = 0; attempt < 120; attempt++) {

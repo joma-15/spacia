@@ -1,6 +1,7 @@
 import { AnswerPool } from "./AnswerPool";
 import { createAnswer, PlayArea } from "./spawnAnswer";
 import { SpaceObject } from "../types";
+import { getBubbleDimensions } from "./answerSizing";
 
 /**
  * These two functions answer one question: "the player just shot a
@@ -64,9 +65,21 @@ export function resolveCorrectHit(
     } else {
       // An already-floating bubble becomes the correct answer instead;
       // the vacated slot gets a distractor.
-      updatedRemaining = remaining.map((o, i) =>
-        i === chosenSlot ? { ...o, label: nextCorrectAnswer, isCorrect: true } : o,
-      );
+      updatedRemaining = remaining.map((o, i) => {
+        if (i === chosenSlot) {
+          const dims = getBubbleDimensions(nextCorrectAnswer, ctx.playArea.width);
+          return {
+            ...o,
+            label: nextCorrectAnswer,
+            isCorrect: true,
+            width: dims.width,
+            height: dims.height,
+            fontSize: dims.fontSize,
+            formattedLabel: dims.formattedLabel,
+          };
+        }
+        return o;
+      });
       const distractor = pool.pickDistractor(new Set([...remainingLabels, nextCorrectAnswer]));
       replacementLabel = distractor ?? hitObject.label;
       replacementIsCorrect = false;
