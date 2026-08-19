@@ -3,6 +3,7 @@ import { Animated, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { THEME, ROCK_PALETTES } from "../colors";
 import { SpaceObject, HitState } from "../types";
+import { estimateDisplaySize, estimateFontSize } from "../utils/answerSizing";
 
 /**
  * One floating "space rock" that shows a possible answer's text.
@@ -12,17 +13,12 @@ import { SpaceObject, HitState } from "../types";
  * This component is purely visual — it doesn't know anything about
  * game rules. It's just told "here's a bubble" and "here's whether it
  * was just hit, and how".
+ *
+ * Text-driven sizing (how much a long label grows the bubble) lives in
+ * utils/answerSizing.ts, shared with the spawn logic — see that file's
+ * comment for why that matters (spawn positioning depends on knowing
+ * exactly how big a bubble will render).
  */
-
-// Tuning knobs for text-driven sizing. Kept local since this is purely
-// a rendering concern — the underlying obj.size (used elsewhere for
-// things like hit-testing/collision) is left untouched.
-const MIN_GROWTH_LEN = 6; // labels shorter than this don't grow the bubble
-const GROWTH_PER_CHAR = 3.2; // px of extra diameter per character over MIN_GROWTH_LEN
-const MAX_GROWTH_FACTOR = 1.8; // never grow past 1.8x the base size
-const MIN_FONT_SIZE = 9;
-const BASE_FONT_SIZE = 12;
-
 const AnswerBubble: React.FC<{
   obj: SpaceObject;
   hitState: "none" | HitState;
@@ -33,8 +29,16 @@ const AnswerBubble: React.FC<{
   useEffect(() => {
     if (hitState !== "none") {
       Animated.parallel([
-        Animated.timing(scale, { toValue: 1.6, duration: 200, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.timing(scale, {
+          toValue: 1.6,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
       ]).start();
     } else {
       scale.setValue(1);
@@ -42,27 +46,27 @@ const AnswerBubble: React.FC<{
     }
   }, [hitState, scale, opacity]);
 
-  const translateX = obj.animX.interpolate({ inputRange: [0, 1], outputRange: [-obj.ampX, obj.ampX] });
-  const translateY = obj.animY.interpolate({ inputRange: [0, 1], outputRange: [-obj.ampY, obj.ampY] });
+  const translateX = obj.animX.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-obj.ampX, obj.ampX],
+  });
+  const translateY = obj.animY.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-obj.ampY, obj.ampY],
+  });
 
   const palette = ROCK_PALETTES[obj.laneIndex % ROCK_PALETTES.length];
   const isHit = hitState !== "none";
 
   // Grow the rendered bubble based on how long the answer text is, so
   // longer answers don't get clipped or squeezed. `obj.size` stays the
-  // baseline/minimum — we only ever scale up from it, and cap the
-  // growth so extremely long strings don't produce a huge circle.
+  // baseline/minimum — we only ever scale up from it. The spawn logic
+  // (spawnAnswer.ts) reserves room for this same growth when it picks
+  // a position, so a grown bubble is guaranteed to still fit where it
+  // was placed.
   const { displaySize, fontSize, offset } = useMemo(() => {
-    const len = obj.label.length;
-    const extraChars = Math.max(0, len - MIN_GROWTH_LEN);
-    const maxSize = obj.size * MAX_GROWTH_FACTOR;
-    const grown = obj.size + extraChars * GROWTH_PER_CHAR;
-    const size = Math.round(Math.min(grown, maxSize));
-
-    // Slightly shrink the font for longer labels so more text fits
-    // per line before wrapping/truncating.
-    const fontScale = Math.max(MIN_FONT_SIZE / BASE_FONT_SIZE, 1 - extraChars * 0.015);
-    const font = Math.round(BASE_FONT_SIZE * fontScale);
+    const size = estimateDisplaySize(obj.size, obj.label);
+    const font = estimateFontSize(obj.label);
 
     // Keep the bubble centered on its original anchor point instead of
     // growing only to the bottom-right.
@@ -72,9 +76,17 @@ const AnswerBubble: React.FC<{
   }, [obj.size, obj.label]);
 
   const overlayColor =
-    hitState === "correct" ? THEME.correctGlow : hitState === "wrong" ? THEME.wrongGlow : "transparent";
+    hitState === "correct"
+      ? THEME.correctGlow
+      : hitState === "wrong"
+        ? THEME.wrongGlow
+        : "transparent";
   const borderColor =
-    hitState === "correct" ? THEME.correct : hitState === "wrong" ? THEME.wrong : palette.border;
+    hitState === "correct"
+      ? THEME.correct
+      : hitState === "wrong"
+        ? THEME.wrong
+        : palette.border;
 
   return (
     <Animated.View
@@ -97,7 +109,14 @@ const AnswerBubble: React.FC<{
         colors={palette.colors as unknown as [string, string]}
         start={{ x: 0.25, y: 0.2 }}
         end={{ x: 0.8, y: 1 }}
-        style={[styles.rockGradient, { width: displaySize, height: displaySize, borderRadius: displaySize / 2 }]}
+        style={[
+          styles.rockGradient,
+          {
+            width: displaySize,
+            height: displaySize,
+            borderRadius: displaySize / 2,
+          },
+        ]}
       >
         {/* Decorative crater dots so each rock looks a little rougher */}
         <View
@@ -146,7 +165,10 @@ const AnswerBubble: React.FC<{
         {isHit && (
           <View
             pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor, borderRadius: displaySize / 2 }]}
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: overlayColor, borderRadius: displaySize / 2 },
+            ]}
           />
         )}
 

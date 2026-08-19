@@ -3,49 +3,65 @@ import { ANSWER_OBJECT_SIZE, FLOAT_MAX_DURATION, FLOAT_MIN_DURATION, FLOAT_AMPLI
 import { SpaceObject } from "../types";
 import { AnswerPool, pickInitialAnswers } from "./AnswerPool";
 import { makeIdGenerator } from "./idGenerator";
+import { estimateDisplaySize } from "./answerSizing";
 
 const nextObjectId = makeIdGenerator();
 
+// Minimum visible gap enforced between a bubble's worst-case footprint
+// and its lane boundary, so neighboring bubbles never even touch
+// edge-to-edge, let alone overlap.
+const FOOTPRINT_MARGIN = 6;
+
+// Extra breathing room reserved ONLY at the two physical screen edges
+// (the outermost lanes), on top of FOOTPRINT_MARGIN. Bigger than the
+// inter-lane margin on purpose — this accounts for device bezels,
+// rounded corners, and edge swipe-gesture zones, not just avoiding
+// another bubble.
+const SCREEN_EDGE_MARGIN = 12;
+
 /**
- * Picks a random horizontal position for a bubble inside its "lane"
- * (the screen is split into even vertical columns, one per bubble, so
- * bubbles don't all cluster in the same spot).
+ * Picks a random position for a bubble's CENTER somewhere inside
+ * [lowerBound, upperBound], guaranteeing at least `halfFootprint` of
+ * clearance on both sides. If the bounds are too tight for that (e.g.
+ * a very long label in a very narrow lane), falls back to dead center
+ * rather than risking the bubble spilling past its boundary.
  */
-function laneX(laneIndex: number, laneCount: number): number {
-  const laneWidth = SCREEN_W / laneCount;
-  const freeSpace = laneWidth - ANSWER_OBJECT_SIZE;
-  const maxJitter = Math.max(0, freeSpace * 0.2);
-  const jitter = (Math.random() - 0.5) * 2 * maxJitter;
-  const laneCenter = laneWidth * laneIndex + laneWidth / 2;
-  return laneCenter - ANSWER_OBJECT_SIZE / 2 + jitter;
+function pickCenterWithinBounds(lowerBound: number, upperBound: number, halfFootprint: number): number {
+  const min = lowerBound + halfFootprint;
+  const max = upperBound - halfFootprint;
+  if (min > max) return (lowerBound + upperBound) / 2;
+  return min + Math.random() * (max - min);
 }
 
 /**
- * Starts a slow back-and-forth "floating" animation on a single
- * Animated.Value, forever, until something calls `.stopAnimation()` on it.
+ * Drives a single Animated.Value in an ORGANIC WANDER, forever, until
+ * something calls `.stopAnimation()` on it.
+ *
+ * Unlike a fixed back-and-forth loop (always bouncing between the same
+ * two endpoints with the same duration every cycle), this picks a NEW
+ * random resting point and a NEW random duration every time a move
+ * finishes. That's what keeps the motion from settling into a
+ * repeating, synced pattern with the other axis — which is what reads
+ * to the eye as "moving in a straight line."
  */
-function startFloatLoop(
+function startWanderLoop(
   animVal: Animated.Value,
-  duration: number,
+  minDuration: number,
+  maxDuration: number,
   initialDelay: number,
 ) {
   let first = true;
   const step = () => {
-    Animated.sequence([
-      Animated.timing(animVal, {
-        toValue: 1,
-        duration,
-        delay: first ? initialDelay : 0,
-        easing: Easing.inOut(Easing.sin),
-        useNativeDriver: true,
-      }),
-      Animated.timing(animVal, {
-        toValue: 0,
-        duration,
-        easing: Easing.inOut(Easing.sin),
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
+    const target = Math.random();
+    const duration = minDuration + Math.random() * (maxDuration - minDuration);
+
+    Animated.timing(animVal, {
+      toValue: target,
+      duration,
+      delay: first ? initialDelay : 0,
+      easing: Easing.inOut(Easing.sin),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
       first = false;
       if (finished) step();
     });
@@ -61,6 +77,20 @@ function startFloatLoop(
  *
  * `speedMultiplier` makes bubbles drift faster/more erratically as the
  * player advances further into the deck (difficulty ramp-up).
+ *
+ * OVERLAP & SCREEN-EDGE PREVENTION: each bubble lives in its own lane
+ * (a vertical column of the screen) for its whole lifetime. We reserve
+ * room, when picking where a bubble sits, for its full worst-case
+ * footprint — its text-driven display size (see answerSizing.ts, since
+ * long labels render bigger) PLUS however far it can drift from its
+ * resting position (ampX/ampY) — inside its lane bounds. That alone
+ * guarantees bubbles in different lanes can never touch.
+ *
+ * The outermost lanes (laneIndex 0 and laneCount - 1) get an ADDITIONAL
+ * SCREEN_EDGE_MARGIN reserved against the physical screen edge (x = 0
+ * and x = SCREEN_W), on top of the normal footprint clearance, so a
+ * bubble never renders flush against — or clipped by — the edge of the
+ * device.
  */
 export function spawnAnswerInLane(
   label: string,
@@ -73,31 +103,47 @@ export function spawnAnswerInLane(
   speedMultiplier: number = 1,
 ): SpaceObject {
   const size = ANSWER_OBJECT_SIZE;
-  const x = laneX(laneIndex, laneCount);
-  const usableHeight = Math.max(0, playAreaBottom - playAreaTop - size);
-  const y = playAreaTop + Math.random() * usableHeight;
   const id = nextObjectId();
-
-  const animX = new Animated.Value(0);
-  const animY = new Animated.Value(0);
-
-  const xDuration =
-    (FLOAT_MIN_DURATION + Math.random() * (FLOAT_MAX_DURATION - FLOAT_MIN_DURATION)) /
-    speedMultiplier;
-  const yDuration =
-    (FLOAT_MIN_DURATION + Math.random() * (FLOAT_MAX_DURATION - FLOAT_MIN_DURATION)) /
-    speedMultiplier;
-
-  const xDelay = Math.random() * FLOAT_MAX_DURATION;
-  const yDelay = Math.random() * FLOAT_MAX_DURATION;
 
   const ampVariation = 0.85 + Math.random() * 0.3; // +/-15% per bubble
   const ampX = FLOAT_AMPLITUDE_X * ampVariation * Math.min(speedMultiplier, 1.4);
   const ampY = FLOAT_AMPLITUDE_Y * ampVariation * Math.min(speedMultiplier, 1.4);
 
+  // Worst-case rendered size for this label — matches exactly what
+  // AnswerBubble will draw, since both pull from answerSizing.ts.
+  const maxDisplaySize = estimateDisplaySize(size, label);
+  const maxRadius = maxDisplaySize / 2;
+
+  const laneWidth = SCREEN_W / laneCount;
+  let laneLeft = laneWidth * laneIndex;
+  let laneRight = laneLeft + laneWidth;
+
+  // Pull the outermost lane boundaries in from the actual screen edge.
+  if (laneIndex === 0) laneLeft += SCREEN_EDGE_MARGIN;
+  if (laneIndex === laneCount - 1) laneRight -= SCREEN_EDGE_MARGIN;
+
+  const centerX = pickCenterWithinBounds(laneLeft, laneRight, maxRadius + ampX + FOOTPRINT_MARGIN);
+  const x = centerX - size / 2;
+
+  const centerY = pickCenterWithinBounds(playAreaTop, playAreaBottom, maxRadius + ampY + FOOTPRINT_MARGIN);
+  const y = centerY - size / 2;
+
+  const animX = new Animated.Value(0.5);
+  const animY = new Animated.Value(0.5);
+
+  // Duration bounds each wander "hop" is drawn from. speedMultiplier
+  // shortens these as the player advances (faster, twitchier drift).
+  const minDur = FLOAT_MIN_DURATION / speedMultiplier;
+  const maxDur = FLOAT_MAX_DURATION / speedMultiplier;
+
+  const xDelay = Math.random() * FLOAT_MAX_DURATION;
+  const yDelay = Math.random() * FLOAT_MAX_DURATION;
+
   let currentX = x;
   let currentY = y;
-  const toOffset = (amp: number, value: number) => -amp + value * 2 * amp;
+  // animX/animY now wander over [0,1], where 0.5 is the resting
+  // position (no offset) — map that onto [-amp, +amp].
+  const toOffset = (amp: number, value: number) => (value - 0.5) * 2 * amp;
 
   onUpdate(id, currentX, currentY);
 
@@ -110,8 +156,8 @@ export function spawnAnswerInLane(
     onUpdate(id, currentX, currentY);
   });
 
-  startFloatLoop(animX, xDuration, xDelay);
-  startFloatLoop(animY, yDuration, yDelay);
+  startWanderLoop(animX, minDur, maxDur, xDelay);
+  startWanderLoop(animY, minDur, maxDur, yDelay);
 
   const stop = () => {
     animX.stopAnimation();
