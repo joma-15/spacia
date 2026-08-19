@@ -3,7 +3,7 @@ import { Animated, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { THEME, ROCK_PALETTES } from "../colors";
 import { SpaceObject, HitState } from "../types";
-import { estimateDisplaySize, estimateFontSize } from "../utils/answerSizing";
+import { getBubbleDimensions } from "../utils/answerSizing";
 
 /**
  * One floating "space rock" that shows a possible answer's text.
@@ -46,34 +46,12 @@ const AnswerBubble: React.FC<{
     }
   }, [hitState, scale, opacity]);
 
-  const translateX = obj.animX.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-obj.ampX, obj.ampX],
-  });
-  const translateY = obj.animY.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-obj.ampY, obj.ampY],
-  });
-
   const palette = ROCK_PALETTES[obj.laneIndex % ROCK_PALETTES.length];
   const isHit = hitState !== "none";
 
-  // Grow the rendered bubble based on how long the answer text is, so
-  // longer answers don't get clipped or squeezed. `obj.size` stays the
-  // baseline/minimum — we only ever scale up from it. The spawn logic
-  // (spawnAnswer.ts) reserves room for this same growth when it picks
-  // a position, so a grown bubble is guaranteed to still fit where it
-  // was placed.
-  const { displaySize, fontSize, offset } = useMemo(() => {
-    const size = estimateDisplaySize(obj.size, obj.label);
-    const font = estimateFontSize(obj.label);
-
-    // Keep the bubble centered on its original anchor point instead of
-    // growing only to the bottom-right.
-    const diff = size - obj.size;
-
-    return { displaySize: size, fontSize: font, offset: diff / 2 };
-  }, [obj.size, obj.label]);
+  // The same text sizing utility is used by spawning and rendering, so
+  // the measured collision footprint always matches the visible bubble.
+  const { fontSize } = useMemo(() => getBubbleDimensions(obj.label, obj.width), [obj.label, obj.width]);
 
   const overlayColor =
     hitState === "correct"
@@ -94,14 +72,14 @@ const AnswerBubble: React.FC<{
       style={[
         styles.spaceObject,
         {
-          left: obj.x - offset,
-          top: obj.y - offset,
-          width: displaySize,
-          height: displaySize,
-          borderRadius: displaySize / 2,
+          left: obj.x,
+          top: obj.y,
+          width: obj.width,
+          height: obj.height,
+          borderRadius: Math.min(obj.width, obj.height) / 2,
           borderColor,
           opacity,
-          transform: [{ translateX }, { translateY }, { scale }],
+          transform: [{ scale }],
         },
       ]}
     >
@@ -112,9 +90,9 @@ const AnswerBubble: React.FC<{
         style={[
           styles.rockGradient,
           {
-            width: displaySize,
-            height: displaySize,
-            borderRadius: displaySize / 2,
+            width: obj.width,
+            height: obj.height,
+            borderRadius: Math.min(obj.width, obj.height) / 2,
           },
         ]}
       >
@@ -125,11 +103,11 @@ const AnswerBubble: React.FC<{
             styles.crater,
             {
               backgroundColor: palette.craterColor,
-              width: displaySize * 0.22,
-              height: displaySize * 0.22,
-              borderRadius: displaySize * 0.11,
-              top: displaySize * 0.18,
-              left: displaySize * 0.62,
+              width: obj.height * 0.22,
+              height: obj.height * 0.22,
+              borderRadius: obj.height * 0.11,
+              top: obj.height * 0.18,
+              left: obj.width * 0.72,
             },
           ]}
         />
@@ -139,11 +117,11 @@ const AnswerBubble: React.FC<{
             styles.crater,
             {
               backgroundColor: palette.craterColor,
-              width: displaySize * 0.15,
-              height: displaySize * 0.15,
-              borderRadius: displaySize * 0.075,
-              top: displaySize * 0.6,
-              left: displaySize * 0.18,
+              width: obj.height * 0.15,
+              height: obj.height * 0.15,
+              borderRadius: obj.height * 0.075,
+              top: obj.height * 0.6,
+              left: obj.width * 0.12,
             },
           ]}
         />
@@ -153,11 +131,11 @@ const AnswerBubble: React.FC<{
             styles.crater,
             {
               backgroundColor: palette.craterColor,
-              width: displaySize * 0.12,
-              height: displaySize * 0.12,
-              borderRadius: displaySize * 0.06,
-              top: displaySize * 0.68,
-              left: displaySize * 0.6,
+              width: obj.height * 0.12,
+              height: obj.height * 0.12,
+              borderRadius: obj.height * 0.06,
+              top: obj.height * 0.68,
+              left: obj.width * 0.7,
             },
           ]}
         />
@@ -167,18 +145,20 @@ const AnswerBubble: React.FC<{
             pointerEvents="none"
             style={[
               StyleSheet.absoluteFill,
-              { backgroundColor: overlayColor, borderRadius: displaySize / 2 },
+              { backgroundColor: overlayColor, borderRadius: Math.min(obj.width, obj.height) / 2 },
             ]}
           />
         )}
 
-        <Text style={[styles.spaceObjectLabel, { fontSize }]} numberOfLines={3}>
+        <Text style={[styles.spaceObjectLabel, { fontSize }]}>
           {obj.label}
         </Text>
       </LinearGradient>
     </Animated.View>
   );
 });
+
+AnswerBubble.displayName = "AnswerBubble";
 
 const styles = StyleSheet.create({
   spaceObject: {
@@ -188,7 +168,8 @@ const styles = StyleSheet.create({
   rockGradient: {
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     overflow: "hidden",
   },
   crater: {
@@ -202,6 +183,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
     zIndex: 2,
+    flexShrink: 1,
   },
 });
 

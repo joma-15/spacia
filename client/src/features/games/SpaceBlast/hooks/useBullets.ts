@@ -79,14 +79,14 @@ export function useBullets({ shipX, shipY, shipSize, fireCooldownMs, maxBullets,
         if (hitObject) {
           const result = hitObject.isCorrect ? "correct" : "wrong";
           const impactPos = getObjectPos(hitObject.id) ?? { x: hitObject.x, y: hitObject.y };
-          const explosionSize = hitObject.size * 1.5;
+          const explosionSize = Math.max(hitObject.width, hitObject.height) * 1.5;
 
           setExplosions((prev) => [
             ...prev,
             {
               id: nextExplosionId(),
-              x: impactPos.x + hitObject.size / 2 - explosionSize / 2,
-              y: impactPos.y + hitObject.size / 2 - explosionSize / 2,
+              x: impactPos.x + hitObject.width / 2 - explosionSize / 2,
+              y: impactPos.y + hitObject.height / 2 - explosionSize / 2,
               size: explosionSize,
               variant: result,
             },

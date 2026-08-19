@@ -9,22 +9,21 @@
  * agree on how big a label makes a bubble.
  */
 
-export const MIN_GROWTH_LEN = 6; // labels shorter than this don't grow the bubble
-export const GROWTH_PER_CHAR = 3.2; // px of extra diameter per character over MIN_GROWTH_LEN
-export const MAX_GROWTH_FACTOR = 1.4; // never grow past this multiple of the base size
-export const MIN_FONT_SIZE = 9;
-export const BASE_FONT_SIZE = 12;
+export const MIN_FONT_SIZE = 11;
+export const BASE_FONT_SIZE = 14;
 
 /** The on-screen diameter a bubble will render at for a given label. */
-export function estimateDisplaySize(baseSize: number, label: string): number {
-  const extraChars = Math.max(0, label.length - MIN_GROWTH_LEN);
-  const grown = baseSize + extraChars * GROWTH_PER_CHAR;
-  return Math.round(Math.min(grown, baseSize * MAX_GROWTH_FACTOR));
+export interface BubbleDimensions {
+  width: number;
+  height: number;
+  fontSize: number;
 }
 
-/** The font size a bubble will render its label at. */
-export function estimateFontSize(label: string): number {
-  const extraChars = Math.max(0, label.length - MIN_GROWTH_LEN);
-  const fontScale = Math.max(MIN_FONT_SIZE / BASE_FONT_SIZE, 1 - extraChars * 0.015);
-  return Math.round(BASE_FONT_SIZE * fontScale);
+/** A conservative text measurement shared by spawning and rendering. */
+export function getBubbleDimensions(label: string, playAreaWidth: number): BubbleDimensions {
+  const width = Math.max(104, Math.min(190, Math.max(104, playAreaWidth - 28)));
+  const fontSize = label.length > 90 ? MIN_FONT_SIZE : BASE_FONT_SIZE;
+  const charsPerLine = Math.max(8, Math.floor((width - 28) / (fontSize * 0.62)));
+  const lines = Math.max(1, Math.ceil(label.length / charsPerLine));
+  return { width: Math.round(width), height: Math.round(32 + lines * (fontSize * 1.3)), fontSize };
 }

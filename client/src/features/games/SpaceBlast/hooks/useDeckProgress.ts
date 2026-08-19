@@ -87,6 +87,15 @@ export function useDeckProgress(flashcards: FlashCard[], maxLives: number) {
     });
   }, []);
 
+  const restart = useCallback(() => {
+    playOrderRef.current = fisherYatesShuffle(flashcards.map((_, i) => i));
+    setCurrentIndex(0);
+    setLives(maxLives);
+    livesRef.current = maxLives;
+    setShowWinModal(false);
+    setShowGameOverModal(false);
+  }, [flashcards, maxLives]);
+
   return {
     flashcardsKey,
     safeIndex,
@@ -103,5 +112,6 @@ export function useDeckProgress(flashcards: FlashCard[], maxLives: number) {
     peekNextCard,
     advanceToIndex,
     loseLife,
+    restart,
   };
 }

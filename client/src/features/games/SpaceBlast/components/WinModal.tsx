@@ -14,13 +14,13 @@ const WinModal: React.FC<{ totalCount: number; onOk: () => void }> = ({ totalCou
       <View style={modalStyles.badge}>
         <View style={{ width: 10, height: 10, backgroundColor: "#3DDC84", transform: [{ rotate: "45deg" }] }} />
       </View>
-      <Text style={modalStyles.title}>YOU WIN!</Text>
+      <Text style={modalStyles.title}>CONGRATULATIONS! 🚀</Text>
       <Text style={modalStyles.subtitle}>
-        You answered all {totalCount} {totalCount === 1 ? "question" : "questions"} correctly.
+        You completed all the flashcards! {totalCount} {totalCount === 1 ? "question" : "questions"} answered correctly.
       </Text>
 
       <Pressable onPress={onOk} style={({ pressed }) => [modalStyles.button, pressed && modalStyles.pressed]}>
-        <Text style={modalStyles.buttonText}>OK</Text>
+        <Text style={modalStyles.buttonText}>PLAY AGAIN</Text>
       </Pressable>
     </View>
   </View>

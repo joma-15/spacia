@@ -110,6 +110,11 @@ export class AnswerPool {
 
     return null;
   }
+
+  /** A real deck answer for the rare case a deck has fewer unique labels than choices. */
+  pickAnyAnswer(): string | null {
+    return this.cards.find((card) => Boolean(card.answer))?.answer ?? null;
+  }
 }
 
 /**
@@ -131,6 +136,15 @@ export function pickInitialAnswers(
     if (candidate === null) break; // pool ran out, keep what we have
     shown.add(candidate);
     result.push(candidate);
+  }
+
+  // Keep the board at exactly three answer objects even for a malformed deck
+  // whose cards all share the same answer text. We only ever reuse real deck
+  // answers; correctness is stored on the object, not inferred from its label.
+  while (result.length < count) {
+    const fallback = pool.pickAnyAnswer();
+    if (!fallback) break;
+    result.push(fallback);
   }
 
   return fisherYatesShuffle(result);

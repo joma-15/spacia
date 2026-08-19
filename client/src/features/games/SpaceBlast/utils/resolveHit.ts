@@ -1,5 +1,5 @@
 import { AnswerPool } from "./AnswerPool";
-import { spawnAnswerInLane } from "./spawnAnswer";
+import { createAnswer, PlayArea } from "./spawnAnswer";
 import { SpaceObject } from "../types";
 
 /**
@@ -13,10 +13,7 @@ import { SpaceObject } from "../types";
  */
 
 interface SpawnContext {
-  laneCount: number;
-  topSafeZone: number;
-  bottomSafeZone: number;
-  updateObjectPos: (id: number, x: number, y: number) => void;
+  playArea: PlayArea;
   speedMultiplier: number;
 }
 
@@ -76,14 +73,12 @@ export function resolveCorrectHit(
     }
   }
 
-  const replacement = spawnAnswerInLane(
+  const replacement = createAnswer(
     replacementLabel,
     replacementIsCorrect,
     hitObject.laneIndex,
-    ctx.laneCount,
-    ctx.topSafeZone,
-    ctx.bottomSafeZone,
-    ctx.updateObjectPos,
+    ctx.playArea,
+    updatedRemaining,
     ctx.speedMultiplier,
   );
 
@@ -112,14 +107,12 @@ export function resolveWrongHit(
 
   return [
     ...remaining,
-    spawnAnswerInLane(
+    createAnswer(
       replacementLabel,
       false,
       hitObject.laneIndex,
-      ctx.laneCount,
-      ctx.topSafeZone,
-      ctx.bottomSafeZone,
-      ctx.updateObjectPos,
+      ctx.playArea,
+      remaining,
       ctx.speedMultiplier,
     ),
   ];

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useRef } from "react";
 import { GestureResponderEvent } from "react-native";
 import { FlashCard, SpaceObject } from "../types";
 import { useAssetPreload } from "./useAssetPreload";
@@ -6,6 +6,7 @@ import { useDeckProgress } from "./useDeckProgress";
 import { useFloatingAnswers } from "./useFloatingAnswers";
 import { useBullets } from "./useBullets";
 import { resolveCorrectHit, resolveWrongHit } from "../utils/resolveHit";
+import { PlayArea } from "../utils/spawnAnswer";
 
 interface Params {
   flashcards: FlashCard[];
@@ -20,8 +21,7 @@ interface Params {
   shipX: number;
   shipY: number;
   shipSize: number;
-  topSafeZone: number;
-  bottomSafeZone: number;
+  playArea: PlayArea;
 }
 
 /**
@@ -45,14 +45,14 @@ export function useSpaceBlastEngine({
   shipX,
   shipY,
   shipSize,
-  topSafeZone,
-  bottomSafeZone,
+  playArea,
 }: Params) {
   const assetsReady = useAssetPreload();
   const isReady = assetsReady && !isDataLoading;
   const hasEnoughCards = flashcards.length >= minFlashcards;
 
   const deck = useDeckProgress(flashcards, maxLives);
+  const gameEndedRef = useRef(false);
 
   const floating = useFloatingAnswers({
     flashcards,
@@ -61,8 +61,8 @@ export function useSpaceBlastEngine({
     isReady,
     hasEnoughCards,
     speedMultiplier: deck.speedMultiplier,
-    topSafeZone,
-    bottomSafeZone,
+    playArea,
+    paused: deck.showWinModal || deck.showGameOverModal,
   });
 
   const showGame = isReady && hasEnoughCards;
@@ -79,7 +79,7 @@ export function useSpaceBlastEngine({
   // deck, losing a life, and updating the board of floating answers.
   const handleBulletSettled = useCallback(
     (hitObject: SpaceObject | undefined) => {
-      if (!hitObject) return;
+      if (!hitObject || gameEndedRef.current) return;
 
       floating.markHit(hitObject.id, hitObject.isCorrect ? "correct" : "wrong");
       onAnswer?.(deck.currentCard.id, hitObject.isCorrect, hitObject.label);
@@ -100,17 +100,15 @@ export function useSpaceBlastEngine({
           const remaining = prev.filter((o) => o.id !== hitObject.id);
           const pool = floating.answerPoolRef.current;
           const spawnCtx = {
-            laneCount: floating.laneCountRef.current,
-            topSafeZone,
-            bottomSafeZone,
-            updateObjectPos: floating.updateObjectPos,
+            playArea,
             speedMultiplier: nextSpeedMultiplier,
           };
 
           if (hitObject.isCorrect) {
             if (deck.isLastCard) {
+              gameEndedRef.current = true;
               remaining.forEach((o) => o.stop());
-              deck.setShowWinModal(true);
+              if (!deck.showGameOverModal) deck.setShowWinModal(true);
               return [];
             }
 
@@ -125,6 +123,7 @@ export function useSpaceBlastEngine({
           }
 
           if (deck.livesRef.current <= 0) {
+            gameEndedRef.current = true;
             remaining.forEach((o) => o.stop());
             return [];
           }
@@ -138,7 +137,7 @@ export function useSpaceBlastEngine({
         floating.clearHit(hitObject.id);
       }, 220);
     },
-    [floating, deck, onAnswer, topSafeZone, bottomSafeZone],
+    [floating, deck, onAnswer, playArea],
   );
 
   const { bullets, explosions, fireBullet, handleExplosionDone } = useBullets({
@@ -157,28 +156,25 @@ export function useSpaceBlastEngine({
       if (blockInput) return;
 
       const { locationX, locationY } = evt.nativeEvent;
-      if (locationY < topSafeZone || locationY > bottomSafeZone) return;
+      if (locationY < playArea.top || locationY > playArea.bottom) return;
 
       const hitObject = floating.objects.find((obj) => {
         const pos = floating.objectPosRef.current.get(obj.id) ?? { x: obj.x, y: obj.y };
-        const cx = pos.x + obj.size / 2;
-        const cy = pos.y + obj.size / 2;
-        const dist = Math.sqrt((locationX - cx) ** 2 + (locationY - cy) ** 2);
-        return dist <= obj.size / 2 + 10;
+        return locationX >= pos.x - 10 && locationX <= pos.x + obj.width + 10 &&
+          locationY >= pos.y - 10 && locationY <= pos.y + obj.height + 10;
       });
 
       if (hitObject) {
         const pos = floating.objectPosRef.current.get(hitObject.id) ?? { x: hitObject.x, y: hitObject.y };
-        fireBullet(pos.x + hitObject.size / 2, pos.y + hitObject.size / 2, hitObject);
+        fireBullet(pos.x + hitObject.width / 2, pos.y + hitObject.height / 2, hitObject);
       } else {
         fireBullet(locationX, locationY);
       }
     },
-    [blockInput, topSafeZone, bottomSafeZone, floating.objects, floating.objectPosRef, fireBullet],
+    [blockInput, playArea.bottom, playArea.top, floating.objects, floating.objectPosRef, fireBullet],
   );
 
-  return useMemo(
-    () => ({
+  return {
       isReady,
       hasEnoughCards,
       showGame,
@@ -195,24 +191,10 @@ export function useSpaceBlastEngine({
       setShowGameOverModal: deck.setShowGameOverModal,
       currentCard: deck.currentCard,
       safeIndex: deck.safeIndex,
-    }),
-    [
-      isReady,
-      hasEnoughCards,
-      showGame,
-      floating.objects,
-      floating.hitStates,
-      bullets,
-      explosions,
-      handleExplosionDone,
-      handleTap,
-      deck.lives,
-      deck.showWinModal,
-      deck.setShowWinModal,
-      deck.showGameOverModal,
-      deck.setShowGameOverModal,
-      deck.currentCard,
-      deck.safeIndex,
-    ],
-  );
+      restart: () => {
+        gameEndedRef.current = false;
+        deck.restart();
+        floating.reset();
+      },
+  };
 }

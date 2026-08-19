@@ -90,15 +90,14 @@ export interface SpaceObject {
   id: number;
   x: number;
   y: number;
-  size: number;
-  animX: Animated.Value;
-  animY: Animated.Value;
+  width: number;
+  height: number;
+  vx: number;
+  vy: number;
   stop: () => void;
   label: string;
   isCorrect: boolean;
   laneIndex: number;
-  ampX: number;
-  ampY: number;
 }
 
 export interface RockPalette {

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { LayoutChangeEvent, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Device from "expo-device";
@@ -7,8 +7,6 @@ import * as Device from "expo-device";
 import { SpaceBackgroundProps } from "./types";
 import { THEME } from "./colors";
 import {
-  SCREEN_H,
-  SCREEN_W,
   SHIP_DEFAULT_SIZE,
   HEADER_HEIGHT,
   QUESTION_CARD_HEIGHT,
@@ -72,6 +70,11 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   const isTablet = Device.deviceType === Device.DeviceType.TABLET;
 
   const stars = useMemo(() => generateStars(starCount), [starCount]);
+  const [gameSize, setGameSize] = useState({ width: 0, height: 0 });
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setGameSize((previous) => previous.width === width && previous.height === height ? previous : { width, height });
+  }, []);
 
   /* ---------------- Layout math ---------------- */
   // Where does the ship sit, and what's the safe vertical zone floating
@@ -86,8 +89,8 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   // there's no overlap amount to accidentally under/over-tune per device.
   const SHIP_QUESTION_GAP = isTablet ? 20 : 14;
   const shipBottomOffset = questionCardTop + SHIP_QUESTION_GAP;
-  const shipX = SCREEN_W / 2 - shipSize / 2;
-  const shipY = SCREEN_H - shipSize - shipBottomOffset;
+  const shipX = gameSize.width / 2 - shipSize / 2;
+  const shipY = gameSize.height - shipSize - shipBottomOffset;
   const topSafeZone = insets.top + HEADER_HEIGHT + QUESTION_CARD_MARGIN;
   const bottomSafeZone = shipY - QUESTION_CARD_MARGIN;
 
@@ -103,14 +106,13 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     shipX,
     shipY,
     shipSize,
-    topSafeZone,
-    bottomSafeZone,
+    playArea: { width: gameSize.width, top: topSafeZone, bottom: bottomSafeZone },
   });
 
   const showMinCardsModal = engine.isReady && !engine.hasEnoughCards;
 
   /* ---------------- Study folder pill (header) ---------------- */
-  const [internalSetId, setInternalSetId] = useState<string | undefined>(currentStudySetId ?? studySets[0]?.id);
+  const [internalSetId] = useState<string | undefined>(currentStudySetId ?? studySets[0]?.id);
   const activeSetId = currentStudySetId ?? internalSetId;
   const currentStudySet = studySets.find((s) => s.id === activeSetId);
 
@@ -133,10 +135,9 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   }, [onGoToLibrary, router]);
 
   const handleWinModalOk = useCallback(() => {
-    engine.setShowWinModal(false);
-    if (onWin) return onWin();
-    goToGameTab();
-  }, [engine, onWin, goToGameTab]);
+    onWin?.();
+    engine.restart();
+  }, [engine, onWin]);
 
   const handleGameOverOk = useCallback(() => {
     engine.setShowGameOverModal(false);
@@ -145,7 +146,7 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   }, [engine, onGameOver, goToGameTab]);
 
   return (
-    <View style={[styles.container, { backgroundColor }, style]}>
+    <View style={[styles.container, { backgroundColor }, style]} onLayout={handleLayout}>
       {stars.map((star) => (
         <Star key={star.id} config={star} />
       ))}
