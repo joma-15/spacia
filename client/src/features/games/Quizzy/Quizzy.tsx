@@ -12,7 +12,7 @@ import { colors } from '../GameCatalog/constants/colors';
 
 // Placeholder screen for the "MemoryMatch" game.
 // Replace this with the real game UI + logic.
-const MemoryMatch: React.FC = () => {
+const Quizzy: React.FC = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -55,7 +55,7 @@ const MemoryMatch: React.FC = () => {
   );
 };
 
-export default MemoryMatch;
+export default Quizzy;
 
 const styles = StyleSheet.create({
   screen: {
