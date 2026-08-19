@@ -20,10 +20,10 @@ export const GAME_CATEGORIES: GameCategory[] = [
   },
   {
     id: '2',
-    title: 'WordRush',
+    title: 'Quizzy',
     image: require(`${BASE_PATH}/quizzy.webp`),
     tint: '#34D399',
-    route: '/games/WordRush',
+    route: '/games/Quizzy',
   },
   // {
   //   id: '3',

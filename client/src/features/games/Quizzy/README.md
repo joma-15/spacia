@@ -1,20 +1,20 @@
-# Memory Match Game (Placeholder) (`/client/src/features/games/MemoryMatch`)
+# Word Rush Game (Placeholder) (`/client/src/features/games/WordRush`)
 
 ## 1. Overview
 
-**Memory Match** is a planned grid-based card matching game designed to reinforce flashcard recall.
-* **Purpose**: Train spatial memory alongside active term recognition.
-* **Learning Objective**: Flip cards to match terms (questions) with their definitions (answers) in the fewest moves.
-* **Current Status**: This game is currently a **placeholder screen**. It renders a simple back button and title card, awaiting implementation of gameplay logic.
+**Word Rush** is a planned speed-spelling and completion game designed to test spelling and recall of flashcard definitions.
+* **Purpose**: Solidify term retrieval and spelling memory under time limits.
+* **Learning Objective**: Given a definition, spell the matching term correctly before the timer runs out.
+* **Current Status**: This game is currently a **placeholder screen** awaiting implementation of gameplay logic.
 
 ---
 
 ## 2. Folder Structure
 
 ```text
-client/src/features/games/MemoryMatch/
+client/src/features/games/WordRush/
 ├── index.ts                 # Entry point re-exporting the screen
-├── MemoryMatch.tsx          # Screen skeleton placeholder
+├── WordRush.tsx             # Screen skeleton placeholder
 └── README.md
 ```
 
@@ -22,21 +22,20 @@ client/src/features/games/MemoryMatch/
 
 ## 3. Implementation Roadmap & AI Guidance
 
-When implementing this game, follow the architecture established by other games in the codebase:
+To develop this placeholder game, follow the established game architectures:
 
-### 1. Data Retrieval & Setup
-* Load folder parameters (`folderId` and `folderName`) from the route search parameters.
-* Fetch cards locally from SQLite using `getFlashcardsByFolder(folderId)`.
-* Enforce a card minimum (e.g. at least 6-8 cards to make a $4 \times 3$ or $4 \times 4$ grid). If there are not enough cards, display a warning modal with a redirect to the library.
+### 1. Data Prep
+* Consume `folderId` from the route params and retrieve card arrays via `getFlashcardsByFolder(folderId)`.
+* Shuffle the card deck to randomize the quiz order.
 
-### 2. Matching Grid Logic
-* For the selected cards, create card representations for both the Term (question) and definition (answer) (e.g., 6 cards yield 12 grid items).
-* Shuffle the grid using the Fisher-Yates algorithm.
-* Maintain states for `flippedIndices` (up to 2 active card selections) and `matchedPairs` (set of matching IDs).
-* When two cards are flipped:
-  * Compare their term and definition keys.
-  * If they match, add them to `matchedPairs` and trigger success animations. If the session finishes, show a completion modal and update their statuses to `'understood'` using `updateFlashcardStatus()`.
-  * If they mismatch, wait $1$ second and flip them back down.
+### 2. Gameplay Loop & UI
+* Display a definition (answer) as a prompt.
+* Render empty letter tiles for the question term.
+* Provide either a scrambled letter pool (scrabble-style buttons) or interface with the system keyboard to let the user spell the term.
+* Run a global countdown timer (e.g. 15-30 seconds per word).
+* Checking inputs:
+  * If spelled correctly, trigger celebration micro-animations, play success sound, and proceed to the next word. Update card state in SQLite to `'understood'`.
+  * If the timer runs out or spelling is incorrect, show the correct answer, count it as a review card, and reduce active lives.
 
-### 3. Synchronization
-* On successful card match, update local SQLite databases via `updateFlashcardStatus(cardId, 'understood')` and push changes to the server backend using `PATCH /flashcards/:id`.
+### 3. SQLite & Server Syncing
+* Ensure all correct answers trigger `updateFlashcardStatus(cardId, 'understood')` and push background sync updates to the server via `PATCH /flashcards/:id` for seamless offline-first performance.

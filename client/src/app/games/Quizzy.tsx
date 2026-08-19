@@ -1,3 +1,3 @@
-import MemoryMatch from "@/features/games/Quizzy";
+import Quizzy from "@/features/games/Quizzy";
 
-export default MemoryMatch;
+export default Quizzy;
