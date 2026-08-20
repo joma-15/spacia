@@ -12,18 +12,18 @@ from sqlalchemy import text
 
 def create_app(test_config: dict | None = None) -> Flask:
     """
-    This function is our "Application Factory". 
-    Instead of starting the web server immediately when the file loads, this function 
-    sets up the application configuration, connects the database, registers our webpage 
-    routes (blueprints), and defines how to handle errors. 
-    Using a factory function makes testing much easier because we can spin up temporary 
+    This function is our "Application Factory".
+    Instead of starting the web server immediately when the file loads, this function
+    sets up the application configuration, connects the database, registers our webpage
+    routes (blueprints), and defines how to handle errors.
+    Using a factory function makes testing much easier because we can spin up temporary
     app instances with different test settings.
     """
     app = Flask(__name__)
-    
+
     # Load default configurations (like database URLs and secret keys)
     app.config.from_object(Config)
-    
+
     # If we passed in custom testing configuration, apply it now to override defaults
     if test_config:
         app.config.update(test_config)
@@ -37,26 +37,33 @@ def create_app(test_config: dict | None = None) -> Flask:
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
         app.logger.warning("JWT rejected: expired token")
-        return jsonify({
-            "code": "token_expired",
-            "message": "The token has expired."
-        }), 401
+        return (
+            jsonify({"code": "token_expired", "message": "The token has expired."}),
+            401,
+        )
 
     @jwt.invalid_token_loader
     def invalid_token_callback(error_string):
         app.logger.warning("JWT rejected: invalid token (%s)", error_string)
-        return jsonify({
-            "code": "token_invalid",
-            "message": "The token is invalid."
-        }), 401
+        return (
+            jsonify({"code": "token_invalid", "message": "The token is invalid."}),
+            401,
+        )
 
     @jwt.unauthorized_loader
     def missing_token_callback(error_string):
-        app.logger.warning("JWT rejected: missing or malformed token (%s)", error_string)
-        return jsonify({
-            "code": "token_missing",
-            "message": "Request does not contain a valid access token."
-        }), 401
+        app.logger.warning(
+            "JWT rejected: missing or malformed token (%s)", error_string
+        )
+        return (
+            jsonify(
+                {
+                    "code": "token_missing",
+                    "message": "Request does not contain a valid access token.",
+                }
+            ),
+            401,
+        )
 
     # We import database models here before we register the blueprints/routes.
     # This tells the database tool (SQLAlchemy) what tables exist so it can map them properly.
@@ -64,7 +71,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     from models.folders import Folder  # noqa: F401
     from models.schedules import Schedule  # noqa: F401
     from models.users import User  # noqa: F401
-    from models.studysessions import StudySession #noqa: F401
+    from models.studysessions import StudySession  # noqa: F401
     from routes.flashcard_routes import flashcards_bp
     from routes.folder_routes import folders_bp
     from routes.schedule_routes import schedules_bp
@@ -84,7 +91,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/")
     def health_check():
         """
-        Simple health check endpoint. 
+        Simple health check endpoint.
         If the app is running and healthy, going to '/' will return a friendly message.
         """
         return jsonify({"message": "Spacia Backend Running"})
@@ -97,18 +104,12 @@ def create_app(test_config: dict | None = None) -> Flask:
         try:
             db.session.execute(text("SELECT 1"))
 
-            return jsonify({
-                "status": "ok",
-                "database": "connected"
-        }), 200
+            return jsonify({"status": "ok", "database": "connected"}), 200
 
         except Exception:
             app.logger.exception("Database connection failed")
 
-            return jsonify({
-                "status": "error",
-                "database": "disconnected"
-        }), 500
+            return jsonify({"status": "error", "database": "disconnected"}), 500
 
     @app.errorhandler(ApiError)
     def handle_api_error(error: ApiError):
@@ -117,10 +118,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         If something goes wrong that we predicted, we send back a JSON response
         with a friendly message and a specific status code (e.g. 404 Not Found).
         """
-        response_body = {
-            "success": False,
-            "message": error.message
-        }
+        response_body = {"success": False, "message": error.message}
         if error.code:
             response_body["code"] = error.code
         return jsonify(response_body), error.status_code
@@ -153,7 +151,12 @@ def create_app(test_config: dict | None = None) -> Flask:
         If a user attempts to upload a PDF/textbook larger than our set limit (20 MB),
         Flask automatically triggers this handler and sends back a helpful error message.
         """
-        return jsonify({"success": False, "error": "The textbook must be 20 MB or smaller."}), 413
+        return (
+            jsonify(
+                {"success": False, "error": "The textbook must be 20 MB or smaller."}
+            ),
+            413,
+        )
 
     return app
 

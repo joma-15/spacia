@@ -9,11 +9,14 @@ from extensions import db
 
 class ApplicationTestCase(unittest.TestCase):
     def setUp(self):
-        self.app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_app(
+            {"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"}
+        )
         self.client = self.app.test_client()
         with self.app.app_context():
             db.create_all()
             from flask_jwt_extended import create_access_token
+
             self.token = create_access_token(identity="test-user-id")
             self.headers = {"Authorization": f"Bearer {self.token}"}
 
@@ -78,14 +81,22 @@ class ApplicationTestCase(unittest.TestCase):
             headers=self.headers,
         )
         self.assertEqual(update_response.status_code, 200)
-        self.assertEqual(update_response.get_json()["folder"]["subject"], "Organic Chemistry")
+        self.assertEqual(
+            update_response.get_json()["folder"]["subject"], "Organic Chemistry"
+        )
 
-        delete_response = self.client.delete(f"/folders/{folder_id}", headers=self.headers)
+        delete_response = self.client.delete(
+            f"/folders/{folder_id}", headers=self.headers
+        )
         self.assertEqual(delete_response.status_code, 200)
-        self.assertEqual(self.client.get("/folders", headers=self.headers).get_json()["response"], [])
+        self.assertEqual(
+            self.client.get("/folders", headers=self.headers).get_json()["response"], []
+        )
 
     def test_deleting_a_missing_folder_returns_404(self):
-        response = self.client.delete("/folders/missing-folder-id", headers=self.headers)
+        response = self.client.delete(
+            "/folders/missing-folder-id", headers=self.headers
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.get_json()["message"], "Folder not found.")
 
@@ -111,7 +122,9 @@ class ApplicationTestCase(unittest.TestCase):
         self.assertEqual(create_response.status_code, 201)
         self.assertEqual(create_response.get_json()["data"]["id"], custom_card_id)
 
-        list_response = self.client.get(f"/flashcards/{folder_id}/saved", headers=self.headers)
+        list_response = self.client.get(
+            f"/flashcards/{folder_id}/saved", headers=self.headers
+        )
         self.assertEqual(list_response.status_code, 200)
         cards = list_response.get_json()
         self.assertEqual(len(cards), 1)
@@ -125,11 +138,14 @@ class ApplicationTestCase(unittest.TestCase):
             headers=self.headers,
         ).get_json()["folder"]
         from flask_jwt_extended import create_access_token
+
         with self.app.app_context():
             other_token = create_access_token(identity="other-user-id")
         other_headers = {"Authorization": f"Bearer {other_token}"}
 
-        response = self.client.get(f"/flashcards/{owner_folder}/saved", headers=other_headers)
+        response = self.client.get(
+            f"/flashcards/{owner_folder}/saved", headers=other_headers
+        )
         self.assertEqual(response.status_code, 403)
 
     def test_flashcard_endpoints_require_a_jwt(self):
@@ -167,18 +183,29 @@ class ApplicationTestCase(unittest.TestCase):
     def test_refresh_returns_a_new_access_token(self):
         register_response = self.client.post(
             "/auth/register",
-            json={"username": "refreshuser", "email": "refresh@example.com", "password": "password123"},
+            json={
+                "username": "refreshuser",
+                "email": "refresh@example.com",
+                "password": "password123",
+            },
         )
         refresh_token = register_response.get_json()["refresh_token"]
-        response = self.client.post("/auth/refresh", headers={"Authorization": f"Bearer {refresh_token}"})
+        response = self.client.post(
+            "/auth/refresh", headers={"Authorization": f"Bearer {refresh_token}"}
+        )
         self.assertEqual(response.status_code, 200)
         self.assertIn("access_token", response.get_json())
 
     def test_expired_access_token_returns_machine_readable_error(self):
         from flask_jwt_extended import create_access_token
+
         with self.app.app_context():
-            expired_token = create_access_token(identity="expired-user", expires_delta=timedelta(seconds=-1))
-        response = self.client.get("/folders", headers={"Authorization": f"Bearer {expired_token}"})
+            expired_token = create_access_token(
+                identity="expired-user", expires_delta=timedelta(seconds=-1)
+            )
+        response = self.client.get(
+            "/folders", headers={"Authorization": f"Bearer {expired_token}"}
+        )
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.get_json()["code"], "token_expired")
 

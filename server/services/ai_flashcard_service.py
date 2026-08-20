@@ -11,9 +11,10 @@ from services.pdf_service import DocumentTextExtractor
 
 class AiFlashcardService:
     """
-    This service coordinates with Groq's AI API (Llama 3) to convert 
+    This service coordinates with Groq's AI API (Llama 3) to convert
     extracted document text into a neat list of ready-to-study flashcard questions and answers.
     """
+
     MODEL = os.getenv("GROQ_MODEL")
 
     def __init__(
@@ -23,7 +24,7 @@ class AiFlashcardService:
         client: Groq | None = None,
     ):
         """
-        Creates an instance of the AI Service. 
+        Creates an instance of the AI Service.
         It needs a flashcard_service to save the cards, a document_extractor to read documents,
         and optionally a custom Groq client (useful during automated testing).
         """
@@ -40,19 +41,19 @@ class AiFlashcardService:
         4. Validates and saves the cards to the database for this folder.
         """
         chunks = self._document_extractor.extract_chunks(file_path)
-        
+
         # Merge all chunks with two newlines in between, then get AI response
         raw_response = self._generate_response("\n\n".join(chunks))
-        
+
         # Turn the raw text response from the AI into a structured list of dictionaries
         cards = self._parse_cards(raw_response)
-        
+
         # Save the new cards to the database and return them
         return self._flashcard_service.save_generated_cards(folder_id, user_id, cards)
 
     def _generate_response(self, content: str) -> str:
         """
-        Builds the prompt, calls the Groq AI API, and requests the response 
+        Builds the prompt, calls the Groq AI API, and requests the response
         strictly formatted as a JSON object.
         """
         client = self._get_client()
@@ -103,7 +104,7 @@ CONTENT:
         4. Standardizes keys in case the AI used different names (e.g. "front" or "definition").
         """
         cleaned = raw_response.strip()
-        
+
         # If the AI wrapped its output in markdown code blocks, strip them off.
         if cleaned.startswith("```"):
             cleaned = cleaned.strip("`").removeprefix("json").strip()
@@ -116,7 +117,9 @@ CONTENT:
 
         # Check if the output is a dictionary containing a 'flashcards' key
         if not isinstance(data, dict) or "flashcards" not in data:
-            raise ValueError("AI response must contain a JSON object with a 'flashcards' key.")
+            raise ValueError(
+                "AI response must contain a JSON object with a 'flashcards' key."
+            )
 
         cards = data["flashcards"]
         # Check if flashcards is a non-empty list
@@ -127,11 +130,21 @@ CONTENT:
         for card in cards:
             if not isinstance(card, dict):
                 continue
-            
-            # Extract keys defensively, falling back to common alternative names 
+
+            # Extract keys defensively, falling back to common alternative names
             # in case the AI did not follow instructions perfectly.
-            question = card.get("question") or card.get("clue") or card.get("front") or card.get("text")
-            answer = card.get("answer") or card.get("short_answer") or card.get("back") or card.get("definition")
+            question = (
+                card.get("question")
+                or card.get("clue")
+                or card.get("front")
+                or card.get("text")
+            )
+            answer = (
+                card.get("answer")
+                or card.get("short_answer")
+                or card.get("back")
+                or card.get("definition")
+            )
             status = card.get("status") or "review"
 
             # Skip incomplete cards instead of crashing the whole process
@@ -139,11 +152,13 @@ CONTENT:
                 continue
 
             # Standardize output format
-            normalized_cards.append({
-                "question": str(question).strip(),
-                "answer": str(answer).strip(),
-                "status": str(status).strip()
-            })
+            normalized_cards.append(
+                {
+                    "question": str(question).strip(),
+                    "answer": str(answer).strip(),
+                    "status": str(status).strip(),
+                }
+            )
 
         # Ensure we have at least one valid card before completing
         if not normalized_cards:
@@ -153,7 +168,7 @@ CONTENT:
 
     def _get_client(self) -> Groq:
         """
-        Creates or returns the Groq API client. 
+        Creates or returns the Groq API client.
         It lazy-loads the client (creates it only when actually needed),
         and verifies that the API key is configured in the environment.
         """

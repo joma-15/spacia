@@ -12,7 +12,9 @@ from models.studysessions import StudySession
 
 class StudySessionApiTestCase(unittest.TestCase):
     def setUp(self):
-        self.app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_app(
+            {"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"}
+        )
         self.client = self.app.test_client()
         with self.app.app_context():
             db.create_all()
@@ -55,7 +57,12 @@ class StudySessionApiTestCase(unittest.TestCase):
             session = db.session.get(StudySession, session_id)
             self.assertIsNotNone(session.ended_at)
             self.assertEqual(session.duration_seconds, 90)
-            self.assertEqual(StudySession.query.filter_by(user_id="study-user", ended_at=None).count(), 0)
+            self.assertEqual(
+                StudySession.query.filter_by(
+                    user_id="study-user", ended_at=None
+                ).count(),
+                0,
+            )
 
         dashboard = self.client.get("/streak/dashboard", headers=self.headers)
         self.assertEqual(dashboard.status_code, 200)
@@ -70,14 +77,19 @@ class StudySessionApiTestCase(unittest.TestCase):
         ).get_json()["session_id"]
         response = self.client.post(
             "/study-sessions/end",
-            json={"endTime": (started_at - timedelta(seconds=10)).isoformat(), "sessionId": session_id},
+            json={
+                "endTime": (started_at - timedelta(seconds=10)).isoformat(),
+                "sessionId": session_id,
+            },
             headers=self.headers,
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["duration_seconds"], 0)
 
     def test_study_session_endpoints_require_an_access_token(self):
-        response = self.client.post("/study-sessions/start", json={"startTime": "2026-08-17T10:00:00Z"})
+        response = self.client.post(
+            "/study-sessions/start", json={"startTime": "2026-08-17T10:00:00Z"}
+        )
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.get_json()["code"], "token_missing")
 

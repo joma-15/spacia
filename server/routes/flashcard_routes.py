@@ -26,13 +26,13 @@ class FlashcardGenerationAPI(MethodView):
     """
     Pluggable view (MethodView) for generating flashcards.
     Using MethodView means if a POST request comes in, Flask automatically calls the `post` function.
-    
+
     This endpoint:
-    1. Receives an uploaded PDF or DOCX file.
-    2. Saves it temporarily on the server.
-    3. Triggers the AI generator to extract text and create flashcards.
-    4. Automatically deletes the file afterwards so it doesn't waste space.
-    """
+        1. Receives an uploaded PDF or DOCX file.
+        2. Saves it temporarily on the server.
+        3. Triggers the AI generator to extract text and create flashcards.
+        4. Automatically deletes the file afterwards so it doesn't waste space.
+        """
     ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
     @jwt_required()
@@ -53,7 +53,7 @@ class FlashcardGenerationAPI(MethodView):
         # Ensure the uploads directory exists
         upload_dir = Path(current_app.config["UPLOAD_FOLDER"])
         upload_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Save the file with a random UUID name to prevent collisions
         # (e.g. if two users upload 'notes.pdf' at the exact same millisecond)
         source_file = upload_dir / f"{uuid4()}{extension}"
@@ -67,7 +67,7 @@ class FlashcardGenerationAPI(MethodView):
             # This is crucial so we never leave temporary PDF files lying around on the server.
             source_file.unlink(missing_ok=True)
 
-        # Return the generated cards formatted as JSON
+            # Return the generated cards formatted as JSON
         return jsonify({"message": "Flashcards generated.", "data": [card.to_dict() for card in flashcards]})
 
 
@@ -94,12 +94,12 @@ class ManualFlashcardAPI(MethodView):
         data = require_json_object(request.get_json(silent=True))
         # Ensure all required fields exist
         require_fields(data, "question", "answer", "status")
-        
+
         flashcard = flashcard_service.create(
-            folder_id, 
+            folder_id,
             get_jwt_identity(),
-            data["question"], 
-            data["answer"], 
+            data["question"],
+            data["answer"],
             data["status"],
             data.get("id")
         )
@@ -125,6 +125,36 @@ class FlashcardItemAPI(MethodView):
         return jsonify({"message": "Flashcard deleted successfully."})
 
 
+class FlashcardBatchStatusAPI(MethodView):
+    """
+    View for updating the study status of MULTIPLE flashcards in a single
+    request. Used by the Quizzy game, which plays an entire quiz locally
+    and syncs every answered card's result in one call at the end, instead
+    of one PATCH per card the way FlashcardItemAPI.patch is used elsewhere.
+
+    Expects: {"updates": [{"id": "<flashcard_id>", "status": "understood"}, ...]}
+    All-or-nothing — if any card is missing, not owned by this user, or has
+    an invalid status, nothing in the batch is saved.
+    """
+    @jwt_required()
+    def patch(self):
+        data = require_json_object(request.get_json(silent=True))
+        require_fields(data, "updates")
+
+        updates = data["updates"]
+        if not isinstance(updates, list) or not updates:
+            raise ApiError("`updates` must be a non-empty list.", 400)
+        for update in updates:
+            if not isinstance(update, dict) or "id" not in update or "status" not in update:
+                raise ApiError("Each item in `updates` must include `id` and `status`.", 400)
+
+            flashcards = flashcard_service.update_status_batch(get_jwt_identity(), updates)
+            return jsonify({
+            "message": "Flashcards updated.",
+            "data": [flashcard.to_dict() for flashcard in flashcards],
+        })
+
+
 class FolderFlashcardsAPI(MethodView):
     """
     View for operations on a whole folder's collection of cards.
@@ -142,4 +172,5 @@ flashcards_bp.add_url_rule("/flashcards/<string:folder_id>", view_func=Flashcard
 flashcards_bp.add_url_rule("/flashcards/<string:folder_id>/saved", view_func=SavedFlashcardsAPI.as_view("saved_flashcards"))
 flashcards_bp.add_url_rule("/flashcards/<string:folder_id>/manualSaved", view_func=ManualFlashcardAPI.as_view("manual_flashcard"))
 flashcards_bp.add_url_rule("/flashcards/<string:flashcard_id>", view_func=FlashcardItemAPI.as_view("flashcard_item"))
+flashcards_bp.add_url_rule("/flashcards/batch-status", view_func=FlashcardBatchStatusAPI.as_view("flashcard_batch_status"))
 flashcards_bp.add_url_rule("/flashcards/folder/<string:folder_id>", view_func=FolderFlashcardsAPI.as_view("folder_flashcards"))

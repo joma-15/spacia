@@ -10,10 +10,11 @@ class ScheduleService:
     This service handles all database actions for study schedules (reminders).
     It manages when users want to be reminded to study a particular folder of cards.
     """
+
     def create(self, data: dict) -> Schedule:
         """
         Creates a new study reminder schedule in the database.
-        The client app (React Native) uses "camelCase" naming (like folderId), 
+        The client app (React Native) uses "camelCase" naming (like folderId),
         but our Python database uses "snake_case" naming (like folder_id).
         This function maps the incoming fields to the correct database model fields.
         """

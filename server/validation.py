@@ -8,7 +8,7 @@ from errors import ApiError
 def require_json_object(payload: Any) -> dict[str, Any]:
     """
     Checks if the data sent to our API is a valid JSON dictionary.
-    If the client sends something else (like text or a list), we stop early 
+    If the client sends something else (like text or a list), we stop early
     and raise an error message telling them it must be a JSON object.
     """
     if not isinstance(payload, dict):

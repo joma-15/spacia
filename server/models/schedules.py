@@ -1,6 +1,7 @@
 from extensions import db
 import uuid
 
+
 class Schedule(db.Model):
     __tablename__ = "schedules"
 

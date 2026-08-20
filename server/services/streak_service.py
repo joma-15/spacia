@@ -24,8 +24,7 @@ class StreakService:
     @classmethod
     def dashboard(cls, user_id: str, month: str | None = None) -> dict:
         completed = (
-            StudySession.query
-            .filter(
+            StudySession.query.filter(
                 StudySession.user_id == user_id,
                 StudySession.ended_at.isnot(None),
                 StudySession.duration_seconds.isnot(None),
@@ -54,8 +53,12 @@ class StreakService:
 
         year, selected_month = map(int, (month or today[:7]).split("-"))
         month_prefix = f"{year:04d}-{selected_month:02d}-"
-        monthly_activity = {date for date in study_dates if date.startswith(month_prefix)}
-        today_sessions = sum(1 for session in completed if cls._utc_date(session.ended_at) == today)
+        monthly_activity = {
+            date for date in study_dates if date.startswith(month_prefix)
+        }
+        today_sessions = sum(
+            1 for session in completed if cls._utc_date(session.ended_at) == today
+        )
 
         folders = (
             Folder.query.options(selectinload(Folder.flashcards))
@@ -67,13 +70,15 @@ class StreakService:
         for folder in folders:
             cards = folder.flashcards
             understood = sum(card.status == "understood" for card in cards)
-            folder_summaries.append({
-                "id": folder.id,
-                "title": folder.subject,
-                "color": folder.accent_color,
-                "total_cards": len(cards),
-                "understood_cards": understood,
-            })
+            folder_summaries.append(
+                {
+                    "id": folder.id,
+                    "title": folder.subject,
+                    "color": folder.accent_color,
+                    "total_cards": len(cards),
+                    "understood_cards": understood,
+                }
+            )
 
         cards_reviewed = (
             db.session.query(func.count(Flashcard.id))
@@ -125,7 +130,10 @@ class StreakService:
                 "study_time_minutes": total_minutes,
                 "xp_earned": 0,
             },
-            "daily_goal": {"target": cls.DAILY_SESSION_GOAL, "completed": today_sessions},
+            "daily_goal": {
+                "target": cls.DAILY_SESSION_GOAL,
+                "completed": today_sessions,
+            },
             "calendar": sorted(monthly_activity),
             "folders": folder_summaries,
             "achievements": achievements,

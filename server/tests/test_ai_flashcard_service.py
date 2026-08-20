@@ -50,10 +50,10 @@ class TestAiFlashcardService(unittest.TestCase):
         """
         cards = self.service._parse_cards(raw_response)
         self.assertEqual(len(cards), 2)
-        
+
         self.assertEqual(cards[0]["question"], "What is velocity?")
         self.assertEqual(cards[0]["answer"], "Displacement over time")
-        
+
         self.assertEqual(cards[1]["question"], "What is speed?")
         self.assertEqual(cards[1]["answer"], "Distance over time")
         self.assertEqual(cards[1]["status"], "review")

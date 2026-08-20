@@ -13,7 +13,9 @@ class StudySessionService:
         return value.astimezone(timezone.utc)
 
     @classmethod
-    def start_session(cls, user_id: str, started_at: datetime) -> tuple[StudySession, bool]:
+    def start_session(
+        cls, user_id: str, started_at: datetime
+    ) -> tuple[StudySession, bool]:
         active_session = (
             StudySession.query.filter_by(user_id=user_id, ended_at=None)
             .order_by(StudySession.started_at.desc())

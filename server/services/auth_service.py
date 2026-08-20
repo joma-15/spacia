@@ -41,21 +41,17 @@ class AuthService:
             db.session.rollback()
             raise
 
-    def login(self,identifier : str, password : str):
+    def login(self, identifier: str, password: str):
 
         start = time.perf_counter()
 
-        user = User.query.with_entities(
-            User.id,
-            User.username,
-            User.email,
-            User.password_hash
-        ).filter(
-            or_(
-                User.username == identifier,
-                User.email == identifier
+        user = (
+            User.query.with_entities(
+                User.id, User.username, User.email, User.password_hash
+            )
+            .filter(or_(User.username == identifier, User.email == identifier))
+            .first()
         )
-    ).first()
 
         # user = User.query.filter_by(
         #     username=identifier
@@ -66,17 +62,20 @@ class AuthService:
         #         email=identifier
         #     ).first()
 
-        #added for performance calculation 
+        # added for performance calculation
         after_db = time.perf_counter()
 
         if user is None:
-            raise ApiError("Incorrect username or password", 401, code="invalid_credentials")
+            raise ApiError(
+                "Incorrect username or password", 401, code="invalid_credentials"
+            )
 
         if not bcrypt.checkpw(
-            password.encode('utf-8'),
-            user.password_hash.encode('utf-8')
+            password.encode("utf-8"), user.password_hash.encode("utf-8")
         ):
-            raise ApiError("Incorrect username or password", 401, code="invalid_credentials")
+            raise ApiError(
+                "Incorrect username or password", 401, code="invalid_credentials"
+            )
 
         after_bcrypt = time.perf_counter()
 
@@ -91,7 +90,7 @@ class AuthService:
         jwt_time = (after_jwt - after_bcrypt) * 1000
         total_time = (after_jwt - start) * 1000
 
-                # ADDED: Print performance information
+        # ADDED: Print performance information
         print("\n========== LOGIN PERFORMANCE ==========")
         print(f"Database lookup : {db_time:.2f} ms")
         print(f"bcrypt check    : {bcrypt_time:.2f} ms")
@@ -101,13 +100,7 @@ class AuthService:
 
         return {
             "message": "login successfully",
-            "access_token" : access_token,
+            "access_token": access_token,
             "refresh_token": refresh_token,
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email
-            }
+            "user": {"id": user.id, "username": user.username, "email": user.email},
         }
-
-
