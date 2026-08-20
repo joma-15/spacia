@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -7,12 +7,13 @@ import {
   ScrollView,
   Dimensions,
   Platform,
-} from 'react-native';
+} from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
-} from 'react-native-safe-area-context';
-import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+} from "react-native-safe-area-context";
+import { MaterialCommunityIcons as Icon } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 /**
  * QUIZZY — single-file React Native + TypeScript multiple choice quiz game.
@@ -29,7 +30,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 // Types
 // ---------------------------------------------------------------------------
 
-type OptionKey = 'A' | 'B' | 'C' | 'D';
+type OptionKey = "A" | "B" | "C" | "D";
 
 interface Question {
   id: number;
@@ -45,99 +46,100 @@ interface Question {
 const MOCK_QUESTIONS: Question[] = [
   {
     id: 1,
-    question: 'What gas do plants absorb from the atmosphere?',
-    options: { A: 'Oxygen', B: 'Carbon Dioxide', C: 'Nitrogen', D: 'Helium' },
-    correct: 'B',
+    question: "What gas do plants absorb from the atmosphere?",
+    options: { A: "Oxygen", B: "Carbon Dioxide", C: "Nitrogen", D: "Helium" },
+    correct: "B",
   },
   {
     id: 2,
-    question: 'What is the powerhouse of the cell?',
+    question: "What is the powerhouse of the cell?",
     options: {
-      A: 'Nucleus',
-      B: 'Ribosome',
-      C: 'Mitochondria',
-      D: 'Golgi Body',
+      A: "Nucleus",
+      B: "Ribosome",
+      C: "Mitochondria",
+      D: "Golgi Body",
     },
-    correct: 'C',
+    correct: "C",
   },
   {
     id: 3,
-    question: 'What is the chemical symbol for gold?',
-    options: { A: 'Ag', B: 'Gd', C: 'Go', D: 'Au' },
-    correct: 'D',
+    question: "What is the chemical symbol for gold?",
+    options: { A: "Ag", B: "Gd", C: "Go", D: "Au" },
+    correct: "D",
   },
   {
     id: 4,
-    question: 'How many bones are in the adult human body?',
-    options: { A: '206', B: '186', C: '215', D: '250' },
-    correct: 'A',
+    question: "How many bones are in the adult human body?",
+    options: { A: "206", B: "186", C: "215", D: "250" },
+    correct: "A",
   },
   {
     id: 5,
-    question: 'What planet is known as the Red Planet?',
-    options: { A: 'Venus', B: 'Mars', C: 'Jupiter', D: 'Saturn' },
-    correct: 'B',
+    question: "What planet is known as the Red Planet?",
+    options: { A: "Venus", B: "Mars", C: "Jupiter", D: "Saturn" },
+    correct: "B",
   },
   {
     id: 6,
-    question: 'What is the largest ocean on Earth?',
+    question: "What is the largest ocean on Earth?",
     options: {
-      A: 'Atlantic',
-      B: 'Indian',
-      C: 'Arctic',
-      D: 'Pacific',
+      A: "Atlantic",
+      B: "Indian",
+      C: "Arctic",
+      D: "Pacific",
     },
-    correct: 'D',
+    correct: "D",
   },
   {
     id: 7,
-    question: 'What force pulls objects toward the Earth?',
-    options: { A: 'Magnetism', B: 'Gravity', C: 'Friction', D: 'Tension' },
-    correct: 'B',
+    question: "What force pulls objects toward the Earth?",
+    options: { A: "Magnetism", B: "Gravity", C: "Friction", D: "Tension" },
+    correct: "B",
   },
   {
     id: 8,
-    question: 'What is H2O more commonly known as?',
-    options: { A: 'Salt', B: 'Hydrogen', C: 'Water', D: 'Oxygen' },
-    correct: 'C',
+    question: "What is H2O more commonly known as?",
+    options: { A: "Salt", B: "Hydrogen", C: "Water", D: "Oxygen" },
+    correct: "C",
   },
 ];
 
 const XP_PER_CORRECT = 150;
-const OPTION_KEYS: OptionKey[] = ['A', 'B', 'C', 'D'];
+const OPTION_KEYS: OptionKey[] = ["A", "B", "C", "D"];
 
 // ---------------------------------------------------------------------------
 // Theme
 // ---------------------------------------------------------------------------
 
 const theme = {
-  bg: '#050f06',
-  panel: '#0b1a0c',
-  panelBorder: '#1f3d21',
-  neon: '#7CFC00',
-  neonDim: '#3f7a2e',
-  neonSoft: 'rgba(124,252,0,0.12)',
-  white: '#f2f7f0',
-  grey: '#7e8a7c',
-  danger: '#ff5c5c',
-  gold: '#e8c14a',
-  purple: '#b98af0',
+  bg: "#050f06",
+  panel: "#0b1a0c",
+  panelBorder: "#1f3d21",
+  neon: "#7CFC00",
+  neonDim: "#3f7a2e",
+  neonSoft: "rgba(124,252,0,0.12)",
+  white: "#f2f7f0",
+  grey: "#7e8a7c",
+  danger: "#ff5c5c",
+  gold: "#e8c14a",
+  purple: "#b98af0",
 };
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-type AnswerState = 'idle' | 'correct' | 'wrong';
+type AnswerState = "idle" | "correct" | "wrong";
 
 export default function Quizzy(): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const { width } = Dimensions.get('window');
+  const { width } = Dimensions.get("window");
   const isTablet = width >= 768;
+  const router = useRouter();
 
   const [questionIndex, setQuestionIndex] = useState<number>(0);
   const [selected, setSelected] = useState<OptionKey | null>(null);
-  const [answerState, setAnswerState] = useState<AnswerState>('idle');
+  const [answerState, setAnswerState] = useState<AnswerState>("idle");
   const [score, setScore] = useState<number>(0);
   const [xp, setXp] = useState<number>(0);
   const [streak, setStreak] = useState<number>(0);
@@ -148,18 +150,18 @@ export default function Quizzy(): React.JSX.Element {
 
   const handleSelect = useCallback(
     (key: OptionKey) => {
-      if (answerState !== 'idle') return; // lock after first pick
+      if (answerState !== "idle") return; // lock after first pick
 
       setSelected(key);
       const isCorrect = key === question.correct;
 
       if (isCorrect) {
-        setAnswerState('correct');
+        setAnswerState("correct");
         setScore((s) => s + 100);
         setXp((x) => x + XP_PER_CORRECT);
         setStreak((s) => s + 1);
       } else {
-        setAnswerState('wrong');
+        setAnswerState("wrong");
         setStreak(0);
       }
     },
@@ -173,13 +175,13 @@ export default function Quizzy(): React.JSX.Element {
     }
     setQuestionIndex((i) => i + 1);
     setSelected(null);
-    setAnswerState('idle');
+    setAnswerState("idle");
   }, [questionIndex, totalQuestions]);
 
   const handleRestart = useCallback(() => {
     setQuestionIndex(0);
     setSelected(null);
-    setAnswerState('idle');
+    setAnswerState("idle");
     setScore(0);
     setXp(0);
     setStreak(0);
@@ -188,16 +190,20 @@ export default function Quizzy(): React.JSX.Element {
 
   // Placeholder handlers — wire up real navigation later.
   const handleBack = useCallback(() => {
-    console.log('Back button pressed');
+    router.replace("/(tabs)/game")
+    console.log("Back button pressed");
   }, []);
 
   const handleChangeFolder = useCallback(() => {
-    console.log('Change folder pressed');
-  }, []);
+    // console.log("Change folder pressed");
+    router.navigate({
+      pathname: "/games/SelectionWizard",
+      params: { gameRoute: "/games/Quizzy" }
+    });
+  }, [router]);
 
   const progressDots = useMemo(
-    () =>
-      Array.from({ length: totalQuestions }, (_, i) => i),
+    () => Array.from({ length: totalQuestions }, (_, i) => i),
     [totalQuestions],
   );
 
@@ -239,7 +245,7 @@ export default function Quizzy(): React.JSX.Element {
     let letterStyle = styles.optionLetter;
     let textStyle = styles.optionText;
 
-    if (answerState !== 'idle') {
+    if (answerState !== "idle") {
       if (isCorrectOption) {
         optionStyle = { ...styles.option, ...styles.optionCorrect };
         letterStyle = { ...styles.optionLetter, ...styles.optionLetterActive };
@@ -251,47 +257,48 @@ export default function Quizzy(): React.JSX.Element {
       }
     }
 
+    // Decide which mark (if any) applies to this option once answered
+    const showCorrectMark = answerState !== "idle" && isCorrectOption;
+    const showWrongMark =
+      answerState !== "idle" && isSelected && !isCorrectOption;
+
     return (
       <Pressable
         key={key}
         onPress={() => handleSelect(key)}
-        disabled={answerState !== 'idle'}
+        disabled={answerState !== "idle"}
         style={({ pressed }) => [
           optionStyle,
-          pressed && answerState === 'idle' && styles.optionPressed,
+          pressed && answerState === "idle" && styles.optionPressed,
         ]}
       >
         <View style={letterStyle}>
           <Text style={styles.optionLetterText}>{key}</Text>
         </View>
         <Text style={textStyle}>{question.options[key]}</Text>
-        {answerState !== 'idle' && isCorrectOption && (
-          <Icon
-            name="check-bold"
-            size={16}
-            color={theme.neon}
-            style={styles.resultMark}
-          />
-        )}
-        {answerState !== 'idle' && isSelected && !isCorrectOption && (
-          <Icon
-            name="close-thick"
-            size={16}
-            color={theme.danger}
-            style={styles.resultMark}
-          />
-        )}
+
+        {/* Fixed-width slot, always present, so text never reflows when marks appear */}
+        <View style={styles.resultMarkSlot}>
+          {showCorrectMark && (
+            <Icon name="check-bold" size={16} color={theme.neon} />
+          )}
+          {showWrongMark && (
+            <Icon name="close-thick" size={16} color={theme.danger} />
+          )}
+        </View>
       </Pressable>
     );
   };
-
   // -------------------------------------------------------------------------
   // Finished screen
   // -------------------------------------------------------------------------
 
   if (finished) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={["top", "bottom", "left", "right"]}
+      >
         {renderTopBar()}
         <View style={[styles.container, styles.centered]}>
           <Text style={styles.logo}>QUIZZY</Text>
@@ -300,9 +307,24 @@ export default function Quizzy(): React.JSX.Element {
           <View style={styles.resultCard}>
             <Text style={styles.resultTitle}>Quiz Complete!</Text>
             <View style={styles.statsRow}>
-              <StatBlock icon="trophy" label="SCORE" value={String(score)} color={theme.gold} />
-              <StatBlock icon="lightning-bolt" label="XP GAINED" value={`+${xp}`} color={theme.neon} />
-              <StatBlock icon="star" label="BEST STREAK" value={`x${streak}`} color={theme.purple} />
+              <StatBlock
+                icon="trophy"
+                label="SCORE"
+                value={String(score)}
+                color={theme.gold}
+              />
+              <StatBlock
+                icon="lightning-bolt"
+                label="XP GAINED"
+                value={`+${xp}`}
+                color={theme.neon}
+              />
+              <StatBlock
+                icon="star"
+                label="BEST STREAK"
+                value={`x${streak}`}
+                color={theme.purple}
+              />
             </View>
           </View>
 
@@ -319,7 +341,10 @@ export default function Quizzy(): React.JSX.Element {
   // -------------------------------------------------------------------------
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["top", "bottom", "left", "right"]}
+    >
       {renderTopBar()}
       <ScrollView
         contentContainerStyle={[
@@ -347,10 +372,7 @@ export default function Quizzy(): React.JSX.Element {
               {progressDots.map((i) => (
                 <View
                   key={i}
-                  style={[
-                    styles.dot,
-                    i <= questionIndex && styles.dotActive,
-                  ]}
+                  style={[styles.dot, i <= questionIndex && styles.dotActive]}
                 />
               ))}
             </View>
@@ -362,10 +384,10 @@ export default function Quizzy(): React.JSX.Element {
             {OPTION_KEYS.map(renderOption)}
           </View>
 
-          {answerState !== 'idle' && (
+          {answerState !== "idle" && (
             <Pressable style={styles.nextButton} onPress={handleNext}>
               <Text style={styles.nextButtonText}>
-                {questionIndex + 1 >= totalQuestions ? 'SEE RESULTS' : 'NEXT →'}
+                {questionIndex + 1 >= totalQuestions ? "SEE RESULTS" : "NEXT →"}
               </Text>
             </Pressable>
           )}
@@ -373,9 +395,24 @@ export default function Quizzy(): React.JSX.Element {
 
         {/* Stats footer */}
         <View style={styles.statsFooter}>
-          <StatBlock icon="trophy" label="SCORE" value={String(score)} color={theme.gold} />
-          <StatBlock icon="lightning-bolt" label="XP GAINED" value={`+${xp}`} color={theme.neon} />
-          <StatBlock icon="star" label="STREAK" value={`x${streak}`} color={theme.purple} />
+          <StatBlock
+            icon="trophy"
+            label="SCORE"
+            value={String(score)}
+            color={theme.gold}
+          />
+          <StatBlock
+            icon="lightning-bolt"
+            label="XP GAINED"
+            value={`+${xp}`}
+            color={theme.neon}
+          />
+          <StatBlock
+            icon="star"
+            label="STREAK"
+            value={`x${streak}`}
+            color={theme.purple}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -392,7 +429,7 @@ function StatBlock({
   value,
   color,
 }: {
-  icon: React.ComponentProps<typeof Icon>['name'];
+  icon: React.ComponentProps<typeof Icon>["name"];
   label: string;
   value: string;
   color: string;
@@ -416,9 +453,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.bg,
   },
   topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 8,
   },
@@ -429,8 +466,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.panel,
     borderWidth: 1,
     borderColor: theme.panelBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   topBarButtonPressed: {
     borderColor: theme.neonDim,
@@ -443,21 +480,21 @@ const styles = StyleSheet.create({
   },
   containerTablet: {
     paddingHorizontal: 64,
-    alignSelf: 'center',
-    width: '100%',
+    alignSelf: "center",
+    width: "100%",
     maxWidth: 700,
   },
   centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 24,
   },
   logo: {
     fontSize: 40,
-    fontWeight: '900',
+    fontWeight: "900",
     color: theme.white,
     letterSpacing: 4,
     textShadowColor: theme.neon,
@@ -467,7 +504,7 @@ const styles = StyleSheet.create({
   tagline: {
     marginTop: 6,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     color: theme.neon,
     letterSpacing: 3,
   },
@@ -480,25 +517,25 @@ const styles = StyleSheet.create({
     borderColor: theme.panelBorder,
     padding: 20,
     shadowColor: theme.neon,
-    shadowOpacity: Platform.OS === 'ios' ? 0.15 : 0,
+    shadowOpacity: Platform.OS === "ios" ? 0.15 : 0,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
   },
   questionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 14,
   },
   questionLabel: {
     color: theme.neon,
-    fontWeight: '800',
+    fontWeight: "800",
     fontSize: 13,
     letterSpacing: 2,
   },
   dotsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 6,
   },
   dot: {
@@ -513,7 +550,7 @@ const styles = StyleSheet.create({
   questionText: {
     color: theme.white,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
     lineHeight: 27,
     marginBottom: 20,
   },
@@ -522,9 +559,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.02)",
     borderWidth: 1.5,
     borderColor: theme.panelBorder,
     borderRadius: 12,
@@ -542,7 +579,7 @@ const styles = StyleSheet.create({
   },
   optionWrong: {
     borderColor: theme.danger,
-    backgroundColor: 'rgba(255,92,92,0.10)',
+    backgroundColor: "rgba(255,92,92,0.10)",
   },
   optionDisabled: {
     opacity: 0.45,
@@ -553,8 +590,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1.5,
     borderColor: theme.neonDim,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   optionLetterActive: {
     borderColor: theme.neon,
@@ -566,17 +603,20 @@ const styles = StyleSheet.create({
   },
   optionLetterText: {
     color: theme.white,
-    fontWeight: '800',
+    fontWeight: "800",
     fontSize: 13,
   },
   optionText: {
     color: theme.white,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     flexShrink: 1,
   },
-  resultMark: {
-    marginLeft: 'auto',
+  resultMarkSlot: {
+    marginLeft: "auto",
+    width: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   nextButton: {
@@ -584,32 +624,32 @@ const styles = StyleSheet.create({
     backgroundColor: theme.neon,
     borderRadius: 12,
     paddingVertical: 14,
-    alignItems: 'center',
+    alignItems: "center",
   },
   nextButtonText: {
     color: theme.bg,
-    fontWeight: '900',
+    fontWeight: "900",
     fontSize: 14,
     letterSpacing: 2,
   },
 
   // Stats footer / result screen
   statsFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
     marginTop: 28,
   },
   statBlock: {
-    alignItems: 'center',
+    alignItems: "center",
     gap: 4,
   },
   statValue: {
     fontSize: 18,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   statLabel: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     color: theme.grey,
     letterSpacing: 1,
   },
@@ -622,19 +662,19 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     paddingHorizontal: 24,
     marginTop: 24,
-    width: '100%',
-    alignItems: 'center',
+    width: "100%",
+    alignItems: "center",
   },
   resultTitle: {
     color: theme.white,
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: "800",
     marginBottom: 20,
   },
   statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
   },
   primaryButton: {
     marginTop: 28,
@@ -645,7 +685,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: theme.bg,
-    fontWeight: '900',
+    fontWeight: "900",
     fontSize: 15,
     letterSpacing: 2,
   },
