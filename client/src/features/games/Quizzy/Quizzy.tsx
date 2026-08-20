@@ -15,7 +15,10 @@ import {
 } from "react-native-safe-area-context";
 import { MaterialCommunityIcons as Icon } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useFlashcardSync } from "../SpaceBlast/hooks/useFlashcardSync";
+import {
+  useFlashcardSync,
+  QuizAnswerRecord,
+} from "./UseflashcardSync";
 import { FlashCard } from "@/features/flashcards/types";
 
 /**
@@ -47,12 +50,6 @@ interface QuizQuestion {
   question: string;
   options: Record<OptionKey, string>;
   correct: OptionKey;
-}
-
-/** One card's result, kept locally during play and included in the final batch. */
-export interface QuizAnswerRecord {
-  cardId: string;
-  correct: boolean;
 }
 
 /**
@@ -166,10 +163,16 @@ interface QuizzyGameProps {
   questions: QuizQuestion[];
   isDataLoading: boolean;
   /**
+   * Fired after every question. Local-only in practice (backed by
+   * `recordAnswerLocally`, which never touches the network) — safe to call
+   * on every answer without any network-related concerns.
+   */
+  onAnswer: (cardId: string, correct: boolean) => void;
+  /**
    * Fired exactly once, when the game finishes, with the complete batched
-   * result. This is the ONLY network-triggering prop on this component now
-   * — nothing fires per-question anymore. May return void or a Promise;
-   * rejections are caught and logged, never thrown back into the UI.
+   * result. This is the ONLY prop on this component that should ever
+   * reach the network. May return void or a Promise; rejections are
+   * caught and logged, never thrown back into the UI.
    */
   onGameComplete: (result: QuizSessionResult) => void | Promise<void>;
 }
@@ -178,6 +181,7 @@ function QuizzyGame({
   folderId,
   questions,
   isDataLoading,
+  onAnswer,
   onGameComplete,
 }: QuizzyGameProps): React.JSX.Element | null {
   const insets = useSafeAreaInsets();
@@ -276,8 +280,12 @@ function QuizzyGame({
         setAnswerState("wrong");
         setStreak(0);
       }
+
+      // Local status write only (SQLite + on-screen card state) — no
+      // network request happens here.
+      onAnswer(question.id, isCorrect);
     },
-    [answerState, question],
+    [answerState, question, onAnswer],
   );
 
   const handleNext = useCallback(() => {
@@ -596,35 +604,25 @@ function QuizzyGame({
 const QuizzyGameContent: React.FC<{ folderId: string; folderName: string }> = ({
   folderId,
 }) => {
-  const { cards, isDataLoading, handleAnswer } = useFlashcardSync(folderId);
+  const { cards, isDataLoading, recordAnswerLocally, submitGameResults } =
+    useFlashcardSync(folderId);
 
   // Only rebuild the quiz set when a card's actual question/answer content
   // changes — NOT when `cards` is replaced purely because of an unrelated
   // sync. That keeps the shuffled options stable mid-quiz.
   const cardsSignature = cards
-    .map((c) => `${c.id}:${c.question}:${c.answer}`)
+    .map((c : any) => `${c.id}:${c.question}:${c.answer}`)
     .join("|");
   const questions = useMemo(
     () => buildQuizQuestions(cards),
     [cardsSignature], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // INTERIM BRIDGE — not the final fix. `useFlashcardSync` only exposes a
-  // per-card `handleAnswer`, not a batch method, so this loop still makes
-  // N calls to it. What this DOES fix: none of those calls happen during
-  // gameplay anymore — they're all deferred until the game is already
-  // over, so a slow/offline connection can no longer stall or interrupt
-  // answering questions. Whether this is *also* N network requests, or
-  // something cheaper, depends on what `handleAnswer` does internally
-  // (see the note in chat) — that requires seeing the hook itself to
-  // resolve properly.
+  // The ONE network call for the whole game — fires once, when
+  // `submitFinalResult` inside QuizzyGame calls this at completion.
   const onGameComplete = useCallback(
-    async (result: QuizSessionResult) => {
-      await Promise.all(
-        result.answers.map((a) => handleAnswer(a.cardId, a.correct)),
-      );
-    },
-    [handleAnswer],
+    (result: QuizSessionResult) => submitGameResults(result.answers),
+    [submitGameResults],
   );
 
   return (
@@ -632,6 +630,7 @@ const QuizzyGameContent: React.FC<{ folderId: string; folderName: string }> = ({
       folderId={folderId}
       questions={questions}
       isDataLoading={isDataLoading}
+      onAnswer={recordAnswerLocally}
       onGameComplete={onGameComplete}
     />
   );
