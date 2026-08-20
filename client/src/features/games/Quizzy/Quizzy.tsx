@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   StyleSheet,
   Text,
   View,
@@ -13,17 +14,19 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { MaterialCommunityIcons as Icon } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useFlashcardSync } from "../SpaceBlast/hooks/useFlashcardSync";
+import { FlashCard } from "@/features/flashcards/types";
 
 /**
  * QUIZZY — single-file React Native + TypeScript multiple choice quiz game.
  * Theme: dark green / neon green "pixel arcade" style, matching the app banner.
- * Uses react-native-safe-area-context so it respects safe area insets on
- * both phones (notches/home indicator) and tablets.
  *
- * NOTE: requires `react-native-safe-area-context` to be installed and the
- * app root wrapped in a <SafeAreaProvider> (usually done in App root already).
- * Also requires `react-native-vector-icons` (or `@expo/vector-icons` on Expo).
+ * Questions are built from a folder's real flashcards (via useFlashcardSync):
+ * each card's `answer` is the correct option, and the 3 distractors are pulled
+ * from OTHER cards' answers in the same folder. If the folder doesn't have
+ * enough unique answers to fill A–D, distractors repeat until all questions
+ * have been generated.
  */
 
 // ---------------------------------------------------------------------------
@@ -32,77 +35,12 @@ import { useRouter } from "expo-router";
 
 type OptionKey = "A" | "B" | "C" | "D";
 
-interface Question {
-  id: number;
+interface QuizQuestion {
+  id: string; // flashcard id — needed so we can report the answer back to the server
   question: string;
   options: Record<OptionKey, string>;
   correct: OptionKey;
 }
-
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-const MOCK_QUESTIONS: Question[] = [
-  {
-    id: 1,
-    question: "What gas do plants absorb from the atmosphere?",
-    options: { A: "Oxygen", B: "Carbon Dioxide", C: "Nitrogen", D: "Helium" },
-    correct: "B",
-  },
-  {
-    id: 2,
-    question: "What is the powerhouse of the cell?",
-    options: {
-      A: "Nucleus",
-      B: "Ribosome",
-      C: "Mitochondria",
-      D: "Golgi Body",
-    },
-    correct: "C",
-  },
-  {
-    id: 3,
-    question: "What is the chemical symbol for gold?",
-    options: { A: "Ag", B: "Gd", C: "Go", D: "Au" },
-    correct: "D",
-  },
-  {
-    id: 4,
-    question: "How many bones are in the adult human body?",
-    options: { A: "206", B: "186", C: "215", D: "250" },
-    correct: "A",
-  },
-  {
-    id: 5,
-    question: "What planet is known as the Red Planet?",
-    options: { A: "Venus", B: "Mars", C: "Jupiter", D: "Saturn" },
-    correct: "B",
-  },
-  {
-    id: 6,
-    question: "What is the largest ocean on Earth?",
-    options: {
-      A: "Atlantic",
-      B: "Indian",
-      C: "Arctic",
-      D: "Pacific",
-    },
-    correct: "D",
-  },
-  {
-    id: 7,
-    question: "What force pulls objects toward the Earth?",
-    options: { A: "Magnetism", B: "Gravity", C: "Friction", D: "Tension" },
-    correct: "B",
-  },
-  {
-    id: 8,
-    question: "What is H2O more commonly known as?",
-    options: { A: "Salt", B: "Hydrogen", C: "Water", D: "Oxygen" },
-    correct: "C",
-  },
-];
 
 const XP_PER_CORRECT = 150;
 const OPTION_KEYS: OptionKey[] = ["A", "B", "C", "D"];
@@ -126,12 +64,83 @@ const theme = {
 };
 
 // ---------------------------------------------------------------------------
-// Component
+// Helpers — turn flashcards into multiple-choice questions
+// ---------------------------------------------------------------------------
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Builds one multiple-choice question per flashcard. The correct option is
+ * the card's own answer; the 3 distractors come from other cards' answers
+ * in the same folder (unique where possible). If there aren't enough
+ * unique wrong answers to go around, distractors repeat.
+ */
+function buildQuizQuestions(cards: FlashCard[]): QuizQuestion[] {
+  if (cards.length === 0) return [];
+
+  const allAnswers = cards.map((c) => c.answer);
+
+  return cards.map((card) => {
+    // Every other card's answer, excluding this card's own answer text
+    // (guards against two cards coincidentally sharing an answer).
+    const otherAnswers = cards
+      .map((c, idx) => ({ id: c.id, answer: allAnswers[idx] }))
+      .filter((c) => c.id !== card.id && c.answer !== card.answer)
+      .map((c) => c.answer);
+
+    let distractorPool = shuffle(Array.from(new Set(otherAnswers)));
+
+    if (distractorPool.length === 0) {
+      // Only one unique answer exists in the whole folder — nothing to
+      // draw distractors from at all.
+      distractorPool = ["N/A", "N/A", "N/A"];
+    } else if (distractorPool.length < 3) {
+      // Not enough unique wrong answers — repeat until we have 3.
+      const filled: string[] = [];
+      while (filled.length < 3) {
+        filled.push(distractorPool[filled.length % distractorPool.length]);
+      }
+      distractorPool = filled;
+    }
+
+    const distractors = distractorPool.slice(0, 3);
+    const shuffledOptions = shuffle([card.answer, ...distractors]);
+
+    const options = {} as Record<OptionKey, string>;
+    let correct: OptionKey = "A";
+    OPTION_KEYS.forEach((key, i) => {
+      options[key] = shuffledOptions[i];
+      if (shuffledOptions[i] === card.answer) correct = key;
+    });
+
+    return { id: card.id, question: card.question, options, correct };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Game component — presentational, driven entirely by props
 // ---------------------------------------------------------------------------
 
 type AnswerState = "idle" | "correct" | "wrong";
 
-export default function Quizzy(): React.JSX.Element {
+interface QuizzyGameProps {
+  questions: QuizQuestion[];
+  isDataLoading: boolean;
+  onAnswer: (cardId: string, correct: boolean) => void;
+}
+
+function QuizzyGame({
+  questions,
+  isDataLoading,
+  onAnswer,
+}: QuizzyGameProps): React.JSX.Element | null {
   const insets = useSafeAreaInsets();
   const { width } = Dimensions.get("window");
   const isTablet = width >= 768;
@@ -145,12 +154,12 @@ export default function Quizzy(): React.JSX.Element {
   const [streak, setStreak] = useState<number>(0);
   const [finished, setFinished] = useState<boolean>(false);
 
-  const question = MOCK_QUESTIONS[questionIndex];
-  const totalQuestions = MOCK_QUESTIONS.length;
+  const totalQuestions = questions.length;
+  const question = questions[questionIndex];
 
   const handleSelect = useCallback(
     (key: OptionKey) => {
-      if (answerState !== "idle") return; // lock after first pick
+      if (answerState !== "idle" || !question) return; // lock after first pick
 
       setSelected(key);
       const isCorrect = key === question.correct;
@@ -164,8 +173,11 @@ export default function Quizzy(): React.JSX.Element {
         setAnswerState("wrong");
         setStreak(0);
       }
+
+      // Report this card's result to the server (fire-and-forget, offline-first).
+      onAnswer(question.id, isCorrect);
     },
-    [answerState, question],
+    [answerState, question, onAnswer],
   );
 
   const handleNext = useCallback(() => {
@@ -188,24 +200,22 @@ export default function Quizzy(): React.JSX.Element {
     setFinished(false);
   }, []);
 
-  // Placeholder handlers — wire up real navigation later.
   const handleBack = useCallback(() => {
-    router.replace("/(tabs)/game")
-    console.log("Back button pressed");
-  }, []);
+    router.replace("/(tabs)/game");
+  }, [router]);
 
   const handleChangeFolder = useCallback(() => {
-    // console.log("Change folder pressed");
     router.navigate({
       pathname: "/games/SelectionWizard",
-      params: { gameRoute: "/games/Quizzy" }
+      params: { gameRoute: "/games/Quizzy" },
     });
   }, [router]);
 
-  const progressDots = useMemo(
-    () => Array.from({ length: totalQuestions }, (_, i) => i),
-    [totalQuestions],
-  );
+  // Progress is shown as a fixed-width fill bar (percentage of totalQuestions)
+  // rather than one dot per question, so it can never overflow the card no
+  // matter how many questions the deck has.
+  const progressPercent =
+    totalQuestions > 0 ? ((questionIndex + 1) / totalQuestions) * 100 : 0;
 
   // -------------------------------------------------------------------------
   // Render helpers
@@ -238,6 +248,7 @@ export default function Quizzy(): React.JSX.Element {
   );
 
   const renderOption = (key: OptionKey) => {
+    if (!question) return null;
     const isSelected = selected === key;
     const isCorrectOption = key === question.correct;
 
@@ -257,7 +268,6 @@ export default function Quizzy(): React.JSX.Element {
       }
     }
 
-    // Decide which mark (if any) applies to this option once answered
     const showCorrectMark = answerState !== "idle" && isCorrectOption;
     const showWrongMark =
       answerState !== "idle" && isSelected && !isCorrectOption;
@@ -289,6 +299,60 @@ export default function Quizzy(): React.JSX.Element {
       </Pressable>
     );
   };
+
+  // -------------------------------------------------------------------------
+  // Loading state
+  // -------------------------------------------------------------------------
+
+  if (isDataLoading) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={["top", "bottom", "left", "right"]}
+      >
+        {renderTopBar()}
+        <View style={[styles.container, styles.centered]}>
+          <Text style={styles.logo}>QUIZZY</Text>
+          <ActivityIndicator
+            color={theme.neon}
+            size="large"
+            style={{ marginTop: 24 }}
+          />
+          <Text style={[styles.tagline, { marginTop: 16 }]}>
+            LOADING QUESTIONS…
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Empty state — folder has no flashcards yet
+  // -------------------------------------------------------------------------
+
+  if (totalQuestions === 0) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={["top", "bottom", "left", "right"]}
+      >
+        {renderTopBar()}
+        <View style={[styles.container, styles.centered]}>
+          <Text style={styles.logo}>QUIZZY</Text>
+          <Text style={[styles.tagline, { marginTop: 6 }]}>
+            THINK. CHOOSE. SCORE.
+          </Text>
+          <Text style={styles.emptyText}>
+            This folder doesn't have any flashcards yet.
+          </Text>
+          <Pressable style={styles.primaryButton} onPress={handleChangeFolder}>
+            <Text style={styles.primaryButtonText}>CHOOSE ANOTHER FOLDER</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Finished screen
   // -------------------------------------------------------------------------
@@ -340,6 +404,8 @@ export default function Quizzy(): React.JSX.Element {
   // Main quiz screen
   // -------------------------------------------------------------------------
 
+  if (!question) return null; // safety net — shouldn't happen given guards above
+
   return (
     <SafeAreaView
       style={styles.safeArea}
@@ -350,31 +416,27 @@ export default function Quizzy(): React.JSX.Element {
         contentContainerStyle={[
           styles.container,
           isTablet && styles.containerTablet,
-          {
-            paddingBottom: Math.max(insets.bottom, 16) + 24,
-          },
+          { paddingBottom: Math.max(insets.bottom, 16) + 24 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.logo}>QUIZZY</Text>
           <Text style={styles.tagline}>THINK. CHOOSE. SCORE.</Text>
         </View>
 
-        {/* Question card */}
         <View style={styles.questionCard}>
           <View style={styles.questionHeaderRow}>
             <Text style={styles.questionLabel}>
-              QUESTION {questionIndex + 1}
+              QUESTION {questionIndex + 1}/{totalQuestions}
             </Text>
-            <View style={styles.dotsRow}>
-              {progressDots.map((i) => (
-                <View
-                  key={i}
-                  style={[styles.dot, i <= questionIndex && styles.dotActive]}
-                />
-              ))}
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${progressPercent}%` },
+                ]}
+              />
             </View>
           </View>
 
@@ -393,7 +455,6 @@ export default function Quizzy(): React.JSX.Element {
           )}
         </View>
 
-        {/* Stats footer */}
         <View style={styles.statsFooter}>
           <StatBlock
             icon="trophy"
@@ -418,6 +479,65 @@ export default function Quizzy(): React.JSX.Element {
     </SafeAreaView>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Data wiring — same pattern as SpaceBlastGameContent
+// ---------------------------------------------------------------------------
+
+const QuizzyGameContent: React.FC<{ folderId: string; folderName: string }> = ({
+  folderId,
+}) => {
+  const { cards, isDataLoading, handleAnswer } = useFlashcardSync(folderId);
+
+  // Only rebuild the quiz set when a card's actual question/answer content
+  // changes — NOT when `cards` is replaced purely because `handleAnswer`
+  // flipped a card's status. That keeps the shuffled options stable
+  // mid-quiz.
+  const cardsSignature = cards
+    .map((c) => `${c.id}:${c.question}:${c.answer}`)
+    .join("|");
+  const questions = useMemo(
+    () => buildQuizQuestions(cards),
+    [cardsSignature], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  return (
+    <QuizzyGame
+      questions={questions}
+      isDataLoading={isDataLoading}
+      onAnswer={handleAnswer}
+    />
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Screen — reads folderId/folderName from the route, same as SpaceBlastScreen
+// ---------------------------------------------------------------------------
+
+const QuizzyScreen: React.FC = () => {
+  const { folderId, folderName } = useLocalSearchParams<{
+    folderId: string;
+    folderName: string;
+  }>();
+
+  if (!folderId) {
+    return (
+      <View style={styles.errorScreen}>
+        <Text style={styles.errorText}>No folder selected.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <QuizzyGameContent
+      key={folderId}
+      folderId={folderId}
+      folderName={folderName ?? "Quizzy"}
+    />
+  );
+};
+
+export default QuizzyScreen;
 
 // ---------------------------------------------------------------------------
 // Small sub-component
@@ -448,10 +568,14 @@ function StatBlock({
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  safeArea: {
+  safeArea: { flex: 1, backgroundColor: theme.bg },
+  errorScreen: {
     flex: 1,
     backgroundColor: theme.bg,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  errorText: { color: theme.grey, fontSize: 16 },
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -473,25 +597,15 @@ const styles = StyleSheet.create({
     borderColor: theme.neonDim,
     backgroundColor: theme.neonSoft,
   },
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
+  container: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 20 },
   containerTablet: {
     paddingHorizontal: 64,
     alignSelf: "center",
     width: "100%",
     maxWidth: 700,
   },
-  centered: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: 24,
-  },
+  centered: { justifyContent: "center", alignItems: "center" },
+  header: { alignItems: "center", marginBottom: 24 },
   logo: {
     fontSize: 40,
     fontWeight: "900",
@@ -508,8 +622,13 @@ const styles = StyleSheet.create({
     color: theme.neon,
     letterSpacing: 3,
   },
-
-  // Question card
+  emptyText: {
+    marginTop: 20,
+    color: theme.grey,
+    fontSize: 14,
+    textAlign: "center",
+    paddingHorizontal: 24,
+  },
   questionCard: {
     backgroundColor: theme.panel,
     borderRadius: 18,
@@ -534,18 +653,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 2,
   },
-  dotsRow: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+  // Fixed-width progress bar — replaces the old one-dot-per-question row,
+  // which had no width cap and overflowed the card once there were enough
+  // questions. The track width never changes; only the fill percentage does.
+  progressTrack: {
+    width: 90,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: theme.panelBorder,
+    overflow: "hidden",
   },
-  dotActive: {
+  progressFill: {
+    height: "100%",
     backgroundColor: theme.neon,
+    borderRadius: 3,
   },
   questionText: {
     color: theme.white,
@@ -554,10 +675,7 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     marginBottom: 20,
   },
-
-  optionsList: {
-    gap: 12,
-  },
+  optionsList: { gap: 12 },
   option: {
     flexDirection: "row",
     alignItems: "center",
@@ -573,17 +691,12 @@ const styles = StyleSheet.create({
     borderColor: theme.neonDim,
     backgroundColor: theme.neonSoft,
   },
-  optionCorrect: {
-    borderColor: theme.neon,
-    backgroundColor: theme.neonSoft,
-  },
+  optionCorrect: { borderColor: theme.neon, backgroundColor: theme.neonSoft },
   optionWrong: {
     borderColor: theme.danger,
     backgroundColor: "rgba(255,92,92,0.10)",
   },
-  optionDisabled: {
-    opacity: 0.45,
-  },
+  optionDisabled: { opacity: 0.45 },
   optionLetter: {
     width: 30,
     height: 30,
@@ -593,19 +706,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  optionLetterActive: {
-    borderColor: theme.neon,
-    backgroundColor: theme.neon,
-  },
+  optionLetterActive: { borderColor: theme.neon, backgroundColor: theme.neon },
   optionLetterWrong: {
     borderColor: theme.danger,
     backgroundColor: theme.danger,
   },
-  optionLetterText: {
-    color: theme.white,
-    fontWeight: "800",
-    fontSize: 13,
-  },
+  optionLetterText: { color: theme.white, fontWeight: "800", fontSize: 13 },
   optionText: {
     color: theme.white,
     fontSize: 15,
@@ -618,7 +724,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   nextButton: {
     marginTop: 20,
     backgroundColor: theme.neon,
@@ -632,28 +737,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 2,
   },
-
-  // Stats footer / result screen
   statsFooter: {
     flexDirection: "row",
     justifyContent: "space-around",
     marginTop: 28,
   },
-  statBlock: {
-    alignItems: "center",
-    gap: 4,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "900",
-  },
+  statBlock: { alignItems: "center", gap: 4 },
+  statValue: { fontSize: 18, fontWeight: "900" },
   statLabel: {
     fontSize: 10,
     fontWeight: "700",
     color: theme.grey,
     letterSpacing: 1,
   },
-
   resultCard: {
     backgroundColor: theme.panel,
     borderWidth: 1,
