@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -27,6 +27,13 @@ import { FlashCard } from "@/features/flashcards/types";
  * from OTHER cards' answers in the same folder. If the folder doesn't have
  * enough unique answers to fill A–D, distractors repeat until all questions
  * have been generated.
+ *
+ * SYNC MODEL (see summary in the accompanying explanation):
+ * Every answer during the game updates LOCAL state only (score, xp, streak,
+ * question index, per-card correctness). Nothing is sent to the backend
+ * until the game finishes, at which point ONE batched result — including
+ * every card's answer — is sent via `onGameComplete`. This replaces the old
+ * per-question `onAnswer(cardId, correct)` call that fired on every tap.
  */
 
 // ---------------------------------------------------------------------------
@@ -40,6 +47,30 @@ interface QuizQuestion {
   question: string;
   options: Record<OptionKey, string>;
   correct: OptionKey;
+}
+
+/** One card's result, kept locally during play and included in the final batch. */
+export interface QuizAnswerRecord {
+  cardId: string;
+  correct: boolean;
+}
+
+/**
+ * The single payload sent to the backend when the game ends. Field names are
+ * deliberately close to the example contract from the refactor request —
+ * adjust in `useFlashcardSync` (or wherever the actual request is built) to
+ * match the real endpoint if it differs.
+ */
+export interface QuizSessionResult {
+  folderId: string;
+  answers: QuizAnswerRecord[];
+  score: number;
+  xp: number;
+  correctAnswers: number;
+  incorrectAnswers: number;
+  totalQuestions: number;
+  completed: true;
+  durationSeconds: number;
 }
 
 const XP_PER_CORRECT = 150;
@@ -131,15 +162,23 @@ function buildQuizQuestions(cards: FlashCard[]): QuizQuestion[] {
 type AnswerState = "idle" | "correct" | "wrong";
 
 interface QuizzyGameProps {
+  folderId: string;
   questions: QuizQuestion[];
   isDataLoading: boolean;
-  onAnswer: (cardId: string, correct: boolean) => void;
+  /**
+   * Fired exactly once, when the game finishes, with the complete batched
+   * result. This is the ONLY network-triggering prop on this component now
+   * — nothing fires per-question anymore. May return void or a Promise;
+   * rejections are caught and logged, never thrown back into the UI.
+   */
+  onGameComplete: (result: QuizSessionResult) => void | Promise<void>;
 }
 
 function QuizzyGame({
+  folderId,
   questions,
   isDataLoading,
-  onAnswer,
+  onGameComplete,
 }: QuizzyGameProps): React.JSX.Element | null {
   const insets = useSafeAreaInsets();
   const { width } = Dimensions.get("window");
@@ -154,8 +193,64 @@ function QuizzyGame({
   const [streak, setStreak] = useState<number>(0);
   const [finished, setFinished] = useState<boolean>(false);
 
+  // ---------------------------------------------------------------------
+  // Local-only gameplay tracking for the eventual ONE backend sync.
+  // These are refs (not state) on purpose: they're written synchronously
+  // inside `handleSelect`, so `submitFinalResult` always reads the true,
+  // up-to-the-moment totals — no risk of reading a stale `score` the way
+  // you would from `setScore(score + 1)` followed immediately by a read.
+  // ---------------------------------------------------------------------
+  const answersRef = useRef<QuizAnswerRecord[]>([]);
+  const correctCountRef = useRef(0);
+  const incorrectCountRef = useRef(0);
+  const hasSubmittedRef = useRef(false);
+  const startTimeRef = useRef<number>(Date.now());
+
   const totalQuestions = questions.length;
   const question = questions[questionIndex];
+
+  // The single, guarded backend sync. Called once, when the game reaches
+  // its terminal state — never from a useEffect keyed on score/progress.
+  const submitFinalResult = useCallback(() => {
+    if (hasSubmittedRef.current) return; // duplicate-submission guard
+    hasSubmittedRef.current = true;
+
+    const correctAnswers = correctCountRef.current;
+    const incorrectAnswers = incorrectCountRef.current;
+    const durationSeconds = Math.round(
+      (Date.now() - startTimeRef.current) / 1000,
+    );
+
+    const result: QuizSessionResult = {
+      folderId,
+      answers: answersRef.current,
+      score: correctAnswers * 100,
+      xp: correctAnswers * XP_PER_CORRECT,
+      correctAnswers,
+      incorrectAnswers,
+      totalQuestions,
+      completed: true,
+      durationSeconds,
+    };
+
+    try {
+      const maybePromise = onGameComplete(result);
+      if (
+        maybePromise &&
+        typeof (maybePromise as Promise<void>).catch === "function"
+      ) {
+        (maybePromise as Promise<void>).catch((err) => {
+          // Gameplay already finished locally — a failed sync must not
+          // roll back the score, restart the game, or retry-spam the
+          // backend. If the app has an offline queue elsewhere, hook it
+          // in here instead of this log line.
+          console.warn("[Quizzy] Failed to sync final result:", err);
+        });
+      }
+    } catch (err) {
+      console.warn("[Quizzy] Failed to sync final result:", err);
+    }
+  }, [onGameComplete, folderId, totalQuestions]);
 
   const handleSelect = useCallback(
     (key: OptionKey) => {
@@ -163,6 +258,14 @@ function QuizzyGame({
 
       setSelected(key);
       const isCorrect = key === question.correct;
+
+      // Local-only bookkeeping for the end-of-game sync. No network call.
+      answersRef.current.push({ cardId: question.id, correct: isCorrect });
+      if (isCorrect) {
+        correctCountRef.current += 1;
+      } else {
+        incorrectCountRef.current += 1;
+      }
 
       if (isCorrect) {
         setAnswerState("correct");
@@ -173,22 +276,20 @@ function QuizzyGame({
         setAnswerState("wrong");
         setStreak(0);
       }
-
-      // Report this card's result to the server (fire-and-forget, offline-first).
-      onAnswer(question.id, isCorrect);
     },
-    [answerState, question, onAnswer],
+    [answerState, question],
   );
 
   const handleNext = useCallback(() => {
     if (questionIndex + 1 >= totalQuestions) {
       setFinished(true);
+      submitFinalResult(); // the ONE backend request for the whole game
       return;
     }
     setQuestionIndex((i) => i + 1);
     setSelected(null);
     setAnswerState("idle");
-  }, [questionIndex, totalQuestions]);
+  }, [questionIndex, totalQuestions, submitFinalResult]);
 
   const handleRestart = useCallback(() => {
     setQuestionIndex(0);
@@ -198,6 +299,14 @@ function QuizzyGame({
     setXp(0);
     setStreak(0);
     setFinished(false);
+
+    // Reset local tracking so a replay produces its own independent final
+    // sync, instead of being silently blocked by the previous game's guard.
+    answersRef.current = [];
+    correctCountRef.current = 0;
+    incorrectCountRef.current = 0;
+    hasSubmittedRef.current = false;
+    startTimeRef.current = Date.now();
   }, []);
 
   const handleBack = useCallback(() => {
@@ -490,9 +599,8 @@ const QuizzyGameContent: React.FC<{ folderId: string; folderName: string }> = ({
   const { cards, isDataLoading, handleAnswer } = useFlashcardSync(folderId);
 
   // Only rebuild the quiz set when a card's actual question/answer content
-  // changes — NOT when `cards` is replaced purely because `handleAnswer`
-  // flipped a card's status. That keeps the shuffled options stable
-  // mid-quiz.
+  // changes — NOT when `cards` is replaced purely because of an unrelated
+  // sync. That keeps the shuffled options stable mid-quiz.
   const cardsSignature = cards
     .map((c) => `${c.id}:${c.question}:${c.answer}`)
     .join("|");
@@ -501,11 +609,30 @@ const QuizzyGameContent: React.FC<{ folderId: string; folderName: string }> = ({
     [cardsSignature], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  // INTERIM BRIDGE — not the final fix. `useFlashcardSync` only exposes a
+  // per-card `handleAnswer`, not a batch method, so this loop still makes
+  // N calls to it. What this DOES fix: none of those calls happen during
+  // gameplay anymore — they're all deferred until the game is already
+  // over, so a slow/offline connection can no longer stall or interrupt
+  // answering questions. Whether this is *also* N network requests, or
+  // something cheaper, depends on what `handleAnswer` does internally
+  // (see the note in chat) — that requires seeing the hook itself to
+  // resolve properly.
+  const onGameComplete = useCallback(
+    async (result: QuizSessionResult) => {
+      await Promise.all(
+        result.answers.map((a) => handleAnswer(a.cardId, a.correct)),
+      );
+    },
+    [handleAnswer],
+  );
+
   return (
     <QuizzyGame
+      folderId={folderId}
       questions={questions}
       isDataLoading={isDataLoading}
-      onAnswer={handleAnswer}
+      onGameComplete={onGameComplete}
     />
   );
 };
