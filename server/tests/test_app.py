@@ -233,3 +233,270 @@ class ApplicationTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Batch status endpoint tests (PATCH /flashcards/batch-status)
+# ---------------------------------------------------------------------------
+
+class FlashcardBatchStatusTestCase(unittest.TestCase):
+    """
+    Tests for PATCH /flashcards/batch-status — the endpoint games use to
+    sync an entire session's understood cards in one request.
+
+    Each test creates its own folder + cards so tests are fully isolated.
+    """
+
+    def setUp(self):
+        self.app = create_app(
+            {"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"}
+        )
+        self.client = self.app.test_client()
+        with self.app.app_context():
+            db.create_all()
+            from flask_jwt_extended import create_access_token
+
+            self.token = create_access_token(identity="test-user-id")
+            self.headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+            }
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    # ------------------------------------------------------------------ helpers
+
+    def _create_folder(self):
+        """Creates a folder and returns its ID."""
+        resp = self.client.post(
+            "/folders",
+            json={"subject": "Test", "accentColor": "#112233"},
+            headers=self.headers,
+        )
+        return resp.get_json()["folder"]
+
+    def _create_card(self, folder_id, status="review", card_id=None):
+        """Creates a flashcard and returns its ID."""
+        payload = {
+            "question": "Q?",
+            "answer": "A",
+            "status": status,
+        }
+        if card_id:
+            payload["id"] = card_id
+        resp = self.client.post(
+            f"/flashcards/{folder_id}/manualSaved",
+            json=payload,
+            headers=self.headers,
+        )
+        return resp.get_json()["data"]["id"]
+
+    # ------------------------------------------------------------------ tests
+
+    def test_batch_empty_updates_list_returns_400(self):
+        """Test 1 (req #19): An empty updates list must be rejected."""
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={"updates": []},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_batch_missing_id_field_returns_400(self):
+        """Test 2 (req #19): Each update must include both id and status."""
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={"updates": [{"status": "understood"}]},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_batch_invalid_status_returns_400(self):
+        """Test 3 (req #14): Invalid status values must be rejected."""
+        folder_id = self._create_folder()
+        card_id = self._create_card(folder_id)
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={"updates": [{"id": card_id, "status": "invalid_status"}]},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_batch_single_card_success(self):
+        """Test 4 (req #18): A valid single-card batch is accepted and applied."""
+        folder_id = self._create_folder()
+        card_id = self._create_card(folder_id)
+
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={"updates": [{"id": card_id, "status": "understood"}]},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()["data"]
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["id"], card_id)
+        self.assertEqual(data[0]["status"], "understood")
+
+    def test_batch_multiple_cards_success(self):
+        """Test 5 (req #18): A valid multi-card batch updates all cards in one request."""
+        folder_id = self._create_folder()
+        card_a = self._create_card(folder_id)
+        card_b = self._create_card(folder_id)
+        card_c = self._create_card(folder_id)
+
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={
+                "updates": [
+                    {"id": card_a, "status": "understood"},
+                    {"id": card_b, "status": "understood"},
+                    {"id": card_c, "status": "understood"},
+                ]
+            },
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        returned_ids = {d["id"] for d in resp.get_json()["data"]}
+        self.assertEqual(returned_ids, {card_a, card_b, card_c})
+
+    def test_batch_duplicate_ids_last_write_wins(self):
+        """Test 6 (req #8): Duplicate IDs in the batch are handled safely."""
+        folder_id = self._create_folder()
+        card_id = self._create_card(folder_id)
+
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={
+                "updates": [
+                    {"id": card_id, "status": "review"},
+                    {"id": card_id, "status": "understood"},
+                ]
+            },
+            headers=self.headers,
+        )
+        # The batch should succeed (both writes are valid)
+        self.assertEqual(resp.status_code, 200)
+        # The card should end up in the last-written status
+        data = resp.get_json()["data"]
+        final_status = next(d["status"] for d in data if d["id"] == card_id)
+        self.assertEqual(final_status, "understood")
+
+    def test_batch_unknown_card_returns_404(self):
+        """Test 7 (req #14): An unknown card ID causes the whole batch to fail."""
+        folder_id = self._create_folder()
+        real_card = self._create_card(folder_id)
+
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={
+                "updates": [
+                    {"id": real_card, "status": "understood"},
+                    {"id": "non-existent-card-id", "status": "understood"},
+                ]
+            },
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 404)
+
+        # Verify the real card was NOT updated (all-or-nothing semantics)
+        saved = self.client.get(
+            f"/flashcards/{folder_id}/saved", headers=self.headers
+        ).get_json()
+        real_status = next(c["status"] for c in saved if c["id"] == real_card)
+        self.assertEqual(real_status, "review")
+
+    def test_batch_card_owned_by_other_user_returns_403(self):
+        """Test 8 (req #14): A card owned by another user rejects the whole batch."""
+        folder_id = self._create_folder()
+        card_id = self._create_card(folder_id)
+
+        with self.app.app_context():
+            from flask_jwt_extended import create_access_token
+            other_token = create_access_token(identity="other-user-id")
+        other_headers = {
+            "Authorization": f"Bearer {other_token}",
+            "Content-Type": "application/json",
+        }
+
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={"updates": [{"id": card_id, "status": "understood"}]},
+            headers=other_headers,
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_batch_already_understood_card_is_idempotent(self):
+        """Test 9 (req #14): Updating an already-understood card to understood is idempotent."""
+        folder_id = self._create_folder()
+        card_id = self._create_card(folder_id, status="understood")
+
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={"updates": [{"id": card_id, "status": "understood"}]},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()["data"]
+        self.assertEqual(data[0]["status"], "understood")
+
+    def test_batch_understood_to_review_transition(self):
+        """Test 10 (req #14): The batch endpoint allows understood → review transitions."""
+        folder_id = self._create_folder()
+        card_id = self._create_card(folder_id, status="understood")
+
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={"updates": [{"id": card_id, "status": "review"}]},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json()["data"][0]["status"], "review")
+
+    def test_batch_mixed_valid_and_invalid_commits_nothing(self):
+        """Test 11 (req #14): A batch with any invalid entry commits nothing."""
+        folder_id = self._create_folder()
+        good_card = self._create_card(folder_id)
+
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={
+                "updates": [
+                    {"id": good_card, "status": "understood"},
+                    {"id": "totally-missing-card", "status": "understood"},
+                ]
+            },
+            headers=self.headers,
+        )
+        self.assertIn(resp.status_code, (400, 404))
+
+        # Verify the good card was not updated
+        saved = self.client.get(
+            f"/flashcards/{folder_id}/saved", headers=self.headers
+        ).get_json()
+        good_status = next(c["status"] for c in saved if c["id"] == good_card)
+        self.assertEqual(good_status, "review")
+
+    def test_batch_missing_updates_key_returns_400(self):
+        """Test 12 (req #19): Requests without the top-level `updates` key are rejected."""
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={"data": [{"id": "x", "status": "understood"}]},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_batch_unauthenticated_returns_401(self):
+        """Test 13 (req #14): Unauthenticated requests are rejected."""
+        resp = self.client.patch(
+            "/flashcards/batch-status",
+            json={"updates": [{"id": "x", "status": "understood"}]},
+        )
+        self.assertEqual(resp.status_code, 401)
+
+
+if __name__ == "__main__":
+    unittest.main()

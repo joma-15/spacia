@@ -4,6 +4,22 @@
  * Orchestrates the Flip & Sort game screen: loading cards from SQLite,
  * keying the game content to folderId so it resets state on folder changes,
  * and rendering components like custom header, progress bar, 3D card, and actions.
+ *
+ * SYNC MODEL:
+ *  - `onUpdateCardStatus` does LOCAL writes only (SQLite + React state).
+ *    No network request is made per card swipe.
+ *  - A `pendingBatchRef` Map<cardId, status> accumulates every status change
+ *    during the session. Using a Map means the latest status per card always
+ *    wins, naturally handling cards the user flips more than once (e.g.,
+ *    understood → back → review).
+ *  - `flushPendingUpdates` runs ONE `PATCH /flashcards/batch-status` containing
+ *    only the cards that reached "understood". If nothing was understood, no
+ *    network request is made. It is guarded by `isFlushingRef` so concurrent
+ *    flush calls (e.g., completion + back press at the same time) produce
+ *    exactly one request.
+ *  - Flush is triggered:
+ *      A. When the user finishes the deck (via dismissCompletion → onComplete).
+ *      B. When the user taps the back/exit button (handleBackPress).
  */
 
 import React, { useCallback, useRef, useState, useEffect } from "react";
@@ -48,7 +64,17 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
   const activeStudySessionId = useRef<number | null>(null);
   const endingStudySession = useRef<Promise<void> | null>(null);
 
-  // Load cards for this folder from database as state
+  // Accumulates the latest status for every card touched this session.
+  // Map deduplicates: if the user re-sorts a card, its entry is simply
+  // overwritten with the newest status.
+  const pendingBatchRef = useRef<Map<string, "review" | "understood">>(new Map());
+
+  // Guard: prevents concurrent flush calls from sending duplicate requests.
+  const isFlushingRef = useRef(false);
+
+  // Load cards for this folder from database as state.
+  // FlipSort only shows cards still in "review" — understood cards are
+  // already learned and don't need to appear in the game (req. 6).
   const [cards, setCards] = useState<Flashcard[]>([]);
 
   const finishStudySession = useCallback(async () => {
@@ -120,57 +146,87 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
     }
   }, [folderId, userId]);
 
-  // Callback to update status immediately in SQLite and state
-  // const onUpdateCardStatus = useCallback((cardId: string, newStatus: 'review' | 'understood') => {
-  //   try {
-  //     updateFlashcardStatus(cardId, newStatus);
-  //     setCards((prev) =>
-  //       prev.map((c) => (c.id === cardId ? { ...c, status: newStatus } : c))
-  //     );
-  //   } catch (e) {
-  //     console.error("Failed to update flashcard status:", e);
-  //   }
-  // }, []);
-
+  /**
+   * Local-only status update — writes to SQLite and React state immediately
+   * so the UI responds without any network latency. The change is also
+   * recorded in `pendingBatchRef` for the eventual end-of-session batch flush.
+   */
   const onUpdateCardStatus = useCallback(
-    async (cardId: string, newStatus: "review" | "understood") => {
+    (cardId: string, newStatus: "review" | "understood") => {
       try {
-        // Update local SQLite
         if (!userId) return;
+
+        // Local SQLite write (offline-first)
         updateFlashcardStatus(userId, cardId, newStatus);
 
-        // Update React state
+        // Update React state so counters and card indicators reflect the change
         setCards((prev) =>
           prev.map((card) =>
             card.id === cardId ? { ...card, status: newStatus } : card,
           ),
         );
 
-        // Sync to backend
-        const token = await getAccessToken();
-        if (!token) return;
-        const response = await fetch(`${BASE_URL}/flashcards/${cardId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            status: newStatus,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to update flashcard");
-        }
-
-        return await response.json();
+        // Queue for the end-of-session batch. Using Map.set means a card that
+        // is re-sorted within the same session simply has its entry updated
+        // rather than duplicated (req. 8).
+        pendingBatchRef.current.set(cardId, newStatus);
       } catch (error) {
-        console.error("Failed to update flashcard status:", error);
+        console.error("Failed to update flashcard status locally:", error);
       }
     },
     [userId],
   );
+
+  /**
+   * Sends one batch request for all cards that reached "understood" during
+   * this session. If nothing was understood, or the request is already in
+   * flight, this is a no-op.
+   *
+   * Cards that ended up back in "review" are intentionally excluded — we
+   * only persist the transition to "understood" (req. 2 & 10).
+   */
+  const flushPendingUpdates = useCallback(async () => {
+    if (isFlushingRef.current) return;
+    isFlushingRef.current = true;
+
+    try {
+      // Collect only understood cards from the queue
+      const understoodUpdates: { id: string; status: "understood" }[] = [];
+      pendingBatchRef.current.forEach((status, id) => {
+        if (status === "understood") {
+          understoodUpdates.push({ id, status: "understood" });
+        }
+      });
+
+      // Clear the queue before the network call so a concurrent flush
+      // (e.g., triggered by unmount) sees an empty map.
+      pendingBatchRef.current.clear();
+
+      if (understoodUpdates.length === 0) return; // nothing to persist (req. 18)
+
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const response = await fetch(`${BASE_URL}/flashcards/batch-status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ updates: understoodUpdates }),
+      });
+
+      if (!response.ok) {
+        console.warn("[FlipSort] Failed to sync session results:", response.status);
+        // Don't re-queue — the local SQLite state is already correct.
+        // A future sync (e.g., on next game load) will reconcile with the server.
+      }
+    } catch (error) {
+      console.error("[FlipSort] Error flushing pending updates:", error);
+    } finally {
+      isFlushingRef.current = false;
+    }
+  }, []);
 
   // Hook 1: Visual flip animation state
   const {
@@ -182,16 +238,14 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
     resetFlip,
   } = useCardFlip();
 
-  // const handleBackPress = useCallback(() => {
-  //   // Navigate back to selection wizard
-  //   router.navigate({
-  //     pathname: "/games/SelectionWizard",
-  //     params: { gameRoute: "/games/FlipSort" }
-  //   });
-  // }, [router]);
-  const handleBackPress = () => {
+  /**
+   * Flushes pending updates before navigating away so understood cards
+   * are not lost when the user taps the back button (req. 6B & 7).
+   */
+  const handleBackPress = useCallback(async () => {
+    await flushPendingUpdates();
     router.replace("/(tabs)/game");
-  };
+  }, [flushPendingUpdates, router]);
 
   const handleChangeFolderPress = useCallback(() => {
     // Navigate back to selection wizard to choose another folder
@@ -200,6 +254,15 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
       params: { gameRoute: "/games/FlipSort" },
     });
   }, [router]);
+
+  /**
+   * Called when the user dismisses the completion modal. Flushes the
+   * pending batch first, then navigates (req. 6A).
+   */
+  const handleComplete = useCallback(async () => {
+    await flushPendingUpdates();
+    router.replace("/(tabs)/game");
+  }, [flushPendingUpdates, router]);
 
   // Hook 2: Game session business logic
   const {
@@ -220,7 +283,7 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
     cards,
     onUpdateCardStatus,
     resetFlip,
-    onComplete: handleBackPress, // Navigate back on complete
+    onComplete: handleComplete,
   });
 
   if (cards.length === 0) {

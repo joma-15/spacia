@@ -148,8 +148,8 @@ class FlashcardBatchStatusAPI(MethodView):
             if not isinstance(update, dict) or "id" not in update or "status" not in update:
                 raise ApiError("Each item in `updates` must include `id` and `status`.", 400)
 
-            flashcards = flashcard_service.update_status_batch(get_jwt_identity(), updates)
-            return jsonify({
+        flashcards = flashcard_service.update_status_batch(get_jwt_identity(), updates)
+        return jsonify({
             "message": "Flashcards updated.",
             "data": [flashcard.to_dict() for flashcard in flashcards],
         })

@@ -12,9 +12,15 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
  *  2. In the background, fetches the latest version from the server
  *     and updates local storage + on-screen state if anything changed.
  *
- * Also exposes `handleAnswer`, which is what the game calls every time
- * the player answers a question — it updates SQLite immediately, then
- * pushes the change to the server without blocking the game.
+ * Only flashcards still in "review" status are returned to the game —
+ * already-understood cards are filtered out so they never appear as
+ * questions or floating answer targets.
+ *
+ * Answer syncing uses a two-phase approach (matching Quizzy):
+ *  - `handleAnswer`       → local-only (SQLite + React state). Safe to call
+ *                           on every answer; never touches the network.
+ *  - `submitGameResults`  → called ONCE at game end. Sends only the
+ *                           understood card IDs in a single batch request.
  */
 export function useFlashcardSync(folderId: string) {
   const { cacheOwnerId } = useAuth();
@@ -30,12 +36,16 @@ export function useFlashcardSync(folderId: string) {
         return [];
       }
       const dbCards = getFlashcardsByFolder(userId, folderId) as any[];
-      const mapped: FlashCard[] = dbCards.map((c) => ({
-        id: String(c.id),
-        question: c.question,
-        answer: c.answer,
-        status: (c.status as CardStatus) ?? "review",
-      }));
+      const mapped: FlashCard[] = dbCards
+        .map((c) => ({
+          id: String(c.id),
+          question: c.question,
+          answer: c.answer,
+          status: (c.status as CardStatus) ?? "review",
+        }))
+        // Only expose cards that still need review — understood cards are
+        // already learned and must not appear in the game (req. 6 & 11).
+        .filter((c) => c.status === "review");
       if (isMountedRef.current) setCards(mapped);
       return mapped;
     } catch (e) {
@@ -62,7 +72,7 @@ export function useFlashcardSync(folderId: string) {
       return;
     }
     try {
-      // 1. Show local SQLite data immediately.
+      // 1. Show local SQLite data immediately (filtered to review-only).
       const local = loadCachedCards();
       if (local.length > 0 && isMountedRef.current) setIsDataLoading(false);
 
@@ -73,24 +83,28 @@ export function useFlashcardSync(folderId: string) {
       if (!response.ok) throw new Error("Failed to fetch from backend");
       const data = await response.json();
 
-      const backend: FlashCard[] = data.map((item: any) => ({
+      const backendAll: FlashCard[] = data.map((item: any) => ({
         id: String(item.id),
         question: item.question,
         answer: item.answer,
         status: (item.status as CardStatus) ?? "review",
       }));
 
+      // Filter to review-only for the game, but persist the full set locally
+      // so the local cache stays in sync with the server truth.
+      const backendReview = backendAll.filter((c) => c.status === "review");
+
       if (!isMountedRef.current) return;
 
-      // 3. If nothing changed, we're done — local data is already correct.
-      if (areDecksEqual(local, backend)) {
+      // 3. If nothing changed among review cards, we're done.
+      if (areDecksEqual(local, backendReview)) {
         setIsDataLoading(false);
         return;
       }
 
       // 4. Otherwise, save the fresh data locally and update the screen.
-      replaceFlashcardsForFolder(userId, folderId, backend.map((card) => ({ ...card, folderId })), "synced");
-      if (isMountedRef.current) setCards(backend);
+      replaceFlashcardsForFolder(userId, folderId, backendAll.map((card) => ({ ...card, folderId })), "synced");
+      if (isMountedRef.current) setCards(backendReview);
     } catch (error) {
       console.error("Sync failed, falling back to local SQLite cache:", error);
       // No extra handling needed — the local cards loaded in step 1 are
@@ -108,27 +122,67 @@ export function useFlashcardSync(folderId: string) {
     };
   }, [syncFlashcards]);
 
-  const handleAnswer = useCallback(async (cardId: string, correct: boolean) => {
-    if (!userId) return;
-    const newStatus: CardStatus = correct ? "understood" : "review";
-    try {
-      // Update local SQLite first (offline-first).
-      updateFlashcardStatus(userId, cardId, newStatus);
-      setCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, status: newStatus } : card)));
+  /**
+   * Called after every question. Local-only — SQLite write + on-screen
+   * state. Never touches the network, so it is always instant regardless
+   * of connection quality.
+   *
+   * Cards newly marked "understood" are removed from the visible deck so
+   * they cannot be selected again in the same game session (req. 12).
+   */
+  const handleAnswer = useCallback(
+    (cardId: string, correct: boolean) => {
+      if (!userId) return;
+      const newStatus: CardStatus = correct ? "understood" : "review";
+      try {
+        updateFlashcardStatus(userId, cardId, newStatus);
+        setCards((prev) => {
+          const updated = prev.map((card) =>
+            card.id === cardId ? { ...card, status: newStatus } : card,
+          );
+          // Remove newly understood cards from the active deck so the
+          // engine never picks them again within this session.
+          return correct ? updated.filter((card) => card.id !== cardId) : updated;
+        });
+      } catch (error) {
+        console.error("Failed to record answer locally:", error);
+      }
+    },
+    [userId],
+  );
 
-      // Then push the change to the server in the background.
+  /**
+   * Called ONCE when the game reaches a terminal state (win or game over).
+   * Sends only the understood card IDs in a single batch request.
+   *
+   * If there are zero understood cards, no network request is made (req. 18).
+   * Uses PATCH /flashcards/batch-status — the same endpoint used by Quizzy.
+   *
+   * Throws on failure so the caller can decide how to handle the error;
+   * the game has already finished locally by this point.
+   */
+  const submitGameResults = useCallback(
+    async (understoodCardIds: string[]) => {
+      if (!userId || understoodCardIds.length === 0) return;
       const token = await getAccessToken();
       if (!token) return;
-      const response = await fetch(`${BASE_URL}/flashcards/${cardId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!response.ok) throw new Error("Failed to update flashcard status on server");
-    } catch (error) {
-      console.error("Failed to update flashcard status:", error);
-    }
-  }, [userId]);
 
-  return { cards, isDataLoading, handleAnswer };
+      const updates = understoodCardIds.map((id) => ({ id, status: "understood" as CardStatus }));
+
+      const response = await fetch(`${BASE_URL}/flashcards/batch-status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ updates }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to submit game results to server");
+      }
+    },
+    [userId],
+  );
+
+  return { cards, isDataLoading, handleAnswer, submitGameResults };
 }

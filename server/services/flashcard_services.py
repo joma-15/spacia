@@ -56,7 +56,7 @@ class FlashcardService:
     def update_status_batch(self, user_id: str, updates: list[dict]) -> list[Flashcard]:
         """
         Updates the study status of many flashcards in ONE transaction —
-        used by the Quizzy game to sync an entire quiz's worth of answers
+        used by games to sync an entire session's worth of understood cards
         in a single request/commit instead of one PATCH (and one commit)
         per card.
 
@@ -73,10 +73,10 @@ class FlashcardService:
             flashcard.status = status
             flashcards.append(flashcard)
 
-            # One commit for the whole batch, same pattern as save_generated_cards'
-            # batch insert below.
-            db.session.commit()
-            return flashcards
+        # One commit for the whole batch — outside the loop so all updates
+        # are committed atomically. If anything above raised, nothing commits.
+        db.session.commit()
+        return flashcards
 
     def delete(self, flashcard_id: str, user_id: str) -> None:
         """

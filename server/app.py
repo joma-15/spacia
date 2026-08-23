@@ -28,6 +28,17 @@ def create_app(test_config: dict | None = None) -> Flask:
     if test_config:
         app.config.update(test_config)
 
+    # SQLite (used for in-memory test databases) does not support the
+    # MySQL-specific pool options (pool_size, max_overflow, pool_timeout).
+    # Strip those keys so SQLAlchemy does not raise a TypeError when creating
+    # the StaticPool that the SQLite dialect requires.
+    if "sqlite" in app.config.get("SQLALCHEMY_DATABASE_URI", ""):
+        incompatible_pool_opts = {"pool_size", "max_overflow", "pool_timeout"}
+        engine_opts = app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {})
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            k: v for k, v in engine_opts.items() if k not in incompatible_pool_opts
+        }
+
     # Connect the database (SQLAlchemy) and cross-origin resource sharing (CORS) to this app.
     # CORS allows our React Native app (running on a different port/device) to talk to this backend.
     db.init_app(app)

@@ -134,14 +134,26 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
     router.replace("/(tabs)/library");
   }, [onGoToLibrary, router]);
 
-  const handleWinModalOk = useCallback(() => {
-    onWin?.();
+  /**
+   * Awaits the optional onWin callback (which flushes the pending batch)
+   * before restarting the game, so the batch is persisted before the next
+   * session's state is initialised.
+   */
+  const handleWinModalOk = useCallback(async () => {
+    await onWin?.();
     engine.restart();
   }, [engine, onWin]);
 
-  const handleGameOverOk = useCallback(() => {
+  /**
+   * Awaits the optional onGameOver callback (which flushes the pending
+   * batch) before navigating away.
+   */
+  const handleGameOverOk = useCallback(async () => {
     engine.setShowGameOverModal(false);
-    if (onGameOver) return onGameOver();
+    if (onGameOver) {
+      await onGameOver();
+      return;
+    }
     goToGameTab();
   }, [engine, onGameOver, goToGameTab]);
 
