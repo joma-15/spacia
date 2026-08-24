@@ -77,7 +77,7 @@ class AiFlashcardService:
 Return the output as a valid JSON object containing a "flashcards" key, which points to an array of flashcards.
 Each flashcard in the array must be an object with exactly three keys:
 - "question": a clue-based question
-- "answer": a short answer or just a one word answer highlighted terms on the handout
+- "answer": just a one word answer highlighted terms on the handout ( for instance 'what is the capital of phillipines?' answer:manila
 - "status": the string "review"
 
 JSON Schema:
