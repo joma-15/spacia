@@ -1,33 +1,54 @@
-// ============================================================================
-// Spacia — useCalendar
-// ============================================================================
-
 import { useCallback, useEffect, useState } from "react";
-import { CalendarService } from "../services/CalendarService";
+import { useFocusEffect } from "expo-router";
+import { DashboardService } from "../services/DashboardService";
 import { AsyncResource, CalendarDay } from "../types";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import { subscribeResource } from "@/shared/services/resourceStore";
 
 export function useCalendar(): AsyncResource<CalendarDay[]> {
-  const [data, setData] = useState<CalendarDay[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { cacheOwnerId, isRestoring } = useAuth();
+  const [data, setData] = useState<CalendarDay[] | null>(() => {
+    if (!cacheOwnerId) return null;
+    return DashboardService.getCachedDashboard(cacheOwnerId)?.calendar ?? null;
+  });
+  const [loading, setLoading] = useState(!data);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh: boolean) => {
+    if (isRestoring || !cacheOwnerId) return;
     try {
-      isRefresh ? setRefreshing(true) : setLoading(true);
+      if (isRefresh) setRefreshing(true);
       setError(null);
-      const result = await CalendarService.getMonth();
-      setData(result);
+      const dashboard = await DashboardService.getDashboard(
+        cacheOwnerId,
+        isRefresh ? "network-only" : "stale-while-revalidate",
+      );
+      setData(dashboard.calendar);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load calendar.");
+      console.warn("Failed to refresh calendar, keeping cached data:", err);
+      const cached = DashboardService.getCachedDashboard(cacheOwnerId);
+      if (cached) setData(cached.calendar);
+      else setError(err instanceof Error ? err.message : "Failed to load calendar.");
     } finally {
-      isRefresh ? setRefreshing(false) : setLoading(false);
+      if (isRefresh) setRefreshing(false);
+      else setLoading(false);
     }
-  }, []);
+  }, [cacheOwnerId, isRestoring]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load(false);
+    }, [load]),
+  );
 
   useEffect(() => {
-    load(false);
-  }, [load]);
+    if (!cacheOwnerId) return;
+    return subscribeResource(cacheOwnerId, "streak-dashboard", () => {
+      const cached = DashboardService.getCachedDashboard(cacheOwnerId);
+      if (cached) setData(cached.calendar);
+    });
+  }, [cacheOwnerId]);
 
   const refresh = useCallback(async () => {
     await load(true);

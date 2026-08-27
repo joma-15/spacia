@@ -8,7 +8,7 @@ const initializations = new Map<string, Promise<void>>();
 export function initializeUserData(userId: string): Promise<void> {
   const existing = initializations.get(userId);
   if (existing) return existing;
-  const work = loadFolders(userId, "network-first")
+  const work = loadFolders(userId, "stale-while-revalidate")
     .then(() => undefined)
     // A first launch is still allowed to reach the UI if offline. The screen
     // will surface an error only when it has no local data to show.

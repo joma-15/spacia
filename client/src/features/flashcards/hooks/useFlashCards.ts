@@ -39,13 +39,26 @@ export function useFlashCards(folderId: string) {
   const userId = cacheOwnerId;
   // ── States ──
   // The list of flashcards in the folder
-  const [cards, setCards] = useState<FlashCard[]>([]);
+  const [cards, setCards] = useState<FlashCard[]>(() => {
+    try {
+      if (!userId || !folderId) return [];
+      const cached = getFlashcardsByFolder(userId, folderId);
+      return cached.map((card: any) => ({
+        id: card.id,
+        question: card.question,
+        answer: card.answer,
+        status: card.status,
+      }));
+    } catch {
+      return [];
+    }
+  });
   // Active filter tab: 'all', 'review' (needs study), or 'understood' (completed)
   const [activeTab, setActiveTab] = useState<TabType>("all");
   // True when performing a slow background action like generating cards via AI
   const [loading, setLoading] = useState(false);
-  // True when the folder is first opened and loading its cards for the first time
-  const [initialLoading, setInitialLoading] = useState(false);
+  // True only when the folder is opened with NO local cached cards
+  const [initialLoading, setInitialLoading] = useState(() => cards.length === 0);
 
   // ── Reference Objects (Refs) ──
   // Refs act like persistent variables that do NOT trigger screen refreshes when changed.
@@ -392,18 +405,15 @@ export function useFlashCards(folderId: string) {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setInitialLoading(true);
+    // Load from local SQLite cache first
+    const hasCache = loadCachedCards();
+    if (!hasCache) {
+      setInitialLoading(true);
+    }
 
-    // Performance Optimization: React Native's InteractionManager.
-    // We delay the network request until the screen slide animation completes.
-    // This makes sure the screen feels fast and smooth, without dropping frames.
+    // Delay the network request until the screen slide animation completes
     const task = InteractionManager.runAfterInteractions(() => {
       if (!isMountedRef.current || controller.signal.aborted) return;
-
-      const shouldShowCacheBeforeServer = false;
-      if (shouldShowCacheBeforeServer) {
-        setInitialLoading(false);
-      }
       void loadSavedCards(controller.signal, true);
     });
 

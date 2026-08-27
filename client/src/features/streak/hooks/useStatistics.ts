@@ -1,37 +1,41 @@
-// ============================================================================
-// Spacia — useStatistics
-// ============================================================================
-
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router";
-import { StatisticsService } from "../services/StatisticsService";
+import { DashboardService } from "../services/DashboardService";
 import { AsyncResource, Statistics } from "../types";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { subscribeResource } from "@/shared/services/resourceStore";
 
 export function useStatistics(): AsyncResource<Statistics> {
   const { cacheOwnerId, isRestoring } = useAuth();
-  const [data, setData] = useState<Statistics | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<Statistics | null>(() => {
+    if (!cacheOwnerId) return null;
+    return DashboardService.getCachedDashboard(cacheOwnerId)?.statistics ?? null;
+  });
+  const [loading, setLoading] = useState(!data);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh: boolean) => {
+    if (isRestoring || !cacheOwnerId) return;
     try {
-      if (isRestoring || !cacheOwnerId) return;
-      isRefresh ? setRefreshing(true) : setLoading(true);
+      if (isRefresh) setRefreshing(true);
       setError(null);
-      const result = await StatisticsService.getStatistics(cacheOwnerId, isRefresh ? "network-only" : "stale-while-revalidate");
-      setData(result);
+      const dashboard = await DashboardService.getDashboard(
+        cacheOwnerId,
+        isRefresh ? "network-only" : "stale-while-revalidate",
+      );
+      setData(dashboard.statistics);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load statistics.");
+      console.warn("Failed to refresh statistics, keeping cached data:", err);
+      const cached = DashboardService.getCachedDashboard(cacheOwnerId);
+      if (cached) setData(cached.statistics);
+      else setError(err instanceof Error ? err.message : "Failed to load statistics.");
     } finally {
-      isRefresh ? setRefreshing(false) : setLoading(false);
+      if (isRefresh) setRefreshing(false);
+      else setLoading(false);
     }
   }, [cacheOwnerId, isRestoring]);
 
-  // Refresh whenever the dashboard becomes visible so sessions completed in a
-  // game screen are reflected without maintaining a duplicate global store.
   useFocusEffect(
     useCallback(() => {
       void load(false);
@@ -40,8 +44,11 @@ export function useStatistics(): AsyncResource<Statistics> {
 
   useEffect(() => {
     if (!cacheOwnerId) return;
-    return subscribeResource(cacheOwnerId, "streak-statistics", () => { void load(false); });
-  }, [cacheOwnerId, load]);
+    return subscribeResource(cacheOwnerId, "streak-dashboard", () => {
+      const cached = DashboardService.getCachedDashboard(cacheOwnerId);
+      if (cached) setData(cached.statistics);
+    });
+  }, [cacheOwnerId]);
 
   const refresh = useCallback(async () => {
     await load(true);

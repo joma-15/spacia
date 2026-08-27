@@ -55,6 +55,10 @@ function mapDashboard(response: DashboardResponse): DashboardData {
 }
 
 export const DashboardService = {
+  getCachedDashboard(userId: string): DashboardData | null {
+    return readResource<DashboardData>(userId, "streak-dashboard")?.data ?? null;
+  },
+
   async getDashboard(userId: string, policy: FetchPolicy = "stale-while-revalidate"): Promise<DashboardData> {
     return loadResource({
       userId, resource: "streak-dashboard", staleTime: 2 * 60 * 1000, policy,

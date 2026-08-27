@@ -1,12 +1,10 @@
-// ============================================================================
-// Spacia — useDailyChallenge
-// Exposes both the loaded challenge and a `startChallenge()` action, mirroring
-// how a real mutation (POST) would be wired once the backend exists.
-// ============================================================================
-
 import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import { ChallengeService } from "../services/ChallengeService";
+import { DashboardService } from "../services/DashboardService";
 import { AsyncResource, Challenge } from "../types";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import { subscribeResource } from "@/shared/services/resourceStore";
 
 interface UseDailyChallengeResult extends AsyncResource<Challenge> {
   starting: boolean;
@@ -14,28 +12,50 @@ interface UseDailyChallengeResult extends AsyncResource<Challenge> {
 }
 
 export function useDailyChallenge(): UseDailyChallengeResult {
-  const [data, setData] = useState<Challenge | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { cacheOwnerId, isRestoring } = useAuth();
+  const [data, setData] = useState<Challenge | null>(() => {
+    if (!cacheOwnerId) return null;
+    return DashboardService.getCachedDashboard(cacheOwnerId)?.challenge ?? null;
+  });
+  const [loading, setLoading] = useState(!data);
   const [refreshing, setRefreshing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh: boolean) => {
+    if (isRestoring || !cacheOwnerId) return;
     try {
-      isRefresh ? setRefreshing(true) : setLoading(true);
+      if (isRefresh) setRefreshing(true);
       setError(null);
-      const result = await ChallengeService.getTodayChallenge();
-      setData(result);
+      const dashboard = await DashboardService.getDashboard(
+        cacheOwnerId,
+        isRefresh ? "network-only" : "stale-while-revalidate",
+      );
+      setData(dashboard.challenge);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load challenge.");
+      console.warn("Failed to refresh daily challenge, keeping cached data:", err);
+      const cached = DashboardService.getCachedDashboard(cacheOwnerId);
+      if (cached) setData(cached.challenge);
+      else setError(err instanceof Error ? err.message : "Failed to load challenge.");
     } finally {
-      isRefresh ? setRefreshing(false) : setLoading(false);
+      if (isRefresh) setRefreshing(false);
+      else setLoading(false);
     }
-  }, []);
+  }, [cacheOwnerId, isRestoring]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load(false);
+    }, [load]),
+  );
 
   useEffect(() => {
-    load(false);
-  }, [load]);
+    if (!cacheOwnerId) return;
+    return subscribeResource(cacheOwnerId, "streak-dashboard", () => {
+      const cached = DashboardService.getCachedDashboard(cacheOwnerId);
+      if (cached) setData(cached.challenge);
+    });
+  }, [cacheOwnerId]);
 
   const refresh = useCallback(async () => {
     await load(true);

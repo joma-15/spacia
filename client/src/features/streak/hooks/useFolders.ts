@@ -5,21 +5,32 @@
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { DashboardService } from "../services/DashboardService";
 import { FolderService } from "../services/FolderService";
 import { AsyncResource, Folder } from "../types";
 import { subscribeResource } from "@/shared/services/resourceStore";
 
 export function useFolders(): AsyncResource<Folder[]> {
   const { cacheOwnerId, isAuthenticated, isRestoring } = useAuth();
-  const [data, setData] = useState<Folder[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<Folder[] | null>(() => {
+    if (!cacheOwnerId) return null;
+    const dashboardFolders = DashboardService.getCachedDashboard(cacheOwnerId)?.folders;
+    if (dashboardFolders && dashboardFolders.length > 0) return dashboardFolders;
+    try {
+      const local = FolderService.getLocalFolders(cacheOwnerId);
+      return local.length > 0 ? local : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(!data);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh: boolean) => {
     if (isRestoring || !cacheOwnerId) return;
     try {
-      isRefresh ? setRefreshing(true) : setLoading(true);
+      if (isRefresh) setRefreshing(true);
       setError(null);
       const result = isAuthenticated
         ? await FolderService.getRemoteFolders(cacheOwnerId, isRefresh ? "network-only" : "stale-while-revalidate")
@@ -36,7 +47,8 @@ export function useFolders(): AsyncResource<Folder[]> {
         setError(err instanceof Error ? err.message : "Failed to load folders.");
       }
     } finally {
-      isRefresh ? setRefreshing(false) : setLoading(false);
+      if (isRefresh) setRefreshing(false);
+      else setLoading(false);
     }
   }, [cacheOwnerId, isAuthenticated, isRestoring]);
 

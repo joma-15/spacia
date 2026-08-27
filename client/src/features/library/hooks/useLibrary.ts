@@ -14,7 +14,7 @@ import { getCardCountsPerFolder } from "@/shared/database/flashcardRepository";
 import { uuidv4 } from "@/shared/database/database";
 import { ApiRequestError, authenticatedFetch } from "@/shared/services/authenticatedFetch";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import { loadFolders as loadFolderResource, recordFolderMutation } from "@/shared/services/folderDataService";
+import { loadFolders as loadFolderResource, recordFolderMutation, getCachedFolders } from "@/shared/services/folderDataService";
 import { subscribeResource } from "@/shared/services/resourceStore";
 
 // Stable key used to store/read folders for a user who hasn't logged in yet.
@@ -29,10 +29,17 @@ export function useLibrary() {
   const syncInFlightRef = useRef<Promise<void> | null>(null);
   const syncQueuedRef = useRef(false);
 
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folders, setFolders] = useState<Folder[]>(() => {
+    try {
+      const cached = getCachedFolders(userId);
+      return cached.length > 0 ? cached : [];
+    } catch {
+      return [];
+    }
+  });
   const [popupEnabled, setPopupEnabled] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => folders.length === 0);
 
   const filteredFolders = folders.filter((folder) =>
     folder.subject.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -42,17 +49,22 @@ export function useLibrary() {
 
   const loadCachedFolders = useCallback(() => {
     try {
-      const cachedFolders = getFolders(userId);
-      const cardCounts = getCardCountsPerFolder(userId);
-
-      const parsedFolders: Folder[] = cachedFolders.map((folder: any) => ({
-        id: folder.id,
-        subject: folder.subject,
-        accentColor: folder.accent_color,
-        cardCount: cardCounts[folder.id] ?? 0,
-      }));
-
-      if (isMountedRef.current) setFolders(parsedFolders);
+      const cached = getCachedFolders(userId);
+      if (isMountedRef.current) {
+        if (cached.length > 0) {
+          setFolders(cached);
+          setLoading(false);
+        } else {
+          const fallback = getFolders(userId).map((folder: any) => ({
+            id: String(folder.id),
+            subject: folder.subject,
+            accentColor: folder.accent_color ?? folder.accentColor ?? "#6B7280",
+            cardCount: 0,
+          }));
+          setFolders(fallback);
+          if (fallback.length > 0) setLoading(false);
+        }
+      }
     } catch (error) {
       console.error("SQLite load error:", error);
     }
@@ -173,29 +185,23 @@ export function useLibrary() {
 
   const fetchFolder = useCallback(async () => {
     try {
-      if (isMountedRef.current) setLoading(true);
+      // 1. Immediately ensure cached folders are loaded
+      loadCachedFolders();
 
       // Guests can't hit the server — just read whatever's cached locally.
       if (isGuest) {
-        loadCachedFolders();
+        if (isMountedRef.current) setLoading(false);
         return;
       }
 
+      // 2. Fetch fresh data in the background
       const remoteFolders = await loadFolderResource(userId);
       if (!isMountedRef.current) return;
       logSyncState(remoteFolders);
       void syncPendingFolders();
       loadCachedFolders();
     } catch (error) {
-      // if (error instanceof ApiRequestError) {
-      //   console.error("Folder request failed; using cached folders:", {
-      //     status: error.status,
-      //     code: error.code,
-      //   });
-      // } else {
-      //   console.error("Folder request failed; using cached folders:", error);
-      // }
-      // Fallback for logged-in users whose request failed (offline, timeout, etc.)
+      console.warn("Folder sync error, keeping cached data:", error);
       loadCachedFolders();
     } finally {
       if (isMountedRef.current) setLoading(false);

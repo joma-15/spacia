@@ -9,23 +9,35 @@ const RESOURCE = "folders";
 const STALE_TIME = 5 * 60 * 1000;
 
 function localFolders(userId: string): CachedFolder[] {
+  const cachedResource = readResource<CachedFolder[]>(userId, RESOURCE);
+  const cachedCountMap = new Map((cachedResource?.data ?? []).map((f) => [f.id, f.cardCount]));
   const counts = getCardCountsPerFolder(userId);
-  return (getFolders(userId) as any[]).map((folder) => ({
-    id: String(folder.id), subject: folder.subject,
-    accentColor: folder.accent_color ?? folder.accentColor,
-    cardCount: counts[String(folder.id)] ?? 0,
-  }));
+  return (getFolders(userId) as any[]).map((folder) => {
+    const id = String(folder.id);
+    const localDbCount = counts[id];
+    const cachedCount = cachedCountMap.get(id);
+    // Use local SQLite count if flashcards have been loaded, or last known cached count
+    const cardCount = (localDbCount !== undefined && localDbCount > 0)
+      ? localDbCount
+      : (cachedCount ?? 0);
+    return {
+      id,
+      subject: folder.subject,
+      accentColor: folder.accent_color ?? folder.accentColor ?? "#6B7280",
+      cardCount,
+    };
+  });
 }
 
 export async function loadFolders(userId: string, policy: FetchPolicy = "stale-while-revalidate"): Promise<CachedFolder[]> {
   return loadResource({
     userId, resource: RESOURCE, staleTime: STALE_TIME, policy,
-    // Older installations have relational rows but no metadata row yet. They
-    // are still valid offline data, merely stale and eligible for revalidation.
-    readLocal: () => readResource<CachedFolder[]>(userId, RESOURCE) ?? (() => {
+    readLocal: () => {
+      const cached = readResource<CachedFolder[]>(userId, RESOURCE);
+      if (cached && cached.data.length > 0) return cached;
       const folders = localFolders(userId);
       return folders.length ? { data: folders, updatedAt: 0 } : null;
-    })(),
+    },
     writeLocal: (folders, updatedAt) => {
       reconcileFoldersFromServer(userId, folders);
       writeResource(userId, RESOURCE, folders, updatedAt);
@@ -41,7 +53,11 @@ export async function loadFolders(userId: string, policy: FetchPolicy = "stale-w
   });
 }
 
-export function getCachedFolders(userId: string) { return localFolders(userId); }
+export function getCachedFolders(userId: string) {
+  const cached = readResource<CachedFolder[]>(userId, RESOURCE);
+  if (cached && cached.data.length > 0) return cached.data;
+  return localFolders(userId);
+}
 
 export function recordFolderMutation(userId: string) {
   // Folder mutations already update the relational cache. Mark its list stale

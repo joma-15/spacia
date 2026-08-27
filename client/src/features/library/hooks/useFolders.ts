@@ -1,67 +1,44 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Folder } from "../types";
-import { BASE_URL } from "@/shared/config/api";
-import { getAccessToken } from "@/shared/components/auth/session";
-
-// const BASE_URL = "http://192.168.8.39:5000";
-
-interface RawFolder {
-  id: number | string;
-  subject: string;
-  accent_color: string;
-}
-
-interface FoldersResponse {
-  response: RawFolder[];
-  cardCount: number;
-}
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import { getCachedFolders, loadFolders } from "@/shared/services/folderDataService";
+import { subscribeResource } from "@/shared/services/resourceStore";
 
 export function useFolders() {
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const { cacheOwnerId } = useAuth();
+  const userId = cacheOwnerId ?? "guest_local";
+
+  const [folders, setFolders] = useState<Folder[]>(() => {
+    try {
+      const cached = getCachedFolders(userId);
+      return cached.length > 0 ? cached : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(() => folders.length === 0);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchFolders = useCallback(async () => {
+    try {
+      const result = await loadFolders(userId, "stale-while-revalidate");
+      setFolders(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load folders");
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
-    let isMounted = true;
-    setLoading(true);
+    void fetchFolders();
+  }, [fetchFolders]);
 
-    const loadFolders = async (): Promise<void> => {
-      const token = await getAccessToken();
-      try {
-        const res = await fetch(`${BASE_URL}/folders`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          }
-        });
-        
-        console.log('token used:', token);
-        console.log('status:', res.status);
-        const data: FoldersResponse = await res.json();
-
-        if (!isMounted) return;
-
-        const mapped: Folder[] = data.response.map((f) => ({
-          id: f.id.toString(),
-          subject: f.subject,
-          accentColor: f.accent_color,
-          cardCount: 0, // backend doesn't compute this per-folder yet
-        }));
-
-        if (loading) {
-          console.log("still loading");
-        }
-
-        setFolders(mapped);
-      } catch (err) {
-        if (isMounted) setError(err instanceof Error ? err.message : "Failed to load folders");
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    loadFolders();
-    return () => { isMounted = false; };
-  }, []);
+  useEffect(() => {
+    return subscribeResource(userId, "folders", () => {
+      setFolders(getCachedFolders(userId));
+    });
+  }, [userId]);
 
   return { folders, loading, error };
 }

@@ -96,8 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadOrCreateGuestCacheOwner(),
       ]);
       if (!cancelled && session) {
-        await initializeUserData(session.user.id);
         setUser(session.user);
+        void initializeUserData(session.user.id);
       }
       if (!cancelled) {
         setGuestCacheOwnerId(guestId);
