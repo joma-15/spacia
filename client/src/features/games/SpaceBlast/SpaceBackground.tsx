@@ -146,16 +146,15 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
 
   /**
    * Awaits the optional onGameOver callback (which flushes the pending
-   * batch) before navigating away.
+   * batch and navigates) or falls back to navigating directly to the Games tab.
    */
   const handleGameOverOk = useCallback(async () => {
-    engine.setShowGameOverModal(false);
     if (onGameOver) {
       await onGameOver();
-      return;
+    } else {
+      goToGameTab();
     }
-    goToGameTab();
-  }, [engine, onGameOver, goToGameTab]);
+  }, [onGameOver, goToGameTab]);
 
   return (
     <View style={[styles.container, { backgroundColor }, style]} onLayout={handleLayout}>

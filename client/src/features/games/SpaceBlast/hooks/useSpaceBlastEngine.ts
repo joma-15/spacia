@@ -54,6 +54,8 @@ export function useSpaceBlastEngine({
   const deck = useDeckProgress(flashcards, maxLives);
   const gameEndedRef = useRef(false);
 
+  const isTerminated = deck.showWinModal || deck.showGameOverModal || deck.lives <= 0 || gameEndedRef.current;
+
   const floating = useFloatingAnswers({
     flashcards,
     flashcardsKey: deck.flashcardsKey,
@@ -62,12 +64,12 @@ export function useSpaceBlastEngine({
     hasEnoughCards,
     speedMultiplier: deck.speedMultiplier,
     playArea,
-    paused: deck.showWinModal || deck.showGameOverModal,
+    paused: isTerminated,
   });
 
   const showGame = isReady && hasEnoughCards;
 
-  const blockInput = deck.showWinModal || deck.showGameOverModal || !hasEnoughCards || !isReady;
+  const blockInput = isTerminated || !hasEnoughCards || !isReady;
 
   const getObjectPos = useCallback(
     (id: number) => floating.objectPosRef.current.get(id),

@@ -120,7 +120,7 @@ export function useFlashcardSync(folderId: string) {
     return () => {
       isMountedRef.current = false;
     };
-  }, [syncFlashcards]);
+  }, [syncFlashcards]); 
 
   /**
    * Called after every question. Local-only — SQLite write + on-screen
@@ -136,14 +136,11 @@ export function useFlashcardSync(folderId: string) {
       const newStatus: CardStatus = correct ? "understood" : "review";
       try {
         updateFlashcardStatus(userId, cardId, newStatus);
-        setCards((prev) => {
-          const updated = prev.map((card) =>
+        setCards((prev) =>
+          prev.map((card) =>
             card.id === cardId ? { ...card, status: newStatus } : card,
-          );
-          // Remove newly understood cards from the active deck so the
-          // engine never picks them again within this session.
-          return correct ? updated.filter((card) => card.id !== cardId) : updated;
-        });
+          ),
+        );
       } catch (error) {
         console.error("Failed to record answer locally:", error);
       }

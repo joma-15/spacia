@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import SpaceBackground from "./SpaceBackground";
 import { useFlashcardSync } from "./hooks/useFlashcardSync";
 import { THEME } from "./colors";
@@ -14,13 +14,13 @@ import { THEME } from "./colors";
  *  - `handleAnswer` is called on every answer (local-only, no network).
  *  - A Set<string> (`pendingUnderstoodRef`) accumulates the IDs of every
  *    card the player answered correctly, deduplicating automatically.
- *  - When the game ends (win or game over), `flushPendingUpdates` sends
- *    ONE batch request with all accumulated understood card IDs.
- *  - `hasSubmittedRef` ensures the flush can only fire once per game
- *    session, preventing duplicate requests if both onWin and a cleanup
- *    lifecycle fire at the same time.
+ *  - When the game ends (win or game over) or user exits, `flushPendingUpdates`
+ *    sends ONE batch request with all accumulated understood card IDs.
+ *  - `isFlushingRef` ensures concurrent flush attempts do not send
+ *    duplicate network requests.
  */
 const SpaceBlastGameContent: React.FC<{ folderId: string; folderName: string }> = ({ folderId, folderName }) => {
+  const router = useRouter();
   const { cards, isDataLoading, handleAnswer, submitGameResults } = useFlashcardSync(folderId);
 
   // Accumulates understood card IDs during gameplay. Using a Set means
@@ -28,7 +28,7 @@ const SpaceBlastGameContent: React.FC<{ folderId: string; folderName: string }> 
   const pendingUnderstoodRef = useRef<Set<string>>(new Set());
 
   // Guards against concurrent or duplicate flush attempts (req. 16).
-  const hasSubmittedRef = useRef(false);
+  const isFlushingRef = useRef(false);
 
   /**
    * Records a correct answer into the pending queue. Only correct answers
@@ -45,15 +45,20 @@ const SpaceBlastGameContent: React.FC<{ folderId: string; folderName: string }> 
   );
 
   /**
-   * Sends the pending batch to the backend exactly once.
+   * Sends the pending batch to the backend.
    * If no cards were understood this session, nothing is sent (req. 18).
    */
   const flushPendingUpdates = useCallback(async () => {
-    if (hasSubmittedRef.current) return;
-    hasSubmittedRef.current = true;
+    if (isFlushingRef.current) return;
+    isFlushingRef.current = true;
 
     const ids = Array.from(pendingUnderstoodRef.current);
     pendingUnderstoodRef.current.clear();
+
+    if (ids.length === 0) {
+      isFlushingRef.current = false;
+      return;
+    }
 
     try {
       await submitGameResults(ids);
@@ -61,6 +66,8 @@ const SpaceBlastGameContent: React.FC<{ folderId: string; folderName: string }> 
       console.warn("[SpaceBlast] Failed to sync game results:", err);
       // Game has already ended locally — log and continue rather than
       // blocking navigation or retrying (matches Quizzy's error handling).
+    } finally {
+      isFlushingRef.current = false;
     }
   }, [submitGameResults]);
 
@@ -72,7 +79,16 @@ const SpaceBlastGameContent: React.FC<{ folderId: string; folderName: string }> 
   /** Flush before navigating away on game over (req. 6A). */
   const onGameOver = useCallback(async () => {
     await flushPendingUpdates();
+
+    router.replace("/(tabs)/game");
   }, [flushPendingUpdates]);
+
+  /** Flush before navigating away on exit/back (req. 6B). */
+  const onBack = useCallback(async () => {
+    await flushPendingUpdates();
+    if (router.canGoBack()) router.replace("/(tabs)/game");
+    else router.replace("/");
+  }, [flushPendingUpdates, router]);
 
   return (
     <SpaceBackground
@@ -83,6 +99,7 @@ const SpaceBlastGameContent: React.FC<{ folderId: string; folderName: string }> 
       onAnswer={onAnswer}
       onWin={onWin}
       onGameOver={onGameOver}
+      onBack={onBack}
     />
   );
 };
