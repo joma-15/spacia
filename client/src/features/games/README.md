@@ -71,8 +71,9 @@ Rather than implementing folder lists and DB loaders inside each game, the syste
 
 ---
 
-## 5. Adding New Games
+## 5. Adding New Games & Categories
 
+### Adding a Game
 To add a new game mode (e.g. expanding the MemoryMatch or WordRush placeholders):
 
 1. **Create Game Module**: Build the folder under `client/src/features/games/YourGameName/`.
@@ -82,16 +83,33 @@ To add a new game mode (e.g. expanding the MemoryMatch or WordRush placeholders)
    import YourGameScreen from "@/features/games/YourGameName";
    export default YourGameScreen;
    ```
-4. **Register Catalog Card**: Add your game specifications to the categories constant in `client/src/features/games/GameCatalog/constants/gameCategories.ts`:
+4. **Register in Catalog**: Add your game to `GAME_CATEGORIES` in `client/src/features/games/GameCatalog/constants/gameCategories.ts`:
    ```typescript
    {
      id: 'your-game',
      title: 'Your Game',
+     image: require(`${BASE_PATH}/your-game.webp`),
+     tint: '#3ED598',
      route: '/games/YourGameName',
-     // assets details...
+     categories: ['singleplayer', 'multiplayer'], // specify category tags here
    }
    ```
 5. **Verify Constraints**: Ensure you implement checks if the deck has enough cards to play (e.g., show a fallback overlay if `cards.length < minCardsLimit`).
+
+### Adding a New Category Tab
+To add a new category filter tab (e.g., "Brain Training", "Timed", "Co-op"):
+1. Open `client/src/features/games/GameCatalog/constants/gameCategories.ts`.
+2. Add a new tab to `GAME_CATEGORY_TABS`:
+   ```typescript
+   export const GAME_CATEGORY_TABS: GameCategoryTab[] = [
+     { id: 'all', label: 'All Games' },
+     { id: 'singleplayer', label: 'Single Player' },
+     { id: 'multiplayer', label: 'Multiplayer' },
+     { id: 'brain-training', label: 'Brain Training' }, // New category
+   ];
+   ```
+3. Tag any game with `'brain-training'` in its `categories` array.
+
 
 ---
 
