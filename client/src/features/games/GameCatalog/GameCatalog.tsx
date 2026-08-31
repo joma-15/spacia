@@ -1,7 +1,10 @@
-import React from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
-import { GAME_CATEGORIES, GAME_CATEGORY_TABS } from './constants/gameCategories';
-import { useGameSearch } from './hooks/useGameSearch';
+import React from "react";
+import { View, ScrollView, StyleSheet } from "react-native";
+import {
+  GAME_CATEGORIES,
+  GAME_CATEGORY_TABS,
+} from "./constants/gameCategories";
+import { useGameSearch } from "./hooks/useGameSearch";
 import {
   ScreenHeader,
   StreakPill,
@@ -10,8 +13,8 @@ import {
   SectionHeader,
   GameCard,
   EmptyState,
-} from './components';
-import { GameCategory } from './types';
+} from "./components";
+import { GameCategory } from "./types";
 
 interface GameCatalogProps {
   onSelectGame: (category: GameCategory) => void;
@@ -21,7 +24,7 @@ interface GameCatalogProps {
   gamesToday?: number;
 }
 
-const HORIZONTAL_PADDING = 20; // must match GameCard.tsx's HORIZONTAL_PADDING
+const HORIZONTAL_PADDING = 16; // must match GameCard.tsx's HORIZONTAL_PADDING
 const GAP = 10; // must match GameCard.tsx's GAP
 
 // The scrollable body of the gaming home screen: header, streak pill,
@@ -43,11 +46,14 @@ export const GameCatalog: React.FC<GameCatalogProps> = ({
 
   const getSectionTitle = () => {
     const activeTab = GAME_CATEGORY_TABS.find((t) => t.id === selectedCategory);
-    return activeTab ? activeTab.label : 'Games';
+    return activeTab ? activeTab.label : "Games";
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
       <ScreenHeader
         greeting="WELCOME BACK,"
         title="Ready to play?"
@@ -64,11 +70,21 @@ export const GameCatalog: React.FC<GameCatalogProps> = ({
         onSelectTab={setSelectedCategory}
       />
 
-      <SectionHeader title={getSectionTitle()} onActionPress={onSeeAllPress} />
+      {/* <SectionHeader title={getSectionTitle()} onActionPress={onSeeAllPress} /> */}
+      <View style={styles.sectionHeader}>
+        <SectionHeader
+          title={getSectionTitle()}
+          onActionPress={onSeeAllPress}
+        />
+      </View>
 
       <View style={styles.grid}>
         {filteredCategories.map((category) => (
-          <GameCard key={category.id} category={category} onPress={onSelectGame} />
+          <GameCard
+            key={category.id}
+            category={category}
+            onPress={onSelectGame}
+          />
         ))}
         {filteredCategories.length === 0 && (
           <EmptyState
@@ -85,15 +101,19 @@ export const GameCatalog: React.FC<GameCatalogProps> = ({
   );
 };
 
-
 const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: HORIZONTAL_PADDING, // must match HORIZONTAL_PADDING in GameCard.tsx
     paddingBottom: 32,
   },
+
+  sectionHeader: {
+    marginTop : -8,
+  },
+
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     rowGap: GAP,
     columnGap: GAP,
   },
