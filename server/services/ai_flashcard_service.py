@@ -76,7 +76,7 @@ class AiFlashcardService:
         return f"""You are a professional study helper. Generate exactly 10 flashcards in English based on the provided content.
 Return the output as a valid JSON object containing a "flashcards" key, which points to an array of flashcards.
 Each flashcard in the array must be an object with exactly three keys:
-- "question": a clue-based question
+- "question": a clue-based question or the description of the highlighted words in the handout 
 - "answer": just a one word answer highlighted terms on the handout ( for instance 'what is the capital of phillipines?' answer:manila
 - "status": the string "review"
 
