@@ -73,7 +73,7 @@ class AiFlashcardService:
         Constructs the detailed instruction prompt for the AI.
         It guides the AI to output exactly 10 flashcards matching our required database schema.
         """
-        return f"""You are a professional study helper. Generate exactly 10 flashcards in English based on the provided content.
+        return f"""You are a professional study helper. Generate (make sure to cover all the topic especially the higlighted ones) flashcards in English based on the provided content.
 Return the output as a valid JSON object containing a "flashcards" key, which points to an array of flashcards.
 Each flashcard in the array must be an object with exactly three keys:
 - "question": a clue-based question or the description of the highlighted words in the handout 
