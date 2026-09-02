@@ -3,6 +3,15 @@
  * ─────────────────────────────────────────────
  * The main 3D-flipping flashcard. Swipe left to mark as Review,
  * swipe right to mark as Understood, swipe up to Skip.
+ *
+ * TEXT READABILITY IMPROVEMENTS
+ * ─────────────────────────────
+ * • Font size shrinks dynamically based on text length so medium-length
+ *   content still looks large and comfortable.
+ * • For extremely long text the inner content area becomes scrollable so
+ *   nothing is ever clipped or hidden.
+ * • The card itself fills its parent container (flex: 1) rather than
+ *   using a fixed pixel height, giving it more room on taller screens.
  */
 
 import React, { useEffect, useRef } from "react";
@@ -12,6 +21,7 @@ import {
   Easing,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -19,11 +29,27 @@ import {
 import { COLORS } from "../colors";
 import type { Flashcard } from "../types";
 
-const CARD_HEIGHT = 440;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SWIPE_THRESHOLD_X = SCREEN_WIDTH * 0.25;
-const SWIPE_THRESHOLD_Y = CARD_HEIGHT * 0.25;
+// Use a fraction of the screen height so the threshold scales across device sizes.
+const SWIPE_THRESHOLD_Y = SCREEN_HEIGHT * 0.12;
 const SWIPE_OUT_DURATION = 220;
+
+/**
+ * Returns a font size that shrinks as the text gets longer.
+ *
+ * Short  (≤ 60 chars)  → 24 px  — large, prominent
+ * Medium (≤ 130 chars) → 19 px  — comfortable
+ * Long   (≤ 220 chars) → 15 px  — compact but readable
+ * Very long (> 220)    → 13 px  — minimal; ScrollView enabled
+ */
+function getDynamicFontSize(text: string): number {
+  const len = text?.length ?? 0;
+  if (len <= 60) return 24;
+  if (len <= 130) return 19;
+  if (len <= 220) return 15;
+  return 13;
+}
 
 interface Props {
   card: Flashcard;
@@ -172,6 +198,12 @@ const FlipCard: React.FC<Props> = ({
 
   if (!card) return null;
 
+  const questionFontSize = getDynamicFontSize(card.question);
+  const answerFontSize = getDynamicFontSize(card.answer);
+  // ScrollView is activated for very long text (font already at minimum).
+  const questionScrollable = questionFontSize <= 13;
+  const answerScrollable = answerFontSize <= 13;
+
   return (
     <Animated.View
       style={[
@@ -231,11 +263,30 @@ const FlipCard: React.FC<Props> = ({
               </Text>
             </View>
           ) : null}
+
           <Text style={styles.label}>QUESTION</Text>
-          <Text style={styles.cardText}>{card.question}</Text>
-          <Text style={styles.tapHint}>
-            Tap to flip · Swipe left to Review · Swipe right to Understood
-          </Text>
+
+          {/* Text area — scrollable for very long questions */}
+          <ScrollView
+            style={styles.textScrollArea}
+            contentContainerStyle={styles.textScrollContent}
+            showsVerticalScrollIndicator={questionScrollable}
+            scrollEnabled={questionScrollable}
+            // Prevent the scroll from being captured by the card's PanResponder
+            // when scrolling is active, so the user can actually scroll the text.
+            onStartShouldSetResponder={() => questionScrollable}
+          >
+            <Text
+              style={[
+                styles.cardText,
+                { fontSize: questionFontSize, lineHeight: questionFontSize * 1.45 },
+              ]}
+            >
+              {card.question}
+            </Text>
+          </ScrollView>
+
+          <Text style={styles.tapHint}>Tap card to flip</Text>
         </Animated.View>
 
         {/* ── BACK FACE: the answer ── */}
@@ -283,18 +334,32 @@ const FlipCard: React.FC<Props> = ({
               </Text>
             </View>
           ) : null}
+
           <Text style={[styles.label, styles.labelBack]}>ANSWER</Text>
-          <Text style={styles.cardText}>{card.answer}</Text>
+
+          {/* Text area — scrollable for very long answers */}
+          <ScrollView
+            style={styles.textScrollArea}
+            contentContainerStyle={styles.textScrollContent}
+            showsVerticalScrollIndicator={answerScrollable}
+            scrollEnabled={answerScrollable}
+            onStartShouldSetResponder={() => answerScrollable}
+          >
+            <Text
+              style={[
+                styles.cardText,
+                { fontSize: answerFontSize, lineHeight: answerFontSize * 1.45 },
+              ]}
+            >
+              {card.answer}
+            </Text>
+          </ScrollView>
+
           <Text style={styles.tapHint}>
             Tap to flip · Swipe left to Review · Swipe right to Understood
           </Text>
         </Animated.View>
       </Pressable>
-
-      {/* Swipe affordance — sits above both faces, ignores touches */}
-      <View style={styles.swipeHintRow} pointerEvents="none">
-        <Text style={styles.swipeHintText}>Swipe Left to Review • Right for Understood</Text>
-      </View>
 
       {/* "REVIEW" badge — fades in while dragging left */}
       <Animated.View
@@ -338,21 +403,31 @@ const FlipCard: React.FC<Props> = ({
 export default FlipCard;
 
 const styles = StyleSheet.create({
-  container: { width: "100%", height: CARD_HEIGHT },
-  pressable: { width: "100%", height: CARD_HEIGHT },
+  // container and pressable fill whatever flex space the parent gives them.
+  // The height is no longer fixed to a constant — the parent's cardContainer
+  // (flex: 1) dictates the available space, which is naturally larger.
+  container: { width: "100%", flex: 1 },
+  pressable: { width: "100%", flex: 1 },
   card: {
     width: "100%",
-    height: CARD_HEIGHT,
+    flex: 1,
     borderRadius: 24,
     backgroundColor: COLORS.cardFrontBg,
     borderWidth: 1,
     borderColor: COLORS.cardFrontBorder,
-    padding: 24,
+    // Top padding reserves space for the QUESTION/ANSWER label.
+    // Bottom padding reserves space for the tap-hint text.
+    paddingTop: 20,
+    paddingBottom: 48,
+    paddingHorizontal: 24,
     alignItems: "center",
-    justifyContent: "center",
   },
   face: {
     position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backfaceVisibility: "hidden",
   },
   backFace: {
@@ -364,38 +439,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 1.5,
-    marginBottom: 16,
+    marginBottom: 12,
+    alignSelf: "center",
   },
   labelBack: { color: COLORS.primary },
+  // The scroll area fills all space between the label and the tap-hint.
+  // Short content is vertically centred inside via flexGrow + justifyContent.
+  textScrollArea: {
+    flex: 1,
+    width: "100%",
+  },
+  textScrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
   cardText: {
     color: COLORS.textPrimary,
-    fontSize: 24,
     fontWeight: "700",
     textAlign: "center",
-    lineHeight: 34,
+    // fontSize and lineHeight are applied as inline styles (dynamic per card)
   },
   tapHint: {
     position: "absolute",
-    bottom: 18,
-    color: COLORS.textDim,
-    fontSize: 12,
-    textAlign: "center",
-    paddingHorizontal: 12,
-  },
-  swipeHintRow: {
-    position: "absolute",
-    top: -28,
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  swipeHintText: {
+    bottom: 14,
+    left: 12,
+    right: 12,
     color: COLORS.textDim,
     fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 1,
-    textTransform: "uppercase",
+    textAlign: "center",
   },
   badge: {
     position: "absolute",

@@ -80,7 +80,11 @@ const SpaceBackground: React.FC<SpaceBackgroundProps> = ({
   // Where does the ship sit, and what's the safe vertical zone floating
   // answers are allowed to drift inside (between the header and the ship)?
   const questionCardBottom = insets.bottom + 16;
-  const questionCardTop = questionCardBottom + QUESTION_CARD_HEIGHT;
+  // Use the maximum possible card height (for very long questions) so the
+  // ship is always positioned above the card regardless of question length.
+  // QuestionCard can grow up to QUESTION_CARD_HEIGHT + 36 (see QuestionCard.tsx).
+  const questionCardMaxHeight = QUESTION_CARD_HEIGHT + 36;
+  const questionCardTop = questionCardBottom + questionCardMaxHeight;
 
   // Fixed visual breathing room between the ship's bottom edge and the
   // question card's top edge. This is ADDED on top of the card's own

@@ -37,7 +37,6 @@ import { useFlipSortSession } from "./hooks/useFlipSortSession";
 import FlipSortHeader from "./components/FlipSortHeader";
 import ProgressBar from "./components/ProgressBar";
 import FlipCard from "./components/FlipCard";
-import ActionButtons from "./components/ActionButtons";
 import { CompletionProgressModal } from "./components/CompletionProgressModal";
 import { BASE_URL } from "@/shared/config/api";
 import { getAccessToken } from "@/shared/components/auth/session";
@@ -230,7 +229,6 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
 
   // Hook 1: Visual flip animation state
   const {
-    isFlipped,
     showBack,
     frontInterpolate,
     backInterpolate,
@@ -288,7 +286,12 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
 
   if (cards.length === 0) {
     return (
-      <View style={[styles.screen, { paddingTop: Math.max(insets.top, 16) }]}>
+      <View
+        style={[
+          styles.screen,
+          { paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) },
+        ]}
+      >
         <FlipSortHeader
           currentNumber={0}
           totalCards={0}
@@ -304,7 +307,13 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: Math.max(insets.top, 16) }]}>
+    <View
+      style={[
+        styles.screen,
+        { paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) },
+      ]}
+    >
+      {/* ── Header ── */}
       <FlipSortHeader
         currentNumber={index + 1}
         totalCards={totalCards}
@@ -313,18 +322,36 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
         onChangeFolderPress={handleChangeFolderPress}
       />
 
+      {/* ── Progress bar ── */}
       <ProgressBar percent={progressPercent} />
 
-      {/* Quizlet-style count indicators */}
+      {/* ── Session score row ── */}
       <View style={styles.counterRow}>
+        {/* Review pill (left) */}
         <View style={[styles.counterPill, styles.reviewCounterPill]}>
-          <Text style={styles.reviewCounterText}>{reviewCount}</Text>
+          <Text style={styles.counterEmoji}>🔁</Text>
+          <View style={styles.counterLabelBlock}>
+            <Text style={styles.counterLabel}>REVIEW</Text>
+            <Text style={styles.reviewCounterText}>{reviewCount}</Text>
+          </View>
         </View>
+
+        {/* Understood pill (right) */}
         <View style={[styles.counterPill, styles.understoodCounterPill]}>
-          <Text style={styles.understoodCounterText}>{understoodCount}</Text>
+          <View style={[styles.counterLabelBlock, styles.counterLabelRight]}>
+            <Text style={styles.counterLabel}>GOT IT</Text>
+            <Text style={styles.understoodCounterText}>{understoodCount}</Text>
+          </View>
+          <Text style={styles.counterEmoji}>✓</Text>
         </View>
       </View>
 
+      {/* ── Swipe hint — above the card, not overlapping anything ── */}
+      <View style={styles.swipeHintRow}>
+        <Text style={styles.swipeHintText}>{"← Review  |  Understood →"}</Text>
+      </View>
+
+      {/* ── Flashcard ── */}
       <View style={styles.cardContainer}>
         {currentCard ? (
           <FlipCard
@@ -347,13 +374,6 @@ const FlipSortGameContent: React.FC<GameContentProps> = ({
         ) : null}
       </View>
 
-      <ActionButtons
-        isFlipped={isFlipped}
-        onReviewPress={markForReview}
-        onUnderstoodPress={markAsUnderstood}
-        bottomInset={insets.bottom}
-        status={currentCard?.status}
-      />
       <CompletionProgressModal
         visible={isComplete}
         understoodCount={completionUnderstoodCount}
@@ -395,11 +415,88 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.screenBg,
     paddingHorizontal: 20,
   },
+  // ── Card container ─────────────────────────────────────────────────────────
+  // flex: 1 means it grows to fill remaining space after the fixed-height
+  // header, progress bar, counter row, and swipe hint have taken their share.
   cardContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+  // ── Session score row ──────────────────────────────────────────────────────
+  counterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  counterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 8,
+    // Prevent the pill from expanding to fill half the row — let content
+    // dictate the width so both pills can sit side-by-side comfortably.
+    alignSelf: "flex-start",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  reviewCounterPill: {
+    backgroundColor: "rgba(58, 42, 20, 0.45)",
+    borderColor: COLORS.reviewBorder,
+  },
+  understoodCounterPill: {
+    backgroundColor: "rgba(31, 122, 75, 0.45)",
+    borderColor: COLORS.understoodBorder,
+  },
+  counterEmoji: {
+    fontSize: 16,
+  },
+  counterLabelBlock: {
+    alignItems: "flex-start",
+  },
+  counterLabelRight: {
+    alignItems: "flex-end",
+  },
+  counterLabel: {
+    color: COLORS.textDim,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  reviewCounterText: {
+    color: COLORS.reviewText,
+    fontWeight: "800",
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  understoodCounterText: {
+    color: COLORS.primary,
+    fontWeight: "800",
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  // ── Swipe hint ─────────────────────────────────────────────────────────────
+  // Placed in normal flow (not absolute) so it never overlaps anything.
+  swipeHintRow: {
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  swipeHintText: {
+    color: COLORS.textDim,
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.8,
+  },
+  // ── Misc ───────────────────────────────────────────────────────────────────
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -419,45 +516,5 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.textMuted,
     fontSize: 16,
-  },
-  counterRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 14,
-    marginBottom: 6,
-    width: "100%",
-  },
-  counterPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    minWidth: 46,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  reviewCounterPill: {
-    backgroundColor: "rgba(58, 42, 20, 0.4)",
-    borderColor: COLORS.reviewBorder,
-  },
-  reviewCounterText: {
-    color: COLORS.reviewText,
-    fontWeight: "800",
-    fontSize: 14,
-  },
-  understoodCounterPill: {
-    backgroundColor: "rgba(31, 122, 75, 0.4)",
-    borderColor: COLORS.understoodBorder,
-  },
-  understoodCounterText: {
-    color: COLORS.primary,
-    fontWeight: "800",
-    fontSize: 14,
   },
 });

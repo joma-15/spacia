@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useState, useRef, useEffect } from "react";
-import { View, Alert, StyleSheet, ScrollView, useWindowDimensions } from "react-native";
+import { View, Alert, StyleSheet, ScrollView, useWindowDimensions, Pressable, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import AuthModal from "@/features/auth/components/AuthModal";
@@ -63,6 +63,7 @@ const CardScreen: React.FC = () => {
     handleEdit,
     handleAddCard,
     handleDeleteAll,
+    handleReviewAll,
     fetchAiCards,
   } = useFlashCards(folderId);
 
@@ -115,6 +116,22 @@ const CardScreen: React.FC = () => {
   const handleConfirmDeleteAll = () => {
     handleDeleteAll();
     setDeleteAllModalVisible(false);
+  };
+
+  // ── Re-review all: confirm then reset all understood cards to review ────────
+  const handleReviewAllPress = () => {
+    Alert.alert(
+      "Re-review All",
+      `Move all ${understoodCards.length} completed card${understoodCards.length !== 1 ? "s" : ""} back to Review so you can study them again?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Re-review All",
+          style: "destructive",
+          onPress: handleReviewAll,
+        },
+      ],
+    );
   };
 
   // ── Navigate to subscription screen ───────────────────────────────────────
@@ -179,7 +196,28 @@ const CardScreen: React.FC = () => {
                 onEdit={handleEdit}
               />
             </View>
-            <View style={{ width: pageWidth }}>
+            <View style={{ width: pageWidth, flex: 1 }}>
+              {/* Re-review All banner — only visible when Done tab has cards */}
+              {understoodCards.length > 0 && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.reviewAllBanner,
+                    pressed && styles.reviewAllBannerPressed,
+                  ]}
+                  onPress={handleReviewAllPress}
+                >
+                  <View style={styles.reviewAllIconWrap}>
+                    <Text style={styles.reviewAllIcon}>🔄</Text>
+                  </View>
+                  <View style={styles.reviewAllTextBlock}>
+                    <Text style={styles.reviewAllTitle}>Re-review All</Text>
+                    <Text style={styles.reviewAllSub}>
+                      Move {understoodCards.length} completed card{understoodCards.length !== 1 ? "s" : ""} back to Review
+                    </Text>
+                  </View>
+                  <Text style={styles.reviewAllArrow}>›</Text>
+                </Pressable>
+              )}
               <CardList
                 cards={understoodCards}
                 onUnderstand={handleUnderstand}
@@ -252,5 +290,52 @@ const styles = StyleSheet.create({
   },
   tabPanelHidden: {
     display: "none",
+  },
+  // ── Re-review All banner ────────────────────────────────────────────────────
+  reviewAllBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+    gap: 12,
+  },
+  reviewAllBannerPressed: {
+    opacity: 0.75,
+  },
+  reviewAllIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primaryDim,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewAllIcon: {
+    fontSize: 18,
+  },
+  reviewAllTextBlock: {
+    flex: 1,
+  },
+  reviewAllTitle: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  reviewAllSub: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: "400",
+  },
+  reviewAllArrow: {
+    color: COLORS.textMuted,
+    fontSize: 22,
+    fontWeight: "300",
+    lineHeight: 26,
   },
 });
