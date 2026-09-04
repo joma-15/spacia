@@ -1,1 +1,1 @@
-export { default } from './Quizzy';
+export { default } from './MemoryMatch';
