@@ -5,7 +5,7 @@
  * entirely to the useFlashCards hook.
  */
 
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, { useCallback, useState, useRef } from "react";
 import { View, Alert, StyleSheet, ScrollView, useWindowDimensions, Pressable, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
@@ -64,6 +64,7 @@ const CardScreen: React.FC = () => {
     handleAddCard,
     handleDeleteAll,
     handleReviewAll,
+    handleMarkAllDone,
     fetchAiCards,
   } = useFlashCards(folderId);
 
@@ -134,6 +135,21 @@ const CardScreen: React.FC = () => {
     );
   };
 
+  // ── Mark all as Done: confirm then move all review cards to understood ─────
+  const handleMarkAllDonePress = () => {
+    Alert.alert(
+      "Mark All as Done",
+      `Move all ${reviewCards.length} review card${reviewCards.length !== 1 ? "s" : ""} to Done?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Mark All as Done",
+          onPress: handleMarkAllDone,
+        },
+      ],
+    );
+  };
+
   // ── Navigate to subscription screen ───────────────────────────────────────
   const handleUpgrade = () => {
     setPremiumModalVisible(false);
@@ -187,7 +203,28 @@ const CardScreen: React.FC = () => {
                 onEdit={handleEdit}
               />
             </View>
-            <View style={{ width: pageWidth }}>
+            <View style={{ width: pageWidth, flex: 1 }}>
+              {/* Mark All as Done banner — only visible when Review tab has cards */}
+              {reviewCards.length > 0 && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.reviewAllBanner,
+                    pressed && styles.reviewAllBannerPressed,
+                  ]}
+                  onPress={handleMarkAllDonePress}
+                >
+                  <View style={styles.reviewAllIconWrap}>
+                    <Text style={styles.reviewAllIcon}>✅</Text>
+                  </View>
+                  <View style={styles.reviewAllTextBlock}>
+                    <Text style={styles.reviewAllTitle}>Mark All as Done</Text>
+                    <Text style={styles.reviewAllSub}>
+                      Move {reviewCards.length} review card{reviewCards.length !== 1 ? "s" : ""} to Done
+                    </Text>
+                  </View>
+                  <Text style={styles.reviewAllArrow}>›</Text>
+                </Pressable>
+              )}
               <CardList
                 cards={reviewCards}
                 onUnderstand={handleUnderstand}

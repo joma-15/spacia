@@ -302,6 +302,49 @@ export function useFlashCards(folderId: string) {
     }
   }, [cards, userId]);
 
+  /**
+   * Moves every "review" card in this folder to "understood" so the
+   * user can mark all cards as done at once. Updates SQLite immediately for offline
+   * use and batches the change to the server in the background.
+   */
+  const handleMarkAllDone = useCallback(async () => {
+    if (!userId) return;
+
+    // Collect the IDs of all review cards upfront
+    const reviewIds = cards
+      .filter((c) => c.status === "review")
+      .map((c) => c.id);
+
+    if (reviewIds.length === 0) return;
+
+    // Eagerly update React state and SQLite so the UI responds instantly
+    setCards((prev) =>
+      prev.map((c) => (c.status === "review" ? { ...c, status: "understood" } : c)),
+    );
+    reviewIds.forEach((id) => {
+      try {
+        updateFlashcardStatus(userId, id, "understood");
+      } catch (e) {
+        console.error("Failed to set card status locally:", id, e);
+      }
+    });
+
+    // Batch-send the status updates to the backend
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await authenticatedFetch(`/flashcards/batch-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          updates: reviewIds.map((id) => ({ id, status: "understood" })),
+        }),
+      });
+    } catch (error) {
+      console.error("Mark all done backend sync failed:", error);
+    }
+  }, [cards, userId]);
+
   // ── Data Syncing and Cache Loading ──────────────────────────────────────────
 
   // Pulls flashcards from the local SQLite database on the phone.
@@ -544,6 +587,7 @@ export function useFlashCards(folderId: string) {
     handleAddCard,
     handleDeleteAll,
     handleReviewAll,
+    handleMarkAllDone,
     fetchAiCards,
   };
 }
