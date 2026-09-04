@@ -43,15 +43,15 @@ export const GAME_CATEGORIES: GameCategory[] = [
     image: require(`${BASE_PATH}/quizzy.webp`),
     tint: '#34D399',
     route: '/games/Quizzy',
+    categories: ['multiplayer'],
+  },
+  {
+    id: '3',
+    title: 'MemoryMatch',
+    image: require(`${BASE_PATH}/spaceblast.webp`),
+    tint: '#E86A92',
+    route: '/games/MemoryMatch',
     categories: ['singleplayer', 'multiplayer'],
   },
-  // {
-  //   id: '3',
-  //   title: 'MemoryMatch',
-  //   image: require(`${BASE_PATH}/jed.jpg`),
-  //   tint: '#E86A92',
-  //   route: '/games/MemoryMatch',
-  //   categories: ['singleplayer', 'multiplayer'],
-  // },
 ];
 
