@@ -27,12 +27,19 @@
  * checking current positions (and, on ticks where both spawn, each other's
  * pick) so the two can never land in the same spot or overlap.
  *
- * Dash (NEW): every left/right swipe that changes lanes also plays a
- * one-shot 3-frame dash animation, shows a trail effect behind the ninja,
- * briefly speeds up obstacle/power-up movement, and makes the player
- * briefly immune to collisions. The dash cannot be re-triggered while one
- * is already playing, and is force-ended if the game ends or a power-up
- * question pops up mid-dash.
+ * Dash: every left/right swipe that changes lanes also plays a one-shot
+ * 3-frame dash animation, shows a trail effect behind the ninja, briefly
+ * speeds up obstacle/power-up movement (DASH_SPEED_MULTIPLIER below), and
+ * makes the player briefly immune to collisions. The dash cannot be
+ * re-triggered while one is already playing, and is force-ended if the game
+ * ends or a power-up question pops up mid-dash.
+ *
+ * Difficulty progression: obstacles/power-ups fall faster the longer a
+ * single run lasts (FALL_SPEED_RAMP_PER_TICK), AND runs start a little
+ * faster the higher your all-time best score is (HIGH_SCORE_SPEED_BONUS_PER_POINT),
+ * so the game keeps getting harder as you improve, not just within one run.
+ * All of the knobs for this live together near the top of the file so
+ * they're easy to find and retune later.
  *
  * How it works:
  * - The screen is split into 3 vertical lanes.
@@ -135,13 +142,49 @@ const NINJA_DASH_TRAIL = require('../../../../assets/images/ninja-dash-trail.png
 const POWER_UP_SIZE = 36; // small circle, deliberately smaller than obstacles
 
 const GAME_TICK_MS = 16; // ~60fps
-const INITIAL_FALL_SPEED = 5; // pixels per tick
 const SPAWN_INTERVAL_MS = 1200; // how often a new obstacle appears
 const POWER_UP_SPAWN_INTERVAL_MS = 4500; // how often a power-up appears
 const POWER_UP_BONUS_SCORE = 50; // score bonus for a correct answer
 const MIN_SPAWN_GAP = 250; // minimum vertical clearance an obstacle or
 // power-up must have from anything else already in its lane before it's
 // allowed to spawn there, so the two never land on the same spot or overlap
+
+// ---------------------------------------------------------------------------
+// Difficulty progression knobs — kept together and named so they're easy to
+// find and retune later without hunting through the tick loop.
+// ---------------------------------------------------------------------------
+
+const INITIAL_FALL_SPEED = 5; // pixels/tick a brand new run starts at
+// (before any high-score bonus is applied — see getStartingFallSpeed below)
+const MAX_FALL_SPEED = 16; // hard cap so a long run never becomes literally
+// unplayable, no matter how long you survive
+
+const FALL_SPEED_RAMP_PER_TICK = 0.002; // how much faster obstacles/
+// power-ups get every single tick just from surviving in the *current* run
+
+const HIGH_SCORE_SPEED_BONUS_PER_POINT = 0.0008; // each point of your
+// all-time best score nudges up the STARTING speed of your next run, so
+// the game keeps getting harder over time as you improve — not just within
+// a single run. Set to 0 to disable this and always start at INITIAL_FALL_SPEED.
+const MAX_HIGH_SCORE_SPEED_BONUS = 6; // cap on how much the high-score
+// bonus above can add to the starting speed, however high your best score gets
+
+const DASH_SPEED_MULTIPLIER = 1.6; // obstacles/power-ups move this much
+// faster (relative to the current fall speed) for the brief duration of a
+// dash, to sell the "burst of speed" feeling. Set to 1 to disable.
+
+/**
+ * The fall speed a fresh run should start at, given the player's all-time
+ * best score. Centralized here so both the initial ref value and
+ * `handleRestart` compute it the same way.
+ */
+function getStartingFallSpeed(bestScore: number): number {
+  const highScoreBonus = Math.min(
+    bestScore * HIGH_SCORE_SPEED_BONUS_PER_POINT,
+    MAX_HIGH_SCORE_SPEED_BONUS,
+  );
+  return INITIAL_FALL_SPEED + highScoreBonus;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -275,6 +318,16 @@ export default function SubwaySurferGame({
 
   // Which lane the player is currently in (0 = left, 1 = middle, 2 = right)
   const [playerLane, setPlayerLane] = useState<number>(1);
+  // Ref mirror of playerLane, read by the game tick loop below. Using a ref
+  // here (instead of reading `playerLane` directly from the closure) means
+  // the tick loop's setInterval never has to be torn down and recreated
+  // when the player changes lanes — see the game loop effect for why that
+  // mattered.
+  const playerLaneRef = useRef<number>(playerLane);
+  useEffect(() => {
+    playerLaneRef.current = playerLane;
+  }, [playerLane]);
+
   // Tracks the last horizontal swipe direction so the ninja sprite can
   // face the way it's moving (mirrored via scaleX).
   const [facingRight, setFacingRight] = useState<boolean>(true);
@@ -285,9 +338,26 @@ export default function SubwaySurferGame({
 
   // Score, increases every tick while alive
   const [score, setScore] = useState<number>(0);
+  // Ref mirror of score, read once at game-over time to update highScore
+  // without needing `score` in that effect's dependency array.
+  const scoreRef = useRef<number>(0);
+  useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
+
+  // All-time best score reached this session. Drives getStartingFallSpeed()
+  // so future runs start a little faster the better you've done before.
+  const [highScore, setHighScore] = useState<number>(0);
 
   // Whether the player has crashed
   const [gameOver, setGameOver] = useState<boolean>(false);
+
+  // Record the high score the moment a run ends.
+  useEffect(() => {
+    if (gameOver) {
+      setHighScore((prev) => Math.max(prev, scoreRef.current));
+    }
+  }, [gameOver]);
 
   // The active power-up question, or null when none is showing. Non-null
   // pauses the run (obstacles/power-ups freeze, score stops climbing).
@@ -320,8 +390,10 @@ export default function SubwaySurferGame({
   const [isDashing, setIsDashing] = useState(false);
   const [dashFrame, setDashFrame] = useState(0);
 
-  // Speed increases slowly over time to ramp up difficulty
-  const fallSpeedRef = useRef<number>(INITIAL_FALL_SPEED);
+  // Speed increases slowly over time to ramp up difficulty. Starts higher
+  // than INITIAL_FALL_SPEED if the player already has a high score from an
+  // earlier run this session.
+  const fallSpeedRef = useRef<number>(getStartingFallSpeed(0));
 
   // Used to give each obstacle / power-up a unique id
   const nextObstacleId = useRef<number>(0);
@@ -477,22 +549,40 @@ export default function SubwaySurferGame({
   // is decided synchronously and the two types can never overlap or land in
   // the same spot. Fully frozen while `isRunningRef.current` is false (game
   // over or a question is being shown).
+  //
+  // IMPORTANT: this effect intentionally does NOT depend on `playerLane`.
+  // It used to, so that collision checks could read the latest lane — but
+  // that meant the *entire* setInterval was torn down and recreated on
+  // every single lane change. Since every lane swipe also triggers a dash,
+  // that teardown/recreate was happening on every dash, which is exactly
+  // what caused the "everything gets slower while dashing" stutter: the
+  // whole game loop was briefly restarting mid-dash. Now the loop reads the
+  // player's lane from `playerLaneRef` (kept in sync above) instead, so the
+  // interval is created once and just keeps ticking — dashing no longer
+  // touches it at all.
   // -------------------------------------------------------------------------
   useEffect(() => {
     const tickInterval = setInterval(() => {
       if (!isRunningRef.current) return;
 
-      // Gradually speed up the game the longer you survive
-      fallSpeedRef.current += 0.002;
+      // Gradually speed up the game the longer you survive, capped at
+      // MAX_FALL_SPEED so a very long run never becomes unplayable.
+      fallSpeedRef.current = Math.min(
+        fallSpeedRef.current + FALL_SPEED_RAMP_PER_TICK,
+        MAX_FALL_SPEED,
+      );
 
       // While dashing, obstacles/power-ups move faster to sell the burst of
       // speed. This only affects this tick's movement math — it never
       // touches fallSpeedRef itself, so the normal difficulty ramp-up isn't
       // disturbed once the dash ends.
-      const effectiveFallSpeed = fallSpeedRef.current;
+      const effectiveFallSpeed = isDashingRef.current
+        ? fallSpeedRef.current * DASH_SPEED_MULTIPLIER
+        : fallSpeedRef.current;
 
       const currentPlayerY =
         gameAreaHeightRef.current - PLAYER_BOTTOM_OFFSET - PLAYER_SIZE;
+      const currentPlayerLane = playerLaneRef.current;
 
       // --- Decide this tick's spawns up front, synchronously, so the two
       // decisions can see each other and never claim the same lane. ---
@@ -538,7 +628,7 @@ export default function SubwaySurferGame({
           const isInPlayerRow =
             newY + OBSTACLE_HEIGHT >= currentPlayerY &&
             newY <= currentPlayerY + PLAYER_SIZE;
-          const isSameLane = obstacle.lane === playerLane;
+          const isSameLane = obstacle.lane === currentPlayerLane;
 
           // Dashing grants brief invulnerability — a collision that would
           // normally end the run is ignored while isDashingRef.current is
@@ -578,7 +668,7 @@ export default function SubwaySurferGame({
           const isInPlayerRow =
             newY + POWER_UP_SIZE >= currentPlayerY &&
             newY <= currentPlayerY + PLAYER_SIZE;
-          const isSameLane = powerUp.lane === playerLane;
+          const isSameLane = powerUp.lane === currentPlayerLane;
 
           if (isInPlayerRow && isSameLane && !grabbedOne) {
             // Grabbed — don't keep it on screen, and stop checking further
@@ -614,13 +704,13 @@ export default function SubwaySurferGame({
     }, GAME_TICK_MS);
 
     return () => clearInterval(tickInterval);
-    // playerLane is read fresh each tick via the state setter callbacks
-    // above, but we still depend on it so collision checks use the latest
-    // lane. powerUpQuestions is stable in practice (default or a prop).
+    // playerLane is deliberately NOT a dependency — see the long comment
+    // above the effect. Lane is read fresh each tick via playerLaneRef.
+    // powerUpQuestions is stable in practice (default or a prop).
     // findClearLane has a stable identity (empty deps) so including it here
-    // never causes extra re-subscriptions. isDashingRef is a ref and
-    // intentionally omitted — its .current is always read fresh.
-  }, [playerLane, powerUpQuestions, findClearLane]);
+    // never causes extra re-subscriptions. isDashingRef/playerLaneRef are
+    // refs and intentionally omitted — their .current is always read fresh.
+  }, [powerUpQuestions, findClearLane]);
 
   // -------------------------------------------------------------------------
   // Swipe controls: swipe left/right to change lanes — each lane swipe also
@@ -681,7 +771,9 @@ export default function SubwaySurferGame({
     setScore(0);
     setPlayerLane(1);
     setFacingRight(true);
-    fallSpeedRef.current = INITIAL_FALL_SPEED;
+    // Start the new run's speed based on the best score reached so far this
+    // session — see HIGH_SCORE_SPEED_BONUS_PER_POINT near the top of the file.
+    fallSpeedRef.current = getStartingFallSpeed(highScore);
     obstacleSpawnTimerRef.current = 0;
     powerUpSpawnTimerRef.current = 0;
     setGameOver(false);
@@ -691,7 +783,7 @@ export default function SubwaySurferGame({
     setNinjaFrame(0);
     setIsDashing(false);
     setDashFrame(0);
-  }, []);
+  }, [highScore]);
 
   // -------------------------------------------------------------------------
   // Top bar — copied from Quizzy: back button on the left, change-folder
@@ -795,6 +887,9 @@ export default function SubwaySurferGame({
         {/* Score display */}
         <View style={styles.scoreContainer}>
           <Text style={styles.scoreText}>Score: {score}</Text>
+          {highScore > 0 && (
+            <Text style={styles.bestScoreText}>Best: {highScore}</Text>
+          )}
         </View>
 
         {/* Lane dividers, just for visual reference */}
@@ -944,6 +1039,9 @@ export default function SubwaySurferGame({
             <View style={styles.gameOverCard}>
               <Text style={styles.gameOverText}>Game Over</Text>
               <Text style={styles.finalScoreText}>Final Score: {score}</Text>
+              {highScore > 0 && (
+                <Text style={styles.bestScoreCardText}>Best: {highScore}</Text>
+              )}
               <Pressable
                 style={({ pressed }) => [
                   styles.restartButton,
@@ -1031,12 +1129,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: THEME.divider,
+    alignItems: 'center',
   },
   scoreText: {
     fontSize: 18,
     fontWeight: '700',
     color: THEME.accent,
     letterSpacing: 0.3,
+  },
+  bestScoreText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: THEME.textSecondary,
+    marginTop: 2,
   },
   laneDivider: {
     position: 'absolute',
@@ -1116,6 +1221,12 @@ const styles = StyleSheet.create({
   finalScoreText: {
     fontSize: 16,
     color: THEME.textSecondary,
+    marginBottom: 4,
+  },
+  bestScoreCardText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: THEME.accent,
     marginBottom: 24,
   },
   restartButton: {
