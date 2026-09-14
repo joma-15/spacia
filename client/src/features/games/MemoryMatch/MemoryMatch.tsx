@@ -129,7 +129,6 @@ const NINJA_DASH_FRAME_INTERVAL_MS = 60; // fast — the dash should feel snappy
 // the ninja sprite itself and never affects collision, lane position, or
 // player size.
 const NINJA_DASH_TRAIL = require('../../../../assets/images/ninja-dash-trail.png');
-const DASH_SPEED_MULTIPLIER = 0.5; // temporary fall-speed multiplier while dashing
 
 const POWER_UP_SIZE = 36; // small circle, deliberately smaller than obstacles
 
@@ -486,9 +485,7 @@ export default function SubwaySurferGame({
       // speed. This only affects this tick's movement math — it never
       // touches fallSpeedRef itself, so the normal difficulty ramp-up isn't
       // disturbed once the dash ends.
-      const effectiveFallSpeed = isDashingRef.current
-        ? fallSpeedRef.current * DASH_SPEED_MULTIPLIER
-        : fallSpeedRef.current;
+      const effectiveFallSpeed = fallSpeedRef.current;
 
       const currentPlayerY =
         gameAreaHeightRef.current - PLAYER_BOTTOM_OFFSET - PLAYER_SIZE;
