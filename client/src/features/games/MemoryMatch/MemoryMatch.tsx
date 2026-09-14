@@ -89,7 +89,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const LANE_COUNT = 3;
 const LANE_WIDTH = SCREEN_WIDTH / LANE_COUNT;
 
-const PLAYER_SIZE = 50;
+const PLAYER_SIZE = 80;
 const PLAYER_BOTTOM_OFFSET = 100; // distance from bottom of the game area
 
 const OBSTACLE_WIDTH = 50;
@@ -98,10 +98,12 @@ const OBSTACLE_HEIGHT = 50;
 // Frames for the ninja while moving — swapped through in sequence to
 // produce a running animation for the player sprite.
 const NINJA_RUN_FRAMES = [
-  require('../../assets/game/ninja/ninja-run-1.png'),
-  require('../../assets/game/ninja/ninja-run-2.png'),
-  require('../../assets/game/ninja/ninja-run-3.png'),
-  require('../../assets/game/ninja/ninja-run-4.png'),
+  require('../../../../assets/images/ninja-run-1.png'),
+  require('../../../../assets/images/ninja-run-2.png'),
+  require('../../../../assets/images/ninja-run-3.png'),
+  require('../../../../assets/images/ninja-run-4.png'),
+  require('../../../../assets/images/ninja-run-5.png'),
+  require('../../../../assets/images/ninja-run-6.png'),
 ];
 const NINJA_FRAME_INTERVAL_MS = 100; // how fast the run cycle animates
 
