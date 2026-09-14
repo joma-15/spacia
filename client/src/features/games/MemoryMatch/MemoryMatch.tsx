@@ -7,23 +7,33 @@
  * Theme: Spacia's dark green design system (#0D1F17 background, #34D399
  * accent), matching the app's home screen.
  *
- * Top bar: copied from Quizzy — a back button and a "change folder" button,
- * same icons/behavior. The whole screen is wrapped in SafeAreaView and also
- * reads useSafeAreaInsets so the game area and bottom score chip never sit
- * under the device's bottom nav bar / home indicator.
+ * Top bar: copied from Quizzy — a back button and a "change folder" button.
+ * The whole screen is wrapped in SafeAreaView and also reads
+ * useSafeAreaInsets so the game area and score chip never sit under the
+ * device's bottom nav bar / home indicator.
+ *
+ * Power-ups (NEW): small green circles fall down the lanes alongside the
+ * obstacles. Grabbing one pauses the run and pops up a quiz question with
+ * three choices — the player can answer or pass. A correct answer grants a
+ * score bonus; a wrong answer or a pass just resumes the run with no
+ * penalty. `POWER_UP_QUESTIONS` is a placeholder bank — swap it for real
+ * flashcard-derived questions (same shape used in Quizzy) once this game is
+ * wired to a folder.
  *
  * How it works:
  * - The screen is split into 3 vertical lanes.
  * - The player (a colored box) sits near the bottom and can slide
  *   left/right between lanes by swiping.
- * - Obstacles (colored boxes) spawn at the top of a random lane and
- *   fall downward every game "tick".
+ * - Obstacles (colored boxes) and power-ups (circles) spawn at the top of
+ *   a random lane and fall downward every game "tick".
  * - If an obstacle reaches the player's row while in the same lane,
  *   it's a collision -> Game Over.
+ * - If a power-up reaches the player's row in the same lane, it's
+ *   collected -> the run pauses and a question pops up.
  * - Score increases automatically the longer you survive.
  *
  * Everything runs off a single game loop (setInterval) that updates
- * obstacle positions, checks collisions, and spawns new obstacles.
+ * obstacle/power-up positions, checks collisions, and spawns new ones.
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -54,6 +64,9 @@ const THEME = {
   accentDim: 'rgba(52, 211, 153, 0.18)', // soft accent fill
   obstacle: '#2E4237', // muted card-like obstacle color
   obstacleBorder: 'rgba(52, 211, 153, 0.25)',
+  powerUp: '#FBBF24', // gold, so it reads distinctly from obstacles
+  powerUpGlow: 'rgba(251, 191, 36, 0.35)',
+  danger: '#F87171',
   textPrimary: '#FFFFFF',
   textSecondary: 'rgba(255, 255, 255, 0.6)',
   overlay: 'rgba(13, 31, 23, 0.85)',
@@ -75,9 +88,13 @@ const PLAYER_BOTTOM_OFFSET = 100; // distance from bottom of the game area
 const OBSTACLE_WIDTH = 50;
 const OBSTACLE_HEIGHT = 50;
 
+const POWER_UP_SIZE = 36; // small circle, deliberately smaller than obstacles
+
 const GAME_TICK_MS = 16; // ~60fps
 const INITIAL_FALL_SPEED = 5; // pixels per tick
 const SPAWN_INTERVAL_MS = 1200; // how often a new obstacle appears
+const POWER_UP_SPAWN_INTERVAL_MS = 4500; // how often a power-up appears
+const POWER_UP_BONUS_SCORE = 50; // score bonus for a correct answer
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,11 +107,65 @@ interface Obstacle {
   y: number; // current vertical position (top edge)
 }
 
+/** A single power-up circle falling down a lane. */
+interface PowerUp {
+  id: number;
+  lane: number;
+  y: number;
+}
+
+type OptionKey = 'A' | 'B' | 'C';
+
+interface PowerUpQuestion {
+  question: string;
+  options: Record<OptionKey, string>;
+  correct: OptionKey;
+}
+
+type QuestionAnswerState = 'idle' | 'correct' | 'wrong' | 'passed';
+
 interface SubwaySurferGameProps {
   /** Optional — only needed if this instance is being driven by a specific folder context. */
   folderId?: string;
   folderName?: string;
+  /**
+   * Optional question bank for power-ups. Defaults to a small placeholder
+   * set — swap in folder-derived questions (same `{question, options,
+   * correct}` shape Quizzy builds) to tie power-ups to real flashcards.
+   */
+  powerUpQuestions?: PowerUpQuestion[];
 }
+
+const OPTION_KEYS: OptionKey[] = ['A', 'B', 'C'];
+
+// Placeholder question bank — replace with real content as needed.
+const DEFAULT_POWER_UP_QUESTIONS: PowerUpQuestion[] = [
+  {
+    question: 'What is the capital of the Philippines?',
+    options: { A: 'Cebu City', B: 'Manila', C: 'Davao City' },
+    correct: 'B',
+  },
+  {
+    question: 'Which planet is known as the Red Planet?',
+    options: { A: 'Venus', B: 'Jupiter', C: 'Mars' },
+    correct: 'C',
+  },
+  {
+    question: 'What is 7 x 8?',
+    options: { A: '54', B: '56', C: '64' },
+    correct: 'B',
+  },
+  {
+    question: 'Which gas do plants absorb from the air?',
+    options: { A: 'Oxygen', B: 'Nitrogen', C: 'Carbon dioxide' },
+    correct: 'C',
+  },
+  {
+    question: 'How many sides does a hexagon have?',
+    options: { A: '5', B: '6', C: '7' },
+    correct: 'B',
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Helper functions
@@ -113,12 +184,17 @@ function clampLane(lane: number): number {
   return lane;
 }
 
+function pickRandomQuestion(bank: PowerUpQuestion[]): PowerUpQuestion {
+  return bank[Math.floor(Math.random() * bank.length)];
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
 export default function SubwaySurferGame({
   folderName,
+  powerUpQuestions = DEFAULT_POWER_UP_QUESTIONS,
 }: SubwaySurferGameProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -137,8 +213,9 @@ export default function SubwaySurferGame({
   // Which lane the player is currently in (0 = left, 1 = middle, 2 = right)
   const [playerLane, setPlayerLane] = useState<number>(1);
 
-  // All obstacles currently on screen
+  // All obstacles and power-ups currently on screen
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
+  const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
 
   // Score, increases every tick while alive
   const [score, setScore] = useState<number>(0);
@@ -146,24 +223,44 @@ export default function SubwaySurferGame({
   // Whether the player has crashed
   const [gameOver, setGameOver] = useState<boolean>(false);
 
+  // The active power-up question, or null when none is showing. Non-null
+  // pauses the run (obstacles/power-ups freeze, score stops climbing).
+  const [activeQuestion, setActiveQuestion] = useState<PowerUpQuestion | null>(
+    null,
+  );
+  const [selectedOption, setSelectedOption] = useState<OptionKey | null>(null);
+  const [questionAnswerState, setQuestionAnswerState] =
+    useState<QuestionAnswerState>('idle');
+
   // Speed increases slowly over time to ramp up difficulty
   const fallSpeedRef = useRef<number>(INITIAL_FALL_SPEED);
 
-  // Used to give each obstacle a unique id
+  // Used to give each obstacle / power-up a unique id
   const nextObstacleId = useRef<number>(0);
+  const nextPowerUpId = useRef<number>(0);
 
-  // Keep a ref mirror of gameOver so the interval callbacks (which are set
-  // up once) can check the latest value without stale closures.
+  // Ref mirrors so interval callbacks (set up once) never read stale state.
   const gameOverRef = useRef<boolean>(false);
   useEffect(() => {
     gameOverRef.current = gameOver;
   }, [gameOver]);
 
-  // Keep a ref mirror of the measured game area height for the same reason.
+  const pausedRef = useRef<boolean>(false);
+  useEffect(() => {
+    pausedRef.current = activeQuestion !== null;
+  }, [activeQuestion]);
+
   const gameAreaHeightRef = useRef<number>(gameAreaHeight);
   useEffect(() => {
     gameAreaHeightRef.current = gameAreaHeight;
   }, [gameAreaHeight]);
+
+  // A single flag both the tick loop and spawn timers check before doing
+  // anything — true only while the run should actually be moving.
+  const isRunningRef = useRef<boolean>(true);
+  useEffect(() => {
+    isRunningRef.current = !gameOverRef.current && !pausedRef.current;
+  }, [gameOver, activeQuestion]);
 
   // -------------------------------------------------------------------------
   // Navigation — copied from Quizzy: back to the games tab, or hand off
@@ -181,11 +278,13 @@ export default function SubwaySurferGame({
   }, [router]);
 
   // -------------------------------------------------------------------------
-  // Game loop: moves obstacles down, checks collisions, updates score
+  // Game loop: moves obstacles + power-ups down, checks collisions, updates
+  // score. Fully frozen while `isRunningRef.current` is false (game over or
+  // a question is being shown).
   // -------------------------------------------------------------------------
   useEffect(() => {
     const tickInterval = setInterval(() => {
-      if (gameOverRef.current) return;
+      if (!isRunningRef.current) return;
 
       // Gradually speed up the game the longer you survive
       fallSpeedRef.current += 0.002;
@@ -193,6 +292,7 @@ export default function SubwaySurferGame({
       const currentPlayerY =
         gameAreaHeightRef.current - PLAYER_BOTTOM_OFFSET - PLAYER_SIZE;
 
+      // --- Obstacles: falling down, can end the game ---
       setObstacles((prevObstacles) => {
         const updated: Obstacle[] = [];
         let didCollide = false;
@@ -200,7 +300,6 @@ export default function SubwaySurferGame({
         for (const obstacle of prevObstacles) {
           const newY = obstacle.y + fallSpeedRef.current;
 
-          // Check collision: obstacle overlaps the player's row AND lane
           const isInPlayerRow =
             newY + OBSTACLE_HEIGHT >= currentPlayerY &&
             newY <= currentPlayerY + PLAYER_SIZE;
@@ -210,7 +309,6 @@ export default function SubwaySurferGame({
             didCollide = true;
           }
 
-          // Keep obstacle only if it's still on screen
           if (newY < gameAreaHeightRef.current) {
             updated.push({ ...obstacle, y: newY });
           }
@@ -223,31 +321,87 @@ export default function SubwaySurferGame({
         return updated;
       });
 
-      // Increase score while still alive
-      setScore((prevScore) => (gameOverRef.current ? prevScore : prevScore + 1));
+      // --- Power-ups: falling down, trigger a question when grabbed ---
+      setPowerUps((prevPowerUps) => {
+        const updated: PowerUp[] = [];
+        let grabbedOne = false;
+
+        for (const powerUp of prevPowerUps) {
+          const newY = powerUp.y + fallSpeedRef.current;
+
+          const isInPlayerRow =
+            newY + POWER_UP_SIZE >= currentPlayerY &&
+            newY <= currentPlayerY + PLAYER_SIZE;
+          const isSameLane = powerUp.lane === playerLane;
+
+          if (isInPlayerRow && isSameLane && !grabbedOne) {
+            // Grabbed — don't keep it on screen, and stop checking further
+            // power-ups this tick (only pop one question at a time).
+            grabbedOne = true;
+            continue;
+          }
+
+          if (newY < gameAreaHeightRef.current) {
+            updated.push({ ...powerUp, y: newY });
+          }
+        }
+
+        if (grabbedOne) {
+          setSelectedOption(null);
+          setQuestionAnswerState('idle');
+          setActiveQuestion(pickRandomQuestion(powerUpQuestions));
+        }
+
+        return updated;
+      });
+
+      // Increase score while still alive and not paused
+      setScore((prevScore) => prevScore + 1);
     }, GAME_TICK_MS);
 
     return () => clearInterval(tickInterval);
-    // playerLane is read fresh each tick via the state setter callback above,
-    // but we still depend on it so collision checks use the latest lane.
-  }, [playerLane]);
+    // playerLane is read fresh each tick via the state setter callbacks
+    // above, but we still depend on it so collision checks use the latest
+    // lane. powerUpQuestions is stable in practice (default or a prop).
+  }, [playerLane, powerUpQuestions]);
 
   // -------------------------------------------------------------------------
   // Spawning: adds a new obstacle in a random lane every SPAWN_INTERVAL_MS
   // -------------------------------------------------------------------------
   useEffect(() => {
     const spawnInterval = setInterval(() => {
-      if (gameOverRef.current) return;
+      if (!isRunningRef.current) return;
 
       const randomLane = Math.floor(Math.random() * LANE_COUNT);
       const newObstacle: Obstacle = {
         id: nextObstacleId.current++,
         lane: randomLane,
-        y: -OBSTACLE_HEIGHT, // start just above the game area
+        y: -OBSTACLE_HEIGHT,
       };
 
       setObstacles((prev) => [...prev, newObstacle]);
     }, SPAWN_INTERVAL_MS);
+
+    return () => clearInterval(spawnInterval);
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Spawning: adds a new power-up in a random lane every
+  // POWER_UP_SPAWN_INTERVAL_MS
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    const spawnInterval = setInterval(() => {
+      if (!isRunningRef.current) return;
+
+      const randomLane = Math.floor(Math.random() * LANE_COUNT);
+      const newPowerUp: PowerUp = {
+        id: nextPowerUpId.current++,
+        lane: randomLane,
+        y: -POWER_UP_SIZE,
+      };
+
+      setPowerUps((prev) => [...prev, newPowerUp]);
+    }, POWER_UP_SPAWN_INTERVAL_MS);
 
     return () => clearInterval(spawnInterval);
   }, []);
@@ -259,15 +413,13 @@ export default function SubwaySurferGame({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderRelease: (_evt, gestureState) => {
-        if (gameOverRef.current) return;
+        if (!isRunningRef.current) return;
 
         const SWIPE_THRESHOLD = 40;
 
         if (gestureState.dx > SWIPE_THRESHOLD) {
-          // Swiped right
           setPlayerLane((prevLane) => clampLane(prevLane + 1));
         } else if (gestureState.dx < -SWIPE_THRESHOLD) {
-          // Swiped left
           setPlayerLane((prevLane) => clampLane(prevLane - 1));
         }
       },
@@ -275,14 +427,47 @@ export default function SubwaySurferGame({
   ).current;
 
   // -------------------------------------------------------------------------
+  // Power-up question handlers
+  // -------------------------------------------------------------------------
+  const handleSelectOption = useCallback(
+    (key: OptionKey) => {
+      if (!activeQuestion || questionAnswerState !== 'idle') return;
+
+      setSelectedOption(key);
+      const isCorrect = key === activeQuestion.correct;
+      setQuestionAnswerState(isCorrect ? 'correct' : 'wrong');
+
+      if (isCorrect) {
+        setScore((s) => s + POWER_UP_BONUS_SCORE);
+      }
+    },
+    [activeQuestion, questionAnswerState],
+  );
+
+  const handlePass = useCallback(() => {
+    if (!activeQuestion || questionAnswerState !== 'idle') return;
+    setQuestionAnswerState('passed');
+  }, [activeQuestion, questionAnswerState]);
+
+  const handleContinueAfterQuestion = useCallback(() => {
+    setActiveQuestion(null);
+    setSelectedOption(null);
+    setQuestionAnswerState('idle');
+  }, []);
+
+  // -------------------------------------------------------------------------
   // Restart the game
   // -------------------------------------------------------------------------
   const handleRestart = useCallback(() => {
     setObstacles([]);
+    setPowerUps([]);
     setScore(0);
     setPlayerLane(1);
     fallSpeedRef.current = INITIAL_FALL_SPEED;
     setGameOver(false);
+    setActiveQuestion(null);
+    setSelectedOption(null);
+    setQuestionAnswerState('idle');
   }, []);
 
   // -------------------------------------------------------------------------
@@ -316,13 +501,57 @@ export default function SubwaySurferGame({
   );
 
   // -------------------------------------------------------------------------
+  // Power-up question option rendering (idle / correct / wrong states)
+  // -------------------------------------------------------------------------
+  const renderQuestionOption = (key: OptionKey) => {
+    if (!activeQuestion) return null;
+    const isSelected = selectedOption === key;
+    const isCorrectOption = key === activeQuestion.correct;
+    const answered =
+      questionAnswerState === 'correct' || questionAnswerState === 'wrong';
+
+    let optionStyle = styles.questionOption;
+    if (answered) {
+      if (isCorrectOption) {
+        optionStyle = { ...styles.questionOption, ...styles.questionOptionCorrect };
+      } else if (isSelected) {
+        optionStyle = { ...styles.questionOption, ...styles.questionOptionWrong };
+      } else {
+        optionStyle = { ...styles.questionOption, ...styles.questionOptionDisabled };
+      }
+    }
+
+    return (
+      <Pressable
+        key={key}
+        onPress={() => handleSelectOption(key)}
+        disabled={questionAnswerState !== 'idle'}
+        style={({ pressed }) => [
+          optionStyle,
+          pressed && questionAnswerState === 'idle' && styles.questionOptionPressed,
+        ]}
+      >
+        <View style={styles.questionOptionLetter}>
+          <Text style={styles.questionOptionLetterText}>{key}</Text>
+        </View>
+        <Text style={styles.questionOptionText}>
+          {activeQuestion.options[key]}
+        </Text>
+        {answered && isCorrectOption && (
+          <Icon name="check-bold" size={16} color={THEME.accent} />
+        )}
+        {answered && isSelected && !isCorrectOption && (
+          <Icon name="close-thick" size={16} color={THEME.danger} />
+        )}
+      </Pressable>
+    );
+  };
+
+  // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={['top', 'left', 'right']}
-    >
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       {renderTopBar()}
 
       {folderName ? (
@@ -348,17 +577,14 @@ export default function SubwaySurferGame({
         {Array.from({ length: LANE_COUNT - 1 }).map((_, index) => (
           <View
             key={`divider-${index}`}
-            style={[
-              styles.laneDivider,
-              { left: (index + 1) * LANE_WIDTH },
-            ]}
+            style={[styles.laneDivider, { left: (index + 1) * LANE_WIDTH }]}
           />
         ))}
 
         {/* Obstacles */}
         {obstacles.map((obstacle) => (
           <View
-            key={obstacle.id}
+            key={`obstacle-${obstacle.id}`}
             style={[
               styles.obstacle,
               {
@@ -367,6 +593,22 @@ export default function SubwaySurferGame({
               },
             ]}
           />
+        ))}
+
+        {/* Power-ups — small circles */}
+        {powerUps.map((powerUp) => (
+          <View
+            key={`powerup-${powerUp.id}`}
+            style={[
+              styles.powerUp,
+              {
+                left: getLaneX(powerUp.lane, POWER_UP_SIZE),
+                top: powerUp.y,
+              },
+            ]}
+          >
+            <Icon name="star" size={16} color={THEME.background} />
+          </View>
         ))}
 
         {/* Player */}
@@ -379,6 +621,57 @@ export default function SubwaySurferGame({
             },
           ]}
         />
+
+        {/* Power-up question overlay */}
+        {activeQuestion && (
+          <View style={styles.questionOverlay}>
+            <View style={styles.questionCard}>
+              <View style={styles.questionBadge}>
+                <Icon name="star" size={14} color={THEME.background} />
+                <Text style={styles.questionBadgeText}>POWER-UP!</Text>
+              </View>
+
+              <Text style={styles.questionText}>{activeQuestion.question}</Text>
+
+              <View style={styles.questionOptionsList}>
+                {OPTION_KEYS.map(renderQuestionOption)}
+              </View>
+
+              {questionAnswerState === 'idle' && (
+                <Pressable style={styles.passButton} onPress={handlePass}>
+                  <Text style={styles.passButtonText}>Pass</Text>
+                </Pressable>
+              )}
+
+              {questionAnswerState !== 'idle' && (
+                <>
+                  <Text
+                    style={[
+                      styles.questionFeedback,
+                      questionAnswerState === 'correct' && {
+                        color: THEME.accent,
+                      },
+                      questionAnswerState === 'wrong' && {
+                        color: THEME.danger,
+                      },
+                    ]}
+                  >
+                    {questionAnswerState === 'correct' &&
+                      `Correct! +${POWER_UP_BONUS_SCORE} score`}
+                    {questionAnswerState === 'wrong' && 'Not quite!'}
+                    {questionAnswerState === 'passed' && 'Skipped — back to the run.'}
+                  </Text>
+                  <Pressable
+                    style={styles.continueButton}
+                    onPress={handleContinueAfterQuestion}
+                  >
+                    <Text style={styles.continueButtonText}>Continue</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Game over overlay */}
         {gameOver && (
@@ -508,6 +801,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.obstacleBorder,
   },
+  powerUp: {
+    position: 'absolute',
+    width: POWER_UP_SIZE,
+    height: POWER_UP_SIZE,
+    borderRadius: POWER_UP_SIZE / 2,
+    backgroundColor: THEME.powerUp,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: THEME.powerUp,
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 5,
+  },
   gameOverOverlay: {
     position: 'absolute',
     top: 0,
@@ -549,5 +856,125 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: THEME.background,
+  },
+  // --- Power-up question overlay ---
+  questionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: THEME.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  questionCard: {
+    width: '100%',
+    backgroundColor: THEME.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: THEME.divider,
+    padding: 24,
+    alignItems: 'center',
+  },
+  questionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: THEME.powerUp,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginBottom: 16,
+  },
+  questionBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.background,
+    letterSpacing: 1,
+  },
+  questionText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: THEME.textPrimary,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  questionOptionsList: { width: '100%', gap: 10 },
+  questionOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: THEME.divider,
+    backgroundColor: THEME.surfaceAlt,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  questionOptionPressed: {
+    borderColor: THEME.accent,
+    backgroundColor: THEME.accentDim,
+  },
+  questionOptionCorrect: {
+    borderColor: THEME.accent,
+    backgroundColor: THEME.accentDim,
+  },
+  questionOptionWrong: {
+    borderColor: THEME.danger,
+    backgroundColor: 'rgba(248, 113, 113, 0.12)',
+  },
+  questionOptionDisabled: { opacity: 0.45 },
+  questionOptionLetter: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: THEME.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  questionOptionLetterText: {
+    color: THEME.textPrimary,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  questionOptionText: {
+    color: THEME.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    flexShrink: 1,
+    flex: 1,
+  },
+  passButton: {
+    marginTop: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+  },
+  passButtonText: {
+    color: THEME.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  questionFeedback: {
+    marginTop: 18,
+    fontSize: 14,
+    fontWeight: '700',
+    color: THEME.textSecondary,
+  },
+  continueButton: {
+    marginTop: 14,
+    backgroundColor: THEME.accent,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  continueButtonText: {
+    color: THEME.background,
+    fontWeight: '800',
+    fontSize: 14,
+    letterSpacing: 0.5,
   },
 });
