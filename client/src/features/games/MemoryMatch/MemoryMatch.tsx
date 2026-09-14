@@ -835,10 +835,11 @@ export default function SubwaySurferGame({
           </View>
         ))}
 
-        {/* Player — animated ninja sprite. Normally cycles through
-            NINJA_RUN_FRAMES; while isDashing is true it instead shows the
-            one-shot NINJA_DASH_FRAMES with a trail behind it. Mirrored to
-            face the last swipe direction either way. */}
+        {/* Player — animated ninja sprite. All run and dash frames are
+            pre-rendered and stacked; only the active one has opacity: 1.
+            This avoids swapping the Image `source` prop every 100ms, which
+            causes React Native to re-decode the image each time and
+            produces visible blinking/flickering. */}
         <View
           style={[
             styles.playerWrap,
@@ -848,26 +849,49 @@ export default function SubwaySurferGame({
             },
           ]}
         >
-          {isDashing && (
-            <Image
-              source={NINJA_DASH_TRAIL}
-              style={styles.dashTrail}
-              resizeMode="contain"
-            />
-          )}
-
+          {/* Dash trail — always mounted, toggled via opacity */}
           <Image
-            source={
-              isDashing
-                ? NINJA_DASH_FRAMES[dashFrame]
-                : NINJA_RUN_FRAMES[ninjaFrame]
-            }
-            style={[
-              styles.playerSprite,
-              { transform: [{ scaleX: facingRight ? 1 : -1 }] },
-            ]}
+            source={NINJA_DASH_TRAIL}
+            style={[styles.dashTrail, { opacity: isDashing ? 1 : 0 }]}
             resizeMode="contain"
+            fadeDuration={0}
           />
+
+          {/* Run cycle — 6 frames, only the active one is visible */}
+          {NINJA_RUN_FRAMES.map((frame, i) => (
+            <Image
+              key={`run-${i}`}
+              source={frame}
+              style={[
+                styles.playerSprite,
+                {
+                  transform: [{ scaleX: facingRight ? 1 : -1 }],
+                  position: i === 0 ? 'relative' : 'absolute',
+                  opacity: !isDashing && ninjaFrame === i ? 1 : 0,
+                },
+              ]}
+              resizeMode="contain"
+              fadeDuration={0}
+            />
+          ))}
+
+          {/* Dash animation — 3 frames, only the active one is visible */}
+          {NINJA_DASH_FRAMES.map((frame, i) => (
+            <Image
+              key={`dash-${i}`}
+              source={frame}
+              style={[
+                styles.playerSprite,
+                {
+                  transform: [{ scaleX: facingRight ? 1 : -1 }],
+                  position: 'absolute',
+                  opacity: isDashing && dashFrame === i ? 1 : 0,
+                },
+              ]}
+              resizeMode="contain"
+              fadeDuration={0}
+            />
+          ))}
         </View>
 
         {/* Power-up question overlay */}
