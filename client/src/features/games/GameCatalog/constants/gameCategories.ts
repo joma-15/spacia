@@ -48,7 +48,7 @@ export const GAME_CATEGORIES: GameCategory[] = [
   {
     id: '3',
     title: 'Spacia Rush',
-    image: require(`${BASE_PATH}/spaceblast.webp`),
+    image: require(`${BASE_PATH}/spacia-rush.png`),
     tint: '#E86A92',
     route: '/games/MemoryMatch',
     categories: ['singleplayer', 'multiplayer'],
