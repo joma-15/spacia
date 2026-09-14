@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+
 import { THEME, ROCK_PALETTES } from "../colors";
 import { SpaceObject, HitState } from "../types";
 import { getBubbleDimensions } from "../utils/answerSizing";
@@ -87,17 +87,16 @@ const AnswerBubble: React.FC<{
         },
       ]}
     >
-      <LinearGradient
-        colors={palette.colors as unknown as [string, string]}
-        start={{ x: 0.25, y: 0.2 }}
-        end={{ x: 0.8, y: 1 }}
+      <View
         style={[
           styles.rockGradient,
           {
             width: obj.width,
             height: obj.height,
             borderRadius: Math.min(obj.width, obj.height) / 2,
-          },
+            experimental_backgroundImage:
+              `linear-gradient(150deg, ${palette.colors[0]}, ${palette.colors[1]})`,
+          } as any,
         ]}
       >
         {/* Decorative crater dots so each rock looks a little rougher */}
@@ -157,7 +156,7 @@ const AnswerBubble: React.FC<{
         <Text style={[styles.spaceObjectLabel, { fontSize }]}>
           {formattedLabel}
         </Text>
-      </LinearGradient>
+      </View>
     </Animated.View>
   );
 });
