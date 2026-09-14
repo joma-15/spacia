@@ -2,7 +2,9 @@
  * SubwaySurferGame.tsx
  *
  * A simplified "Subway Surfers" style endless-runner built with plain
- * React Native Views (boxes) — no images, no game engine libraries.
+ * React Native Views (boxes) — no images, no game engine libraries — except
+ * for the player, which now renders as an animated ninja sprite (4-frame
+ * run cycle) instead of a plain colored box.
  *
  * Theme: Spacia's dark green design system (#0D1F17 background, #34D399
  * accent), matching the app's home screen.
@@ -26,8 +28,8 @@
  *
  * How it works:
  * - The screen is split into 3 vertical lanes.
- * - The player (a colored box) sits near the bottom and can slide
- *   left/right between lanes by swiping.
+ * - The player (an animated ninja sprite) sits near the bottom and can
+ *   slide left/right between lanes by swiping.
  * - Obstacles (colored boxes) and power-ups (circles) spawn at the top of
  *   a random lane and fall downward every game "tick".
  * - If an obstacle reaches the player's row while in the same lane,
@@ -48,6 +50,7 @@ import {
   Dimensions,
   PanResponder,
   Pressable,
+  Image,
 } from 'react-native';
 import {
   SafeAreaView,
@@ -91,6 +94,16 @@ const PLAYER_BOTTOM_OFFSET = 100; // distance from bottom of the game area
 
 const OBSTACLE_WIDTH = 50;
 const OBSTACLE_HEIGHT = 50;
+
+// Frames for the ninja while moving — swapped through in sequence to
+// produce a running animation for the player sprite.
+const NINJA_RUN_FRAMES = [
+  require('../../assets/game/ninja/ninja-run-1.png'),
+  require('../../assets/game/ninja/ninja-run-2.png'),
+  require('../../assets/game/ninja/ninja-run-3.png'),
+  require('../../assets/game/ninja/ninja-run-4.png'),
+];
+const NINJA_FRAME_INTERVAL_MS = 100; // how fast the run cycle animates
 
 const POWER_UP_SIZE = 36; // small circle, deliberately smaller than obstacles
 
@@ -234,6 +247,9 @@ export default function SubwaySurferGame({
 
   // Which lane the player is currently in (0 = left, 1 = middle, 2 = right)
   const [playerLane, setPlayerLane] = useState<number>(1);
+  // Tracks the last horizontal swipe direction so the ninja sprite can
+  // face the way it's moving (mirrored via scaleX).
+  const [facingRight, setFacingRight] = useState<boolean>(true);
 
   // All obstacles and power-ups currently on screen
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
@@ -253,6 +269,22 @@ export default function SubwaySurferGame({
   const [selectedOption, setSelectedOption] = useState<OptionKey | null>(null);
   const [questionAnswerState, setQuestionAnswerState] =
     useState<QuestionAnswerState>('idle');
+
+  // Which frame of the ninja run-cycle is currently showing. Cycles through
+  // NINJA_RUN_FRAMES on a timer, pausing whenever the run itself is paused
+  // (game over or a power-up question is on screen) so the sprite doesn't
+  // keep "running in place" behind an overlay.
+  const [ninjaFrame, setNinjaFrame] = useState(0);
+
+  useEffect(() => {
+    if (gameOver || activeQuestion) return;
+
+    const animation = setInterval(() => {
+      setNinjaFrame((prev) => (prev + 1) % NINJA_RUN_FRAMES.length);
+    }, NINJA_FRAME_INTERVAL_MS);
+
+    return () => clearInterval(animation);
+  }, [gameOver, activeQuestion]);
 
   // Speed increases slowly over time to ramp up difficulty
   const fallSpeedRef = useRef<number>(INITIAL_FALL_SPEED);
@@ -499,8 +531,10 @@ export default function SubwaySurferGame({
         const SWIPE_THRESHOLD = 40;
 
         if (gestureState.dx > SWIPE_THRESHOLD) {
+          setFacingRight(true);
           setPlayerLane((prevLane) => clampLane(prevLane + 1));
         } else if (gestureState.dx < -SWIPE_THRESHOLD) {
+          setFacingRight(false);
           setPlayerLane((prevLane) => clampLane(prevLane - 1));
         }
       },
@@ -539,6 +573,7 @@ export default function SubwaySurferGame({
     setPowerUps([]);
     setScore(0);
     setPlayerLane(1);
+    setFacingRight(true);
     fallSpeedRef.current = INITIAL_FALL_SPEED;
     obstacleSpawnTimerRef.current = 0;
     powerUpSpawnTimerRef.current = 0;
@@ -546,6 +581,7 @@ export default function SubwaySurferGame({
     setActiveQuestion(null);
     setSelectedOption(null);
     setQuestionAnswerState('idle');
+    setNinjaFrame(0);
   }, []);
 
   // -------------------------------------------------------------------------
@@ -689,16 +725,27 @@ export default function SubwaySurferGame({
           </View>
         ))}
 
-        {/* Player */}
+        {/* Player — animated ninja sprite, cycling through NINJA_RUN_FRAMES
+            while the run is active, and mirrored to face the last swipe
+            direction. */}
         <View
           style={[
-            styles.player,
+            styles.playerWrap,
             {
               left: getLaneX(playerLane, PLAYER_SIZE),
               top: playerY,
             },
           ]}
-        />
+        >
+          <Image
+            source={NINJA_RUN_FRAMES[ninjaFrame]}
+            style={[
+              styles.playerSprite,
+              { transform: [{ scaleX: facingRight ? 1 : -1 }] },
+            ]}
+            resizeMode="contain"
+          />
+        </View>
 
         {/* Power-up question overlay */}
         {activeQuestion && (
@@ -851,17 +898,16 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: THEME.divider,
   },
-  player: {
+  playerWrap: {
     position: 'absolute',
     width: PLAYER_SIZE,
     height: PLAYER_SIZE,
-    backgroundColor: THEME.accent,
-    borderRadius: 14,
-    shadowColor: THEME.accent,
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playerSprite: {
+    width: PLAYER_SIZE,
+    height: PLAYER_SIZE,
   },
   obstacle: {
     position: 'absolute',
