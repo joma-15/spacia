@@ -67,6 +67,8 @@ import {
 } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useAssetPreload } from './hooks/useAssetPreload';
+import LoadingOverlay from './components/LoadingOverlay';
 
 // ---------------------------------------------------------------------------
 // Spacia theme tokens — mirrors the shared THEME object used across the app
@@ -258,6 +260,7 @@ export default function SubwaySurferGame({
 }: SubwaySurferGameProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const assetsReady = useAssetPreload();
 
   // Height of the actual playfield, after the top bar/header and after
   // reserving room at the bottom for the device's home indicator / nav bar.
@@ -360,11 +363,12 @@ export default function SubwaySurferGame({
   }, [gameAreaHeight]);
 
   // A single flag the tick loop checks before doing anything — true only
-  // while the run should actually be moving.
-  const isRunningRef = useRef<boolean>(true);
+  // while the run should actually be moving. Gated on assetsReady so the
+  // game never ticks before every sprite frame is decoded.
+  const isRunningRef = useRef<boolean>(false);
   useEffect(() => {
-    isRunningRef.current = !gameOverRef.current && !pausedRef.current;
-  }, [gameOver, activeQuestion]);
+    isRunningRef.current = assetsReady && !gameOverRef.current && !pausedRef.current;
+  }, [assetsReady, gameOver, activeQuestion]);
 
   // -------------------------------------------------------------------------
   // Dash system
@@ -771,6 +775,7 @@ export default function SubwaySurferGame({
   // -------------------------------------------------------------------------
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      {!assetsReady && <LoadingOverlay />}
       {renderTopBar()}
 
       {folderName ? (
