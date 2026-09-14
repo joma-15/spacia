@@ -3,8 +3,9 @@
  *
  * A simplified "Subway Surfers" style endless-runner built with plain
  * React Native Views (boxes) — no images, no game engine libraries — except
- * for the player, which now renders as an animated ninja sprite (4-frame
- * run cycle) instead of a plain colored box.
+ * for the player, which renders as an animated ninja sprite: a 6-frame run
+ * cycle normally, and a 3-frame dash animation (with a trail effect)
+ * triggered by swiping up.
  *
  * Theme: Spacia's dark green design system (#0D1F17 background, #34D399
  * accent), matching the app's home screen.
@@ -14,7 +15,7 @@
  * useSafeAreaInsets so the game area and score chip never sit under the
  * device's bottom nav bar / home indicator.
  *
- * Power-ups (NEW): small green circles fall down the lanes alongside the
+ * Power-ups: small green circles fall down the lanes alongside the
  * obstacles. Grabbing one pauses the run and pops up a quiz question with
  * three choices — the player can answer or pass. A correct answer grants a
  * score bonus; a wrong answer or a pass just resumes the run with no
@@ -26,14 +27,22 @@
  * checking current positions (and, on ticks where both spawn, each other's
  * pick) so the two can never land in the same spot or overlap.
  *
+ * Dash (NEW): every left/right swipe that changes lanes also plays a
+ * one-shot 3-frame dash animation, shows a trail effect behind the ninja,
+ * briefly speeds up obstacle/power-up movement, and makes the player
+ * briefly immune to collisions. The dash cannot be re-triggered while one
+ * is already playing, and is force-ended if the game ends or a power-up
+ * question pops up mid-dash.
+ *
  * How it works:
  * - The screen is split into 3 vertical lanes.
  * - The player (an animated ninja sprite) sits near the bottom and can
- *   slide left/right between lanes by swiping.
+ *   slide left/right between lanes by swiping — each lane swipe also
+ *   triggers a dash.
  * - Obstacles (colored boxes) and power-ups (circles) spawn at the top of
  *   a random lane and fall downward every game "tick".
- * - If an obstacle reaches the player's row while in the same lane,
- *   it's a collision -> Game Over.
+ * - If an obstacle reaches the player's row while in the same lane (and
+ *   the player isn't dashing), it's a collision -> Game Over.
  * - If a power-up reaches the player's row in the same lane, it's
  *   collected -> the run pauses and a question pops up.
  * - Score increases automatically the longer you survive.
@@ -106,6 +115,21 @@ const NINJA_RUN_FRAMES = [
   require('../../../../assets/images/ninja-run-6.png'),
 ];
 const NINJA_FRAME_INTERVAL_MS = 100; // how fast the run cycle animates
+
+// Dash — a separate, one-shot 3-frame animation triggered by swiping up.
+// Kept entirely independent of NINJA_RUN_FRAMES so the normal run cycle is
+// never touched by the dash.
+const NINJA_DASH_FRAMES = [
+  require('../../../../assets/images/ninja-dash-1.png'),
+  require('../../../../assets/images/ninja-dash-2.png'),
+  require('../../../../assets/images/ninja-dash-3.png'),
+];
+const NINJA_DASH_FRAME_INTERVAL_MS = 60; // fast — the dash should feel snappy
+// Purely visual effect rendered behind the ninja while dashing. Not part of
+// the ninja sprite itself and never affects collision, lane position, or
+// player size.
+const NINJA_DASH_TRAIL = require('../../../../assets/images/ninja-dash-trail.png');
+const DASH_SPEED_MULTIPLIER = 0.5; // temporary fall-speed multiplier while dashing
 
 const POWER_UP_SIZE = 36; // small circle, deliberately smaller than obstacles
 
@@ -288,6 +312,12 @@ export default function SubwaySurferGame({
     return () => clearInterval(animation);
   }, [gameOver, activeQuestion]);
 
+  // Dash state — isDashing gates which sprite/trail renders and whether the
+  // player is currently immune to obstacle collisions; dashFrame drives the
+  // one-shot 3-frame dash animation while it's true.
+  const [isDashing, setIsDashing] = useState(false);
+  const [dashFrame, setDashFrame] = useState(0);
+
   // Speed increases slowly over time to ramp up difficulty
   const fallSpeedRef = useRef<number>(INITIAL_FALL_SPEED);
 
@@ -335,6 +365,64 @@ export default function SubwaySurferGame({
   const isRunningRef = useRef<boolean>(true);
   useEffect(() => {
     isRunningRef.current = !gameOverRef.current && !pausedRef.current;
+  }, [gameOver, activeQuestion]);
+
+  // -------------------------------------------------------------------------
+  // Dash system
+  // -------------------------------------------------------------------------
+
+  // Ref mirror of isDashing so long-lived closures (the tick loop, the
+  // PanResponder created once below) always read the *current* value
+  // instead of whatever was captured on the render they were created —
+  // same reasoning as gameOverRef / pausedRef above.
+  const isDashingRef = useRef<boolean>(false);
+  useEffect(() => {
+    isDashingRef.current = isDashing;
+  }, [isDashing]);
+
+  // Starts a dash: kicks off the one-shot 3-frame dash animation. Called
+  // from the left/right lane-swipe handler below. Blocked while already
+  // dashing, while the game is over, or while a power-up question is
+  // paused — all read from refs so this stays correct no matter when the
+  // calling closure was created.
+  const startDash = useCallback(() => {
+    if (isDashingRef.current || gameOverRef.current || pausedRef.current) {
+      return;
+    }
+    setDashFrame(0);
+    setIsDashing(true);
+  }, []);
+
+  // Plays dash-1 -> dash-2 -> dash-3 exactly once, then automatically ends
+  // the dash. A single interval per dash, always cleaned up — on finishing,
+  // on isDashing flipping back to false some other way, or on unmount.
+  useEffect(() => {
+    if (!isDashing) return;
+
+    setDashFrame(0);
+    let frame = 0;
+
+    const dashInterval = setInterval(() => {
+      frame += 1;
+      if (frame >= NINJA_DASH_FRAMES.length) {
+        clearInterval(dashInterval);
+        setIsDashing(false);
+        setDashFrame(0);
+        return;
+      }
+      setDashFrame(frame);
+    }, NINJA_DASH_FRAME_INTERVAL_MS);
+
+    return () => clearInterval(dashInterval);
+  }, [isDashing]);
+
+  // A dash in progress should never survive into game-over or into a
+  // power-up question overlay — cut it short immediately if either starts.
+  useEffect(() => {
+    if (gameOver || activeQuestion) {
+      setIsDashing(false);
+      setDashFrame(0);
+    }
   }, [gameOver, activeQuestion]);
 
   // -------------------------------------------------------------------------
@@ -394,6 +482,14 @@ export default function SubwaySurferGame({
       // Gradually speed up the game the longer you survive
       fallSpeedRef.current += 0.002;
 
+      // While dashing, obstacles/power-ups move faster to sell the burst of
+      // speed. This only affects this tick's movement math — it never
+      // touches fallSpeedRef itself, so the normal difficulty ramp-up isn't
+      // disturbed once the dash ends.
+      const effectiveFallSpeed = isDashingRef.current
+        ? fallSpeedRef.current * DASH_SPEED_MULTIPLIER
+        : fallSpeedRef.current;
+
       const currentPlayerY =
         gameAreaHeightRef.current - PLAYER_BOTTOM_OFFSET - PLAYER_SIZE;
 
@@ -436,14 +532,17 @@ export default function SubwaySurferGame({
         let didCollide = false;
 
         for (const obstacle of prevObstacles) {
-          const newY = obstacle.y + fallSpeedRef.current;
+          const newY = obstacle.y + effectiveFallSpeed;
 
           const isInPlayerRow =
             newY + OBSTACLE_HEIGHT >= currentPlayerY &&
             newY <= currentPlayerY + PLAYER_SIZE;
           const isSameLane = obstacle.lane === playerLane;
 
-          if (isInPlayerRow && isSameLane) {
+          // Dashing grants brief invulnerability — a collision that would
+          // normally end the run is ignored while isDashingRef.current is
+          // true. Obstacle sizes/positions themselves are untouched.
+          if (isInPlayerRow && isSameLane && !isDashingRef.current) {
             didCollide = true;
           }
 
@@ -473,7 +572,7 @@ export default function SubwaySurferGame({
         let grabbedOne = false;
 
         for (const powerUp of prevPowerUps) {
-          const newY = powerUp.y + fallSpeedRef.current;
+          const newY = powerUp.y + effectiveFallSpeed;
 
           const isInPlayerRow =
             newY + POWER_UP_SIZE >= currentPlayerY &&
@@ -518,11 +617,14 @@ export default function SubwaySurferGame({
     // above, but we still depend on it so collision checks use the latest
     // lane. powerUpQuestions is stable in practice (default or a prop).
     // findClearLane has a stable identity (empty deps) so including it here
-    // never causes extra re-subscriptions.
+    // never causes extra re-subscriptions. isDashingRef is a ref and
+    // intentionally omitted — its .current is always read fresh.
   }, [playerLane, powerUpQuestions, findClearLane]);
 
   // -------------------------------------------------------------------------
-  // Swipe controls: swipe left/right to change lanes
+  // Swipe controls: swipe left/right to change lanes — each lane swipe also
+  // triggers a dash (dash animation + trail + brief speed burst + brief
+  // invulnerability).
   // -------------------------------------------------------------------------
   const panResponder = useRef(
     PanResponder.create({
@@ -535,9 +637,11 @@ export default function SubwaySurferGame({
         if (gestureState.dx > SWIPE_THRESHOLD) {
           setFacingRight(true);
           setPlayerLane((prevLane) => clampLane(prevLane + 1));
+          startDash();
         } else if (gestureState.dx < -SWIPE_THRESHOLD) {
           setFacingRight(false);
           setPlayerLane((prevLane) => clampLane(prevLane - 1));
+          startDash();
         }
       },
     })
@@ -584,6 +688,8 @@ export default function SubwaySurferGame({
     setSelectedOption(null);
     setQuestionAnswerState('idle');
     setNinjaFrame(0);
+    setIsDashing(false);
+    setDashFrame(0);
   }, []);
 
   // -------------------------------------------------------------------------
@@ -727,9 +833,10 @@ export default function SubwaySurferGame({
           </View>
         ))}
 
-        {/* Player — animated ninja sprite, cycling through NINJA_RUN_FRAMES
-            while the run is active, and mirrored to face the last swipe
-            direction. */}
+        {/* Player — animated ninja sprite. Normally cycles through
+            NINJA_RUN_FRAMES; while isDashing is true it instead shows the
+            one-shot NINJA_DASH_FRAMES with a trail behind it. Mirrored to
+            face the last swipe direction either way. */}
         <View
           style={[
             styles.playerWrap,
@@ -739,8 +846,20 @@ export default function SubwaySurferGame({
             },
           ]}
         >
+          {isDashing && (
+            <Image
+              source={NINJA_DASH_TRAIL}
+              style={styles.dashTrail}
+              resizeMode="contain"
+            />
+          )}
+
           <Image
-            source={NINJA_RUN_FRAMES[ninjaFrame]}
+            source={
+              isDashing
+                ? NINJA_DASH_FRAMES[dashFrame]
+                : NINJA_RUN_FRAMES[ninjaFrame]
+            }
             style={[
               styles.playerSprite,
               { transform: [{ scaleX: facingRight ? 1 : -1 }] },
@@ -910,6 +1029,14 @@ const styles = StyleSheet.create({
   playerSprite: {
     width: PLAYER_SIZE,
     height: PLAYER_SIZE,
+  },
+  // Rendered behind the ninja (declared first in JSX) only while dashing.
+  // Deliberately larger than the ninja (~2x width) and purely decorative —
+  // it has no bearing on collision, lane position, or PLAYER_SIZE.
+  dashTrail: {
+    position: 'absolute',
+    width: 140,
+    height: 90,
   },
   obstacle: {
     position: 'absolute',
