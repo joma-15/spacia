@@ -18,7 +18,11 @@
  * score bonus; a wrong answer or a pass just resumes the run with no
  * penalty. `POWER_UP_QUESTIONS` is a placeholder bank — swap it for real
  * flashcard-derived questions (same shape used in Quizzy) once this game is
- * wired to a folder.
+ * wired to a folder. To answer a power-up question the player must pick one
+ * of the three options — there's no skip. Obstacles and power-ups are both
+ * spawned from inside the same game tick, which picks each one's lane by
+ * checking current positions (and, on ticks where both spawn, each other's
+ * pick) so the two can never land in the same spot or overlap.
  *
  * How it works:
  * - The screen is split into 3 vertical lanes.
@@ -95,6 +99,9 @@ const INITIAL_FALL_SPEED = 5; // pixels per tick
 const SPAWN_INTERVAL_MS = 1200; // how often a new obstacle appears
 const POWER_UP_SPAWN_INTERVAL_MS = 4500; // how often a power-up appears
 const POWER_UP_BONUS_SCORE = 50; // score bonus for a correct answer
+const MIN_SPAWN_GAP = 250; // minimum vertical clearance an obstacle or
+// power-up must have from anything else already in its lane before it's
+// allowed to spawn there, so the two never land on the same spot or overlap
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,7 +129,7 @@ interface PowerUpQuestion {
   correct: OptionKey;
 }
 
-type QuestionAnswerState = 'idle' | 'correct' | 'wrong' | 'passed';
+type QuestionAnswerState = 'idle' | 'correct' | 'wrong';
 
 interface SubwaySurferGameProps {
   /** Optional — only needed if this instance is being driven by a specific folder context. */
@@ -184,6 +191,21 @@ function clampLane(lane: number): number {
   return lane;
 }
 
+/**
+ * Returns [0, 1, ..., LANE_COUNT - 1] shuffled into a random order. Spawn
+ * logic walks lanes in this order and stops at the first one that's clear,
+ * which is what keeps obstacles and power-ups from ever spawning on top of
+ * each other while still feeling random.
+ */
+function shuffleLanes(): number[] {
+  const lanes = Array.from({ length: LANE_COUNT }, (_, i) => i);
+  for (let i = lanes.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
+  }
+  return lanes;
+}
+
 function pickRandomQuestion(bank: PowerUpQuestion[]): PowerUpQuestion {
   return bank[Math.floor(Math.random() * bank.length)];
 }
@@ -239,6 +261,25 @@ export default function SubwaySurferGame({
   const nextObstacleId = useRef<number>(0);
   const nextPowerUpId = useRef<number>(0);
 
+  // Mirrors of the current obstacles/power-ups arrays, read by the spawn
+  // placement logic inside the tick loop below.
+  const obstaclesRef = useRef<Obstacle[]>([]);
+  useEffect(() => {
+    obstaclesRef.current = obstacles;
+  }, [obstacles]);
+
+  const powerUpsRef = useRef<PowerUp[]>([]);
+  useEffect(() => {
+    powerUpsRef.current = powerUps;
+  }, [powerUps]);
+
+  // How long (ms) since an obstacle / power-up last spawned. These count up
+  // inside the single game tick below instead of via separate setInterval
+  // timers, so obstacle and power-up spawns are decided in one synchronous
+  // step each tick and can never race each other into the same lane.
+  const obstacleSpawnTimerRef = useRef<number>(0);
+  const powerUpSpawnTimerRef = useRef<number>(0);
+
   // Ref mirrors so interval callbacks (set up once) never read stale state.
   const gameOverRef = useRef<boolean>(false);
   useEffect(() => {
@@ -255,8 +296,8 @@ export default function SubwaySurferGame({
     gameAreaHeightRef.current = gameAreaHeight;
   }, [gameAreaHeight]);
 
-  // A single flag both the tick loop and spawn timers check before doing
-  // anything — true only while the run should actually be moving.
+  // A single flag the tick loop checks before doing anything — true only
+  // while the run should actually be moving.
   const isRunningRef = useRef<boolean>(true);
   useEffect(() => {
     isRunningRef.current = !gameOverRef.current && !pausedRef.current;
@@ -277,10 +318,40 @@ export default function SubwaySurferGame({
     });
   }, [router]);
 
+  /**
+   * Finds a lane for a new item spawning at `spawnY`, skipping any lane
+   * where something in `blockerLists` sits within MIN_SPAWN_GAP of that
+   * point, and skipping `excludeLane` outright (used so a power-up and an
+   * obstacle spawning on the same tick can't both claim the same lane).
+   * Returns null if no lane is currently clear.
+   */
+  const findClearLane = useCallback(
+    (
+      spawnY: number,
+      blockerLists: { lane: number; y: number }[][],
+      excludeLane: number | null,
+    ): number | null => {
+      for (const lane of shuffleLanes()) {
+        if (lane === excludeLane) continue;
+        const blocked = blockerLists.some((list) =>
+          list.some(
+            (item) =>
+              item.lane === lane && Math.abs(item.y - spawnY) < MIN_SPAWN_GAP,
+          ),
+        );
+        if (!blocked) return lane;
+      }
+      return null;
+    },
+    [],
+  );
+
   // -------------------------------------------------------------------------
-  // Game loop: moves obstacles + power-ups down, checks collisions, updates
-  // score. Fully frozen while `isRunningRef.current` is false (game over or
-  // a question is being shown).
+  // Game loop: moves obstacles + power-ups down, checks collisions, spawns
+  // new ones, and updates score — all in a single tick so spawn placement
+  // is decided synchronously and the two types can never overlap or land in
+  // the same spot. Fully frozen while `isRunningRef.current` is false (game
+  // over or a question is being shown).
   // -------------------------------------------------------------------------
   useEffect(() => {
     const tickInterval = setInterval(() => {
@@ -291,6 +362,39 @@ export default function SubwaySurferGame({
 
       const currentPlayerY =
         gameAreaHeightRef.current - PLAYER_BOTTOM_OFFSET - PLAYER_SIZE;
+
+      // --- Decide this tick's spawns up front, synchronously, so the two
+      // decisions can see each other and never claim the same lane. ---
+      obstacleSpawnTimerRef.current += GAME_TICK_MS;
+      powerUpSpawnTimerRef.current += GAME_TICK_MS;
+
+      let obstacleSpawnLane: number | null = null;
+      let powerUpSpawnLane: number | null = null;
+
+      const wantsObstacleSpawn =
+        obstacleSpawnTimerRef.current >= SPAWN_INTERVAL_MS;
+      const wantsPowerUpSpawn =
+        powerUpSpawnTimerRef.current >= POWER_UP_SPAWN_INTERVAL_MS;
+
+      // Power-ups are rarer, so give them first pick of a clear lane; the
+      // obstacle spawn (below) then avoids whichever lane that just took.
+      if (wantsPowerUpSpawn) {
+        powerUpSpawnTimerRef.current -= POWER_UP_SPAWN_INTERVAL_MS;
+        powerUpSpawnLane = findClearLane(
+          -POWER_UP_SIZE,
+          [obstaclesRef.current, powerUpsRef.current],
+          null,
+        );
+      }
+
+      if (wantsObstacleSpawn) {
+        obstacleSpawnTimerRef.current -= SPAWN_INTERVAL_MS;
+        obstacleSpawnLane = findClearLane(
+          -OBSTACLE_HEIGHT,
+          [powerUpsRef.current],
+          powerUpSpawnLane,
+        );
+      }
 
       // --- Obstacles: falling down, can end the game ---
       setObstacles((prevObstacles) => {
@@ -312,6 +416,14 @@ export default function SubwaySurferGame({
           if (newY < gameAreaHeightRef.current) {
             updated.push({ ...obstacle, y: newY });
           }
+        }
+
+        if (obstacleSpawnLane !== null) {
+          updated.push({
+            id: nextObstacleId.current++,
+            lane: obstacleSpawnLane,
+            y: -OBSTACLE_HEIGHT,
+          });
         }
 
         if (didCollide) {
@@ -346,6 +458,14 @@ export default function SubwaySurferGame({
           }
         }
 
+        if (powerUpSpawnLane !== null) {
+          updated.push({
+            id: nextPowerUpId.current++,
+            lane: powerUpSpawnLane,
+            y: -POWER_UP_SIZE,
+          });
+        }
+
         if (grabbedOne) {
           setSelectedOption(null);
           setQuestionAnswerState('idle');
@@ -363,48 +483,9 @@ export default function SubwaySurferGame({
     // playerLane is read fresh each tick via the state setter callbacks
     // above, but we still depend on it so collision checks use the latest
     // lane. powerUpQuestions is stable in practice (default or a prop).
-  }, [playerLane, powerUpQuestions]);
-
-  // -------------------------------------------------------------------------
-  // Spawning: adds a new obstacle in a random lane every SPAWN_INTERVAL_MS
-  // -------------------------------------------------------------------------
-  useEffect(() => {
-    const spawnInterval = setInterval(() => {
-      if (!isRunningRef.current) return;
-
-      const randomLane = Math.floor(Math.random() * LANE_COUNT);
-      const newObstacle: Obstacle = {
-        id: nextObstacleId.current++,
-        lane: randomLane,
-        y: -OBSTACLE_HEIGHT,
-      };
-
-      setObstacles((prev) => [...prev, newObstacle]);
-    }, SPAWN_INTERVAL_MS);
-
-    return () => clearInterval(spawnInterval);
-  }, []);
-
-  // -------------------------------------------------------------------------
-  // Spawning: adds a new power-up in a random lane every
-  // POWER_UP_SPAWN_INTERVAL_MS
-  // -------------------------------------------------------------------------
-  useEffect(() => {
-    const spawnInterval = setInterval(() => {
-      if (!isRunningRef.current) return;
-
-      const randomLane = Math.floor(Math.random() * LANE_COUNT);
-      const newPowerUp: PowerUp = {
-        id: nextPowerUpId.current++,
-        lane: randomLane,
-        y: -POWER_UP_SIZE,
-      };
-
-      setPowerUps((prev) => [...prev, newPowerUp]);
-    }, POWER_UP_SPAWN_INTERVAL_MS);
-
-    return () => clearInterval(spawnInterval);
-  }, []);
+    // findClearLane has a stable identity (empty deps) so including it here
+    // never causes extra re-subscriptions.
+  }, [playerLane, powerUpQuestions, findClearLane]);
 
   // -------------------------------------------------------------------------
   // Swipe controls: swipe left/right to change lanes
@@ -444,11 +525,6 @@ export default function SubwaySurferGame({
     [activeQuestion, questionAnswerState],
   );
 
-  const handlePass = useCallback(() => {
-    if (!activeQuestion || questionAnswerState !== 'idle') return;
-    setQuestionAnswerState('passed');
-  }, [activeQuestion, questionAnswerState]);
-
   const handleContinueAfterQuestion = useCallback(() => {
     setActiveQuestion(null);
     setSelectedOption(null);
@@ -464,6 +540,8 @@ export default function SubwaySurferGame({
     setScore(0);
     setPlayerLane(1);
     fallSpeedRef.current = INITIAL_FALL_SPEED;
+    obstacleSpawnTimerRef.current = 0;
+    powerUpSpawnTimerRef.current = 0;
     setGameOver(false);
     setActiveQuestion(null);
     setSelectedOption(null);
@@ -637,12 +715,6 @@ export default function SubwaySurferGame({
                 {OPTION_KEYS.map(renderQuestionOption)}
               </View>
 
-              {questionAnswerState === 'idle' && (
-                <Pressable style={styles.passButton} onPress={handlePass}>
-                  <Text style={styles.passButtonText}>Pass</Text>
-                </Pressable>
-              )}
-
               {questionAnswerState !== 'idle' && (
                 <>
                   <Text
@@ -659,7 +731,6 @@ export default function SubwaySurferGame({
                     {questionAnswerState === 'correct' &&
                       `Correct! +${POWER_UP_BONUS_SCORE} score`}
                     {questionAnswerState === 'wrong' && 'Not quite!'}
-                    {questionAnswerState === 'passed' && 'Skipped — back to the run.'}
                   </Text>
                   <Pressable
                     style={styles.continueButton}
@@ -946,17 +1017,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flexShrink: 1,
     flex: 1,
-  },
-  passButton: {
-    marginTop: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-  },
-  passButtonText: {
-    color: THEME.textSecondary,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
   questionFeedback: {
     marginTop: 18,
