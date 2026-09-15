@@ -176,10 +176,6 @@ const HIGH_SCORE_SPEED_BONUS_PER_POINT = 0.0008; // each point of your
 const MAX_HIGH_SCORE_SPEED_BONUS = 6; // cap on how much the high-score
 // bonus above can add to the starting speed, however high your best score gets
 
-const DASH_SPEED_MULTIPLIER = 1.6; // obstacles/power-ups move this much
-// faster (relative to the current fall speed) for the brief duration of a
-// dash, to sell the "burst of speed" feeling. Set to 1 to disable.
-
 /**
  * The fall speed a fresh run should start at, given the player's all-time
  * best score. Centralized here so both the initial ref value and

@@ -48,7 +48,7 @@ export const GAME_CATEGORIES: GameCategory[] = [
   {
     id: 'ninja-rush',
     title: 'Ninja Rush',
-    image: require(`${BASE_PATH}/spacia-rush.png`),
+    image: require(`${BASE_PATH}/ninja-rush.png`),
     tint: '#E86A92',
     route: '/games/NinjaRush',
     categories: ['singleplayer', 'multiplayer'],
