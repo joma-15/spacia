@@ -148,24 +148,25 @@ const NINJA_DASH_TRAIL = require("../../../../assets/images/ninja-dash-trail.png
 const POWER_UP_SIZE = 70; // small circle, deliberately smaller than obstacles
 
 const GAME_TICK_MS = 16; // ~60fps
-const SPAWN_INTERVAL_MS = 1200; // how often a new obstacle appears
-const POWER_UP_SPAWN_INTERVAL_MS = 4500; // how often a power-up appears
+const SCORE_INTERVAL_MS = 100;
+const POWER_UP_SPAWN_INTERVAL_MS = 8000; // how often a power-up appears
 const POWER_UP_BONUS_SCORE = 50; // score bonus for a correct answer
 const MIN_SPAWN_GAP = 250; // minimum vertical clearance an obstacle or
 // power-up must have from anything else already in its lane before it's
 // allowed to spawn there, so the two never land on the same spot or overlap
+
+//game speed
+// const INITIAL_SPAWN_INTERVAL_MS = 1200;
+// const MIN_SPAWN_INTERVAL_MS = 450;
+
+const INITIAL_SPAWN_INTERVAL_MS = 1000;
+const MIN_SPAWN_INTERVAL_MS = 450;
 
 // ---------------------------------------------------------------------------
 // Difficulty progression knobs — kept together and named so they're easy to
 // find and retune later without hunting through the tick loop.
 // ---------------------------------------------------------------------------
 
-const INITIAL_FALL_SPEED = 5; // pixels/tick a brand new run starts at
-// (before any high-score bonus is applied — see getStartingFallSpeed below)
-const MAX_FALL_SPEED = 16; // hard cap so a long run never becomes literally
-// unplayable, no matter how long you survive
-
-const FALL_SPEED_RAMP_PER_TICK = 0.002; // how much faster obstacles/
 // power-ups get every single tick just from surviving in the *current* run
 
 const HIGH_SCORE_SPEED_BONUS_PER_POINT = 0.0008; // each point of your
@@ -299,6 +300,26 @@ function pickRandomQuestion(bank: PowerUpQuestion[]): PowerUpQuestion {
   return bank[Math.floor(Math.random() * bank.length)];
 }
 
+//for speed progression
+const INITIAL_FALL_SPEED = 5;
+const MAX_FALL_SPEED = 20;
+
+const getDifficulty = (score: number) => {
+  const level = Math.floor(score / 100);
+
+  const fallSpeed = Math.min(INITIAL_FALL_SPEED + level * 0.5, MAX_FALL_SPEED);
+
+  const spawnInterval = Math.max(
+    INITIAL_SPAWN_INTERVAL_MS - level * 80,
+    MIN_SPAWN_INTERVAL_MS,
+  );
+
+  return {
+    fallSpeed,
+    spawnInterval,
+  };
+};
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -347,6 +368,7 @@ export default function SubwaySurferGame({
   // Ref mirror of score, read once at game-over time to update highScore
   // without needing `score` in that effect's dependency array.
   const scoreRef = useRef<number>(0);
+  const scoreTimerRef = useRef<number>(0);
   useEffect(() => {
     scoreRef.current = score;
   }, [score]);
@@ -572,20 +594,11 @@ export default function SubwaySurferGame({
     const tickInterval = setInterval(() => {
       if (!isRunningRef.current) return;
 
-      // Gradually speed up the game the longer you survive, capped at
-      // MAX_FALL_SPEED so a very long run never becomes unplayable.
-      fallSpeedRef.current = Math.min(
-        fallSpeedRef.current + FALL_SPEED_RAMP_PER_TICK,
-        MAX_FALL_SPEED,
-      );
+      // Difficulty is based directly on the current score.
+      const { fallSpeed, spawnInterval } = getDifficulty(scoreRef.current);
 
-      // While dashing, obstacles/power-ups move faster to sell the burst of
-      // speed. This only affects this tick's movement math — it never
-      // touches fallSpeedRef itself, so the normal difficulty ramp-up isn't
-      // disturbed once the dash ends.
-      const effectiveFallSpeed = isDashingRef.current
-        ? fallSpeedRef.current * DASH_SPEED_MULTIPLIER
-        : fallSpeedRef.current;
+      // While dashing, obstacles/power-ups move faster.
+      const effectiveFallSpeed = fallSpeed
 
       const currentPlayerY =
         gameAreaHeightRef.current - PLAYER_BOTTOM_OFFSET - PLAYER_SIZE;
@@ -599,8 +612,8 @@ export default function SubwaySurferGame({
       let obstacleSpawnLane: number | null = null;
       let powerUpSpawnLane: number | null = null;
 
-      const wantsObstacleSpawn =
-        obstacleSpawnTimerRef.current >= SPAWN_INTERVAL_MS;
+      // spawnInterval was already calculated above from scoreRef.current
+      const wantsObstacleSpawn = obstacleSpawnTimerRef.current >= spawnInterval;
       const wantsPowerUpSpawn =
         powerUpSpawnTimerRef.current >= POWER_UP_SPAWN_INTERVAL_MS;
 
@@ -616,7 +629,7 @@ export default function SubwaySurferGame({
       }
 
       if (wantsObstacleSpawn) {
-        obstacleSpawnTimerRef.current -= SPAWN_INTERVAL_MS;
+        obstacleSpawnTimerRef.current -= spawnInterval;
         obstacleSpawnLane = findClearLane(
           -OBSTACLE_HEIGHT,
           [powerUpsRef.current],
@@ -707,7 +720,14 @@ export default function SubwaySurferGame({
       });
 
       // Increase score while still alive and not paused
-      setScore((prevScore) => prevScore + 1);
+      // Increase score based on real elapsed game time.
+      // +1 score every 100ms = approximately 10 points per second.
+      scoreTimerRef.current += GAME_TICK_MS;
+
+      if (scoreTimerRef.current >= SCORE_INTERVAL_MS) {
+        scoreTimerRef.current -= SCORE_INTERVAL_MS;
+        setScore((prevScore) => prevScore + 1);
+      }
     }, GAME_TICK_MS);
 
     return () => clearInterval(tickInterval);
@@ -776,6 +796,7 @@ export default function SubwaySurferGame({
     setObstacles([]);
     setPowerUps([]);
     setScore(0);
+    scoreTimerRef.current = 0;
     setPlayerLane(1);
     setFacingRight(true);
     // Start the new run's speed based on the best score reached so far this
