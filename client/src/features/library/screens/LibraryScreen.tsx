@@ -22,8 +22,15 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import {
+  BannerAd,
+  BannerAdSize,
+  TestIds,
+} from "react-native-google-mobile-ads";
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 import { useLibrary } from "../hooks/useLibrary";
@@ -39,7 +46,6 @@ import SectionHeader from "../components/SectionHeader";
 // ── Theme ─────────────────────────────────────────────────────────────────────
 import { THEME } from "../theme";
 import { useAddFolder } from "@/shared/context/AddFolderContext";
-
 
 // The nav bar is a fixed height — we need this to add padding below the scroll
 // content so the last item isn't hidden behind the bar.
@@ -92,7 +98,7 @@ export default function LibraryScreen() {
           style: "destructive",
           onPress: () => deleteAllFolders(),
         },
-      ]
+      ],
     );
   };
 
@@ -125,7 +131,18 @@ export default function LibraryScreen() {
         />
 
         {/* ── "My Subjects" heading + folder count + Delete All ── */}
-        <SectionHeader count={filteredFolders.length} onDeleteAll={handleDeleteAll} />
+        <SectionHeader
+          count={filteredFolders.length}
+          onDeleteAll={handleDeleteAll}
+        />
+
+        {/* ── AdMob test banner ── */}
+        <View style={styles.adContainer}>
+          <BannerAd
+            unitId={TestIds.BANNER}
+            size={BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER}
+          />
+        </View>
 
         {/* ── Folder grid OR skeleton loading OR empty state ── */}
         {loading ? (
@@ -160,5 +177,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === "android" ? 20 : 8,
+  },
+
+  adContainer: {
+    alignItems: "center",
+    marginVertical: 16,
   },
 });

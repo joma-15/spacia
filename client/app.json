@@ -27,7 +27,9 @@
       [
         "expo-notifications",
         {
-          "sounds": ["./assets/sounds/alarm.wav"]
+          "sounds": [
+            "./assets/sounds/alarm.wav"
+          ]
         }
       ],
       [
@@ -40,7 +42,8 @@
         }
       ],
       "expo-sqlite",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,
