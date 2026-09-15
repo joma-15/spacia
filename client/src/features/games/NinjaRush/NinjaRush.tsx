@@ -58,7 +58,7 @@
  * obstacle/power-up positions, checks collisions, and spawns new ones.
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -67,42 +67,42 @@ import {
   PanResponder,
   Pressable,
   Image,
-} from 'react-native';
+} from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
-} from 'react-native-safe-area-context';
-import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAssetPreload } from './hooks/useAssetPreload';
-import LoadingOverlay from './components/LoadingOverlay';
+} from "react-native-safe-area-context";
+import { MaterialCommunityIcons as Icon } from "@expo/vector-icons";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useAssetPreload } from "./hooks/useAssetPreload";
+import LoadingOverlay from "./components/LoadingOverlay";
 
 // ---------------------------------------------------------------------------
 // Spacia theme tokens — mirrors the shared THEME object used across the app
 // ---------------------------------------------------------------------------
 
 const THEME = {
-  background: '#0D1F17',
-  surface: '#16281F', // card surface, slightly lighter than bg
-  surfaceAlt: '#1C2F25', // secondary card / divider surface
-  accent: '#34D399', // primary green accent (player, buttons, highlights)
-  accentDim: 'rgba(52, 211, 153, 0.18)', // soft accent fill
-  obstacle: '#2E4237', // muted card-like obstacle color
-  obstacleBorder: 'rgba(52, 211, 153, 0.25)',
-  powerUp: '#FBBF24', // gold, so it reads distinctly from obstacles
-  powerUpGlow: 'rgba(251, 191, 36, 0.35)',
-  danger: '#F87171',
-  textPrimary: '#FFFFFF',
-  textSecondary: 'rgba(255, 255, 255, 0.6)',
-  overlay: 'rgba(13, 31, 23, 0.85)',
-  divider: 'rgba(255, 255, 255, 0.08)',
+  background: "#0D1F17",
+  surface: "#16281F", // card surface, slightly lighter than bg
+  surfaceAlt: "#1C2F25", // secondary card / divider surface
+  accent: "#34D399", // primary green accent (player, buttons, highlights)
+  accentDim: "rgba(52, 211, 153, 0.18)", // soft accent fill
+  obstacle: "#2E4237", // muted card-like obstacle color
+  obstacleBorder: "rgba(52, 211, 153, 0.25)",
+  powerUp: "#FBBF24", // gold, so it reads distinctly from obstacles
+  powerUpGlow: "rgba(251, 191, 36, 0.35)",
+  danger: "#F87171",
+  textPrimary: "#FFFFFF",
+  textSecondary: "rgba(255, 255, 255, 0.6)",
+  overlay: "rgba(13, 31, 23, 0.85)",
+  divider: "rgba(255, 255, 255, 0.08)",
 };
 
 // ---------------------------------------------------------------------------
 // Constants — tweak these to change game feel
 // ---------------------------------------------------------------------------
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const LANE_COUNT = 3;
 const LANE_WIDTH = SCREEN_WIDTH / LANE_COUNT;
@@ -110,18 +110,18 @@ const LANE_WIDTH = SCREEN_WIDTH / LANE_COUNT;
 const PLAYER_SIZE = 80;
 const PLAYER_BOTTOM_OFFSET = 100; // distance from bottom of the game area
 
-const OBSTACLE_WIDTH = 50;
-const OBSTACLE_HEIGHT = 50;
+const OBSTACLE_WIDTH = 100;
+const OBSTACLE_HEIGHT = 100;
 
 // Frames for the ninja while moving — swapped through in sequence to
 // produce a running animation for the player sprite.
 const NINJA_RUN_FRAMES = [
-  require('../../../../assets/images/ninja-run-1.png'),
-  require('../../../../assets/images/ninja-run-2.png'),
-  require('../../../../assets/images/ninja-run-3.png'),
-  require('../../../../assets/images/ninja-run-4.png'),
-  require('../../../../assets/images/ninja-run-5.png'),
-  require('../../../../assets/images/ninja-run-6.png'),
+  require("../../../../assets/images/ninja-run-1.png"),
+  require("../../../../assets/images/ninja-run-2.png"),
+  require("../../../../assets/images/ninja-run-3.png"),
+  require("../../../../assets/images/ninja-run-4.png"),
+  require("../../../../assets/images/ninja-run-5.png"),
+  require("../../../../assets/images/ninja-run-6.png"),
 ];
 const NINJA_FRAME_INTERVAL_MS = 100; // how fast the run cycle animates
 
@@ -129,15 +129,18 @@ const NINJA_FRAME_INTERVAL_MS = 100; // how fast the run cycle animates
 // Kept entirely independent of NINJA_RUN_FRAMES so the normal run cycle is
 // never touched by the dash.
 const NINJA_DASH_FRAMES = [
-  require('../../../../assets/images/ninja-dash-1.png'),
-  require('../../../../assets/images/ninja-dash-2.png'),
-  require('../../../../assets/images/ninja-dash-3.png'),
+  require("../../../../assets/images/ninja-dash-1.png"),
+  require("../../../../assets/images/ninja-dash-2.png"),
+  require("../../../../assets/images/ninja-dash-3.png"),
 ];
 const NINJA_DASH_FRAME_INTERVAL_MS = 60; // fast — the dash should feel snappy
 // Purely visual effect rendered behind the ninja while dashing. Not part of
 // the ninja sprite itself and never affects collision, lane position, or
 // player size.
-const NINJA_DASH_TRAIL = require('../../../../assets/images/ninja-dash-trail.png');
+const NINJA_DASH_TRAIL = require("../../../../assets/images/ninja-dash-trail.png");
+
+//sprite for obstacle
+const OBSTACLE_OBJECT = require("@/assets/images/obstacle1.png");
 
 const POWER_UP_SIZE = 36; // small circle, deliberately smaller than obstacles
 
@@ -204,7 +207,7 @@ interface PowerUp {
   y: number;
 }
 
-type OptionKey = 'A' | 'B' | 'C';
+type OptionKey = "A" | "B" | "C";
 
 interface PowerUpQuestion {
   question: string;
@@ -212,7 +215,7 @@ interface PowerUpQuestion {
   correct: OptionKey;
 }
 
-type QuestionAnswerState = 'idle' | 'correct' | 'wrong';
+type QuestionAnswerState = "idle" | "correct" | "wrong";
 
 interface SubwaySurferGameProps {
   /** Optional — only needed if this instance is being driven by a specific folder context. */
@@ -226,34 +229,34 @@ interface SubwaySurferGameProps {
   powerUpQuestions?: PowerUpQuestion[];
 }
 
-const OPTION_KEYS: OptionKey[] = ['A', 'B', 'C'];
+const OPTION_KEYS: OptionKey[] = ["A", "B", "C"];
 
 // Placeholder question bank — replace with real content as needed.
 const DEFAULT_POWER_UP_QUESTIONS: PowerUpQuestion[] = [
   {
-    question: 'What is the capital of the Philippines?',
-    options: { A: 'Cebu City', B: 'Manila', C: 'Davao City' },
-    correct: 'B',
+    question: "What is the capital of the Philippines?",
+    options: { A: "Cebu City", B: "Manila", C: "Davao City" },
+    correct: "B",
   },
   {
-    question: 'Which planet is known as the Red Planet?',
-    options: { A: 'Venus', B: 'Jupiter', C: 'Mars' },
-    correct: 'C',
+    question: "Which planet is known as the Red Planet?",
+    options: { A: "Venus", B: "Jupiter", C: "Mars" },
+    correct: "C",
   },
   {
-    question: 'What is 7 x 8?',
-    options: { A: '54', B: '56', C: '64' },
-    correct: 'B',
+    question: "What is 7 x 8?",
+    options: { A: "54", B: "56", C: "64" },
+    correct: "B",
   },
   {
-    question: 'Which gas do plants absorb from the air?',
-    options: { A: 'Oxygen', B: 'Nitrogen', C: 'Carbon dioxide' },
-    correct: 'C',
+    question: "Which gas do plants absorb from the air?",
+    options: { A: "Oxygen", B: "Nitrogen", C: "Carbon dioxide" },
+    correct: "C",
   },
   {
-    question: 'How many sides does a hexagon have?',
-    options: { A: '5', B: '6', C: '7' },
-    correct: 'B',
+    question: "How many sides does a hexagon have?",
+    options: { A: "5", B: "6", C: "7" },
+    correct: "B",
   },
 ];
 
@@ -366,7 +369,7 @@ export default function SubwaySurferGame({
   );
   const [selectedOption, setSelectedOption] = useState<OptionKey | null>(null);
   const [questionAnswerState, setQuestionAnswerState] =
-    useState<QuestionAnswerState>('idle');
+    useState<QuestionAnswerState>("idle");
 
   // Which frame of the ninja run-cycle is currently showing. Cycles through
   // NINJA_RUN_FRAMES on a timer, pausing whenever the run itself is paused
@@ -439,7 +442,8 @@ export default function SubwaySurferGame({
   // game never ticks before every sprite frame is decoded.
   const isRunningRef = useRef<boolean>(false);
   useEffect(() => {
-    isRunningRef.current = assetsReady && !gameOverRef.current && !pausedRef.current;
+    isRunningRef.current =
+      assetsReady && !gameOverRef.current && !pausedRef.current;
   }, [assetsReady, gameOver, activeQuestion]);
 
   // -------------------------------------------------------------------------
@@ -505,13 +509,13 @@ export default function SubwaySurferGame({
   // to the shared folder picker (which routes back to this screen after).
   // -------------------------------------------------------------------------
   const handleBack = useCallback(() => {
-    router.replace('/(tabs)/game');
+    router.replace("/(tabs)/game");
   }, [router]);
 
   const handleChangeFolder = useCallback(() => {
     router.navigate({
-      pathname: '/games/SelectionWizard',
-      params: { gameRoute: '/games/SubwaySurfer' },
+      pathname: "/games/SelectionWizard",
+      params: { gameRoute: "/games/SubwaySurfer" },
     });
   }, [router]);
 
@@ -692,7 +696,7 @@ export default function SubwaySurferGame({
 
         if (grabbedOne) {
           setSelectedOption(null);
-          setQuestionAnswerState('idle');
+          setQuestionAnswerState("idle");
           setActiveQuestion(pickRandomQuestion(powerUpQuestions));
         }
 
@@ -735,7 +739,7 @@ export default function SubwaySurferGame({
           startDash();
         }
       },
-    })
+    }),
   ).current;
 
   // -------------------------------------------------------------------------
@@ -743,11 +747,11 @@ export default function SubwaySurferGame({
   // -------------------------------------------------------------------------
   const handleSelectOption = useCallback(
     (key: OptionKey) => {
-      if (!activeQuestion || questionAnswerState !== 'idle') return;
+      if (!activeQuestion || questionAnswerState !== "idle") return;
 
       setSelectedOption(key);
       const isCorrect = key === activeQuestion.correct;
-      setQuestionAnswerState(isCorrect ? 'correct' : 'wrong');
+      setQuestionAnswerState(isCorrect ? "correct" : "wrong");
 
       if (isCorrect) {
         setScore((s) => s + POWER_UP_BONUS_SCORE);
@@ -759,7 +763,7 @@ export default function SubwaySurferGame({
   const handleContinueAfterQuestion = useCallback(() => {
     setActiveQuestion(null);
     setSelectedOption(null);
-    setQuestionAnswerState('idle');
+    setQuestionAnswerState("idle");
   }, []);
 
   // -------------------------------------------------------------------------
@@ -779,7 +783,7 @@ export default function SubwaySurferGame({
     setGameOver(false);
     setActiveQuestion(null);
     setSelectedOption(null);
-    setQuestionAnswerState('idle');
+    setQuestionAnswerState("idle");
     setNinjaFrame(0);
     setIsDashing(false);
     setDashFrame(0);
@@ -823,16 +827,25 @@ export default function SubwaySurferGame({
     const isSelected = selectedOption === key;
     const isCorrectOption = key === activeQuestion.correct;
     const answered =
-      questionAnswerState === 'correct' || questionAnswerState === 'wrong';
+      questionAnswerState === "correct" || questionAnswerState === "wrong";
 
     let optionStyle = styles.questionOption;
     if (answered) {
       if (isCorrectOption) {
-        optionStyle = { ...styles.questionOption, ...styles.questionOptionCorrect };
+        optionStyle = {
+          ...styles.questionOption,
+          ...styles.questionOptionCorrect,
+        };
       } else if (isSelected) {
-        optionStyle = { ...styles.questionOption, ...styles.questionOptionWrong };
+        optionStyle = {
+          ...styles.questionOption,
+          ...styles.questionOptionWrong,
+        };
       } else {
-        optionStyle = { ...styles.questionOption, ...styles.questionOptionDisabled };
+        optionStyle = {
+          ...styles.questionOption,
+          ...styles.questionOptionDisabled,
+        };
       }
     }
 
@@ -840,10 +853,12 @@ export default function SubwaySurferGame({
       <Pressable
         key={key}
         onPress={() => handleSelectOption(key)}
-        disabled={questionAnswerState !== 'idle'}
+        disabled={questionAnswerState !== "idle"}
         style={({ pressed }) => [
           optionStyle,
-          pressed && questionAnswerState === 'idle' && styles.questionOptionPressed,
+          pressed &&
+            questionAnswerState === "idle" &&
+            styles.questionOptionPressed,
         ]}
       >
         <View style={styles.questionOptionLetter}>
@@ -866,7 +881,7 @@ export default function SubwaySurferGame({
   // Render
   // -------------------------------------------------------------------------
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       {!assetsReady && <LoadingOverlay />}
       {renderTopBar()}
 
@@ -902,8 +917,9 @@ export default function SubwaySurferGame({
 
         {/* Obstacles */}
         {obstacles.map((obstacle) => (
-          <View
+          <Image
             key={`obstacle-${obstacle.id}`}
+            source={OBSTACLE_OBJECT}
             style={[
               styles.obstacle,
               {
@@ -911,6 +927,7 @@ export default function SubwaySurferGame({
                 top: obstacle.y,
               },
             ]}
+            resizeMode="contain"
           />
         ))}
 
@@ -961,7 +978,7 @@ export default function SubwaySurferGame({
                 styles.playerSprite,
                 {
                   transform: [{ scaleX: facingRight ? 1 : -1 }],
-                  position: i === 0 ? 'relative' : 'absolute',
+                  position: i === 0 ? "relative" : "absolute",
                   opacity: !isDashing && ninjaFrame === i ? 1 : 0,
                 },
               ]}
@@ -979,7 +996,7 @@ export default function SubwaySurferGame({
                 styles.playerSprite,
                 {
                   transform: [{ scaleX: facingRight ? 1 : -1 }],
-                  position: 'absolute',
+                  position: "absolute",
                   opacity: isDashing && dashFrame === i ? 1 : 0,
                 },
               ]}
@@ -1004,22 +1021,22 @@ export default function SubwaySurferGame({
                 {OPTION_KEYS.map(renderQuestionOption)}
               </View>
 
-              {questionAnswerState !== 'idle' && (
+              {questionAnswerState !== "idle" && (
                 <>
                   <Text
                     style={[
                       styles.questionFeedback,
-                      questionAnswerState === 'correct' && {
+                      questionAnswerState === "correct" && {
                         color: THEME.accent,
                       },
-                      questionAnswerState === 'wrong' && {
+                      questionAnswerState === "wrong" && {
                         color: THEME.danger,
                       },
                     ]}
                   >
-                    {questionAnswerState === 'correct' &&
+                    {questionAnswerState === "correct" &&
                       `Correct! +${POWER_UP_BONUS_SCORE} score`}
-                    {questionAnswerState === 'wrong' && 'Not quite!'}
+                    {questionAnswerState === "wrong" && "Not quite!"}
                   </Text>
                   <Pressable
                     style={styles.continueButton}
@@ -1086,9 +1103,9 @@ export const SubwaySurferScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: THEME.background },
   topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 8,
   },
@@ -1099,29 +1116,29 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.divider,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   topBarButtonPressed: {
     borderColor: THEME.accent,
     backgroundColor: THEME.accentDim,
   },
-  header: { alignItems: 'center', marginTop: 8 },
+  header: { alignItems: "center", marginTop: 8 },
   folderLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: THEME.accent,
     letterSpacing: 1.5,
   },
   gameArea: {
     flex: 1,
     backgroundColor: THEME.background,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   scoreContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: 16,
-    alignSelf: 'center',
+    alignSelf: "center",
     zIndex: 10,
     backgroundColor: THEME.surface,
     paddingHorizontal: 20,
@@ -1129,33 +1146,33 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: THEME.divider,
-    alignItems: 'center',
+    alignItems: "center",
   },
   scoreText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: THEME.accent,
     letterSpacing: 0.3,
   },
   bestScoreText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
     color: THEME.textSecondary,
     marginTop: 2,
   },
   laneDivider: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
     width: 1,
     backgroundColor: THEME.divider,
   },
   playerWrap: {
-    position: 'absolute',
+    position: "absolute",
     width: PLAYER_SIZE,
     height: PLAYER_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   playerSprite: {
     width: PLAYER_SIZE,
@@ -1165,27 +1182,23 @@ const styles = StyleSheet.create({
   // Deliberately larger than the ninja (~2x width) and purely decorative —
   // it has no bearing on collision, lane position, or PLAYER_SIZE.
   dashTrail: {
-    position: 'absolute',
+    position: "absolute",
     width: 140,
     height: 90,
   },
   obstacle: {
-    position: 'absolute',
-    width: OBSTACLE_WIDTH,
-    height: OBSTACLE_HEIGHT,
-    backgroundColor: THEME.obstacle,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: THEME.obstacleBorder,
-  },
+  position: 'absolute',
+  width: OBSTACLE_WIDTH,
+  height: OBSTACLE_HEIGHT,
+},
   powerUp: {
-    position: 'absolute',
+    position: "absolute",
     width: POWER_UP_SIZE,
     height: POWER_UP_SIZE,
     borderRadius: POWER_UP_SIZE / 2,
     backgroundColor: THEME.powerUp,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     shadowColor: THEME.powerUp,
     shadowOpacity: 0.6,
     shadowRadius: 8,
@@ -1193,28 +1206,28 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   gameOverOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: THEME.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   gameOverCard: {
     backgroundColor: THEME.surface,
     borderRadius: 24,
     paddingVertical: 32,
     paddingHorizontal: 36,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
     borderColor: THEME.divider,
-    width: '78%',
+    width: "78%",
   },
   gameOverText: {
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: "800",
     color: THEME.textPrimary,
     marginBottom: 8,
   },
@@ -1225,7 +1238,7 @@ const styles = StyleSheet.create({
   },
   bestScoreCardText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: THEME.accent,
     marginBottom: 24,
   },
@@ -1237,33 +1250,33 @@ const styles = StyleSheet.create({
   },
   restartButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     color: THEME.background,
   },
   // --- Power-up question overlay ---
   questionOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: THEME.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 20,
   },
   questionCard: {
-    width: '100%',
+    width: "100%",
     backgroundColor: THEME.surface,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: THEME.divider,
     padding: 24,
-    alignItems: 'center',
+    alignItems: "center",
   },
   questionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     backgroundColor: THEME.powerUp,
     paddingHorizontal: 12,
@@ -1273,21 +1286,21 @@ const styles = StyleSheet.create({
   },
   questionBadgeText: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: "800",
     color: THEME.background,
     letterSpacing: 1,
   },
   questionText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: THEME.textPrimary,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 20,
   },
-  questionOptionsList: { width: '100%', gap: 10 },
+  questionOptionsList: { width: "100%", gap: 10 },
   questionOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     borderWidth: 1.5,
     borderColor: THEME.divider,
@@ -1306,7 +1319,7 @@ const styles = StyleSheet.create({
   },
   questionOptionWrong: {
     borderColor: THEME.danger,
-    backgroundColor: 'rgba(248, 113, 113, 0.12)',
+    backgroundColor: "rgba(248, 113, 113, 0.12)",
   },
   questionOptionDisabled: { opacity: 0.45 },
   questionOptionLetter: {
@@ -1315,25 +1328,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1.5,
     borderColor: THEME.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   questionOptionLetterText: {
     color: THEME.textPrimary,
-    fontWeight: '800',
+    fontWeight: "800",
     fontSize: 12,
   },
   questionOptionText: {
     color: THEME.textPrimary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     flexShrink: 1,
     flex: 1,
   },
   questionFeedback: {
     marginTop: 18,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     color: THEME.textSecondary,
   },
   continueButton: {
@@ -1345,7 +1358,7 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     color: THEME.background,
-    fontWeight: '800',
+    fontWeight: "800",
     fontSize: 14,
     letterSpacing: 0.5,
   },
