@@ -113,6 +113,12 @@ const PLAYER_BOTTOM_OFFSET = 100; // distance from bottom of the game area
 const OBSTACLE_WIDTH = 100;
 const OBSTACLE_HEIGHT = 100;
 
+//sprite for obstacle
+const OBSTACLE_OBJECT = require("@/assets/images/obstacle1.png");
+
+//sprite for scroll
+const SCROLL_OBJECT = require("@/assets/images/scroll1.png");
+
 // Frames for the ninja while moving — swapped through in sequence to
 // produce a running animation for the player sprite.
 const NINJA_RUN_FRAMES = [
@@ -139,10 +145,7 @@ const NINJA_DASH_FRAME_INTERVAL_MS = 60; // fast — the dash should feel snappy
 // player size.
 const NINJA_DASH_TRAIL = require("../../../../assets/images/ninja-dash-trail.png");
 
-//sprite for obstacle
-const OBSTACLE_OBJECT = require("@/assets/images/obstacle1.png");
-
-const POWER_UP_SIZE = 36; // small circle, deliberately smaller than obstacles
+const POWER_UP_SIZE = 70; // small circle, deliberately smaller than obstacles
 
 const GAME_TICK_MS = 16; // ~60fps
 const SPAWN_INTERVAL_MS = 1200; // how often a new obstacle appears
@@ -933,8 +936,9 @@ export default function SubwaySurferGame({
 
         {/* Power-ups — small circles */}
         {powerUps.map((powerUp) => (
-          <View
+          <Image
             key={`powerup-${powerUp.id}`}
+            source={SCROLL_OBJECT}
             style={[
               styles.powerUp,
               {
@@ -942,9 +946,9 @@ export default function SubwaySurferGame({
                 top: powerUp.y,
               },
             ]}
-          >
-            <Icon name="star" size={16} color={THEME.background} />
-          </View>
+            resizeMode="contain"
+            fadeDuration={0}
+          />
         ))}
 
         {/* Player — animated ninja sprite. All run and dash frames are
@@ -1187,23 +1191,19 @@ const styles = StyleSheet.create({
     height: 90,
   },
   obstacle: {
-  position: 'absolute',
-  width: OBSTACLE_WIDTH,
-  height: OBSTACLE_HEIGHT,
-},
+    position: "absolute",
+    width: OBSTACLE_WIDTH,
+    height: OBSTACLE_HEIGHT,
+  },
   powerUp: {
     position: "absolute",
     width: POWER_UP_SIZE,
     height: POWER_UP_SIZE,
-    borderRadius: POWER_UP_SIZE / 2,
-    backgroundColor: THEME.powerUp,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: THEME.powerUp,
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
+    shadowColor: "#FFFFFF",
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 5,
+    elevation: 8,
   },
   gameOverOverlay: {
     position: "absolute",
