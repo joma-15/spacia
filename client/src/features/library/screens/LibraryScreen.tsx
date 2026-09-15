@@ -26,12 +26,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  BannerAd,
-  BannerAdSize,
-  TestIds,
-} from "react-native-google-mobile-ads";
-
 // ── Hook ──────────────────────────────────────────────────────────────────────
 import { useLibrary } from "../hooks/useLibrary";
 
@@ -136,14 +130,6 @@ export default function LibraryScreen() {
           onDeleteAll={handleDeleteAll}
         />
 
-        {/* ── AdMob test banner ── */}
-        <View style={styles.adContainer}>
-          <BannerAd
-            unitId={TestIds.BANNER}
-            size={BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER}
-          />
-        </View>
-
         {/* ── Folder grid OR skeleton loading OR empty state ── */}
         {loading ? (
           <FolderSkeletonGrid />
@@ -177,10 +163,5 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === "android" ? 20 : 8,
-  },
-
-  adContainer: {
-    alignItems: "center",
-    marginVertical: 16,
   },
 });

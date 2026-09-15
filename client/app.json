@@ -56,5 +56,9 @@
       }
     },
     "owner": "marcelhahaha"
+  },
+  
+   "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-6637098218264932~6875967284"
   }
 }

@@ -30,6 +30,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 //   onAddPress: () => void;
 // }
 
+
 /** Animated tab item — handles its own scale + dot-fade per tab */
 const AnimatedTabItem = ({
   item,
@@ -87,6 +88,7 @@ const AnimatedTabItem = ({
 
 const BottomNav = ({ state, navigation, insets }: any) => {
   const { setAddModalVisible } = useAddFolder();
+  const activeTab = state.routes[state.index].name;
 
   return (
     <View
@@ -204,5 +206,9 @@ const styles = StyleSheet.create({
     fontWeight: "300",
     lineHeight: 32,
     marginTop: -2,
+  },
+    adContainer: {
+    alignItems: "center",
+    marginVertical: 16,
   },
 });
