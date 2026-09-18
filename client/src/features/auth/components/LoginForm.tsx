@@ -120,7 +120,7 @@ export default function LoginForm({
         <AuthButton title="Log In" onPress={handleSubmit} loading={submitting} style={styles.submitButton} />
 
         <View style={styles.footerRow}>
-          <Text style={styles.footerText}>Don&apos;t have an account? </Text>
+          <Text style={styles.footerText}>{"Don't have an account? "}</Text>
           <TouchableOpacity onPress={onSwitchToRegister} disabled={submitting}>
             <Text style={styles.footerLink}>Create Account</Text>
           </TouchableOpacity>

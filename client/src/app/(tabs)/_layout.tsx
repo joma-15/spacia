@@ -22,14 +22,21 @@ export default function TabsLayout() {
 
           return (
             <>
-              {activeTab === "library" && (
+              {/* {activeTab === "library" && (
                 <View style={styles.adContainer}>
                   <BannerAd
                     unitId={TestIds.BANNER}
                     size={BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER}
                   />
                 </View>
-              )}
+              )} */}
+
+              <View style={styles.adContainer}>
+                <BannerAd
+                  unitId={TestIds.BANNER}
+                  size={BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER}
+                />
+              </View>
 
               <BottomNav {...props} />
             </>

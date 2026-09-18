@@ -58,7 +58,7 @@ export default function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordForm
     <View>
       <Text style={styles.heading}>Reset your password</Text>
       <Text style={styles.subheading}>
-        Enter the email linked to your account and we&apos;ll send you a reset link.
+        {"Enter the email linked to your account and we'll send you a reset link."}
       </Text>
 
       <AuthInput

@@ -244,7 +244,7 @@ export default function ProfileSidebar() {
                   )}
                 </>
               ) : (
-                <Text style={styles.statusText}>You&apos;re not logged in</Text>
+                <Text style={styles.statusText}>{"You're not logged in"}</Text>
               )}
             </View>
 
