@@ -1,9 +1,18 @@
 /**
  * AiChatScreen.tsx
  * ─────────────────────────────────────────────
- * Root screen for Spacia AI chat:
- * Provides a ChatGPT-like study companion interface where students can
- * select subject folders, ask questions, summarize topics, and generate quizzes.
+ * Root screen for Spacia AI chat.
+ *
+ * Layout strategy (avoids the absolute-positioned BottomNav trap):
+ *  - The screen is a simple flex column: Header → Chat List → Input Bar
+ *  - We listen to keyboard events and store the keyboard height.
+ *  - When the keyboard is closed → paddingBottom = BOTTOM_NAV_HEIGHT + insets.bottom
+ *    so the input bar sits above the bottom nav bar.
+ *  - When the keyboard is open → paddingBottom = keyboardHeight (the actual height the
+ *    keyboard occupies above the bottom edge of the screen).
+ *    On iOS, keyboardEndCoordinates.height already includes the home indicator.
+ *    On Android, we add insets.bottom to compensate for gesture nav bars.
+ *  - No KeyboardAvoidingView is used — it fights with the absolute nav bar.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -11,7 +20,7 @@ import {
   Alert,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
+  KeyboardEvent,
   Platform,
   StyleSheet,
   View,
@@ -45,25 +54,35 @@ export const AiChatScreen: React.FC = () => {
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const [folderModalVisible, setFolderModalVisible] = useState(false);
+
+  // Track keyboard height and visibility
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
 
-  // Monitor keyboard visibility to dynamically clear padding and scroll chat to end
   useEffect(() => {
     const showEvent =
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent =
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-    const showSub = Keyboard.addListener(showEvent, () => {
+    const showSub = Keyboard.addListener(showEvent, (e: KeyboardEvent) => {
+      // e.endCoordinates.height is the keyboard height INCLUDING
+      // the home indicator on iOS. On Android we compensate with insets.bottom.
+      const height =
+        Platform.OS === "android"
+          ? e.endCoordinates.height + insets.bottom
+          : e.endCoordinates.height;
+      setKeyboardHeight(height);
       setIsKeyboardVisible(true);
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      }, Platform.OS === "ios" ? 250 : 50);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
       setIsKeyboardVisible(false);
     });
 
@@ -71,7 +90,14 @@ export const AiChatScreen: React.FC = () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, []);
+  }, [insets.bottom]);
+
+  // Compute the bottom padding for the whole screen content:
+  // ─ Keyboard open  → lift everything by keyboard height so nothing is hidden behind it
+  // ─ Keyboard closed → lift everything above the pinned bottom nav bar
+  const contentBottomPadding = isKeyboardVisible
+    ? keyboardHeight
+    : BOTTOM_NAV_HEIGHT + Math.max(insets.bottom, 8);
 
   // Send message handler (supports both typing input and prompt chips)
   const handleSendMessage = useCallback(
@@ -145,17 +171,6 @@ export const AiChatScreen: React.FC = () => {
     );
   }, []);
 
-  // Dynamic bottom padding calculation using safe area insets:
-  // When typing (keyboard is visible):
-  //   BottomNav is hidden.
-  //   On Android, we apply Math.max(insets.bottom, 0) so gesture/system bars don't cover the textbox.
-  //   On iOS, KeyboardAvoidingView offsets by keyboard height, so container padding is 0.
-  // When idle (keyboard is hidden):
-  //   BottomNav is pinned to the bottom, so we add BOTTOM_NAV_HEIGHT + Math.max(insets.bottom, 8).
-  const dynamicBottomPadding = isKeyboardVisible
-    ? (Platform.OS === "android" ? Math.max(insets.bottom, 0) : 0)
-    : BOTTOM_NAV_HEIGHT + Math.max(insets.bottom, 8);
-
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <StatusBar style="light" />
@@ -167,11 +182,12 @@ export const AiChatScreen: React.FC = () => {
         onNewChat={handleNewChat}
       />
 
-      <KeyboardAvoidingView
-        style={[styles.chatArea, { paddingBottom: dynamicBottomPadding }]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-      >
+      {/*
+        ── Chat area + Input dock in a flex column ──
+        paddingBottom shifts the whole column up by exactly the keyboard
+        height (or the nav bar height when keyboard is closed).
+      */}
+      <View style={[styles.chatArea, { paddingBottom: contentBottomPadding }]}>
         {/* ── Messages List or Empty State ── */}
         {messages.length === 0 ? (
           <EmptyChatState
@@ -218,7 +234,7 @@ export const AiChatScreen: React.FC = () => {
           isThinking={isThinking}
           isKeyboardVisible={isKeyboardVisible}
         />
-      </KeyboardAvoidingView>
+      </View>
 
       {/* ── Folder Selection Modal ── */}
       <FolderSelectModal

@@ -162,7 +162,7 @@ export default function ProfileSidebar() {
           style={styles.proButton}
         >
           <View style={styles.proIconContainer}>
-            <MaterialCommunityIcons name="crown" size={15} color="#FFD54A" />
+            <MaterialCommunityIcons name="crown" size={15} color={colors.background} />
           </View>
 
           <Text style={styles.proBadgeText}>PRO</Text>
