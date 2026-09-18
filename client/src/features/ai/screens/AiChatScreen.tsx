@@ -102,7 +102,7 @@ export const AiChatScreen: React.FC = () => {
   // ─ Keyboard open  → lift everything by keyboard height so nothing is hidden behind it
   // ─ Keyboard closed → lift everything above the pinned bottom nav bar
   const contentBottomPadding = isKeyboardVisible
-    ? Math.max(keyboardHeight - 8, 0)
+    ? Math.max(keyboardHeight - 125, 0)
     : Math.max(BOTTOM_NAV_HEIGHT + Math.max(insets.bottom, 8) - 80, 0);
 
   // Send message handler (supports both typing input and prompt chips)
