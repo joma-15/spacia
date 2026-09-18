@@ -1272,7 +1272,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   restartButtonText: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: "700",
     color: THEME.background,
   },
