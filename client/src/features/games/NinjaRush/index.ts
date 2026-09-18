@@ -1,1 +1,1 @@
-export { default } from './NinjaRush';
+export { default, NinjaRushScreen } from './NinjaRush';
