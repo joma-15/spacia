@@ -25,7 +25,10 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { AI_THEME, generateMockAiResponse } from "../constants";
 import { ChatMessage, SelectedFolderContext } from "../types";
@@ -76,9 +79,12 @@ export const AiChatScreen: React.FC = () => {
           : e.endCoordinates.height;
       setKeyboardHeight(height);
       setIsKeyboardVisible(true);
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, Platform.OS === "ios" ? 250 : 50);
+      setTimeout(
+        () => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        },
+        Platform.OS === "ios" ? 250 : 50,
+      );
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
@@ -96,8 +102,8 @@ export const AiChatScreen: React.FC = () => {
   // ─ Keyboard open  → lift everything by keyboard height so nothing is hidden behind it
   // ─ Keyboard closed → lift everything above the pinned bottom nav bar
   const contentBottomPadding = isKeyboardVisible
-    ? keyboardHeight
-    : BOTTOM_NAV_HEIGHT + Math.max(insets.bottom, 8);
+    ? Math.max(keyboardHeight - 8, 0)
+    : Math.max(BOTTOM_NAV_HEIGHT + Math.max(insets.bottom, 8) - 80, 0);
 
   // Send message handler (supports both typing input and prompt chips)
   const handleSendMessage = useCallback(
