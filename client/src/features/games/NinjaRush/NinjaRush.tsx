@@ -832,7 +832,7 @@ function NinjaRushGame({
               fadeDuration={0}
             />
           ))}
-        </View>
+        </View>z
 
         {/* Power-up question overlay */}
         {activeQuestion && (

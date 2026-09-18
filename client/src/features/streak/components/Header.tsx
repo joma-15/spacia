@@ -29,5 +29,6 @@ const styles = StyleSheet.create({
   title: {
     ...typography.display,
     color: colors.textPrimary,
+    paddingRight: 130,
   },
 });

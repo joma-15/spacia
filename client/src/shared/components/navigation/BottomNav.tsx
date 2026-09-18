@@ -12,8 +12,16 @@
  * which tab was tapped via onTabPress / onAddPress callbacks.
  */
 
-import { useEffect, useRef } from "react";
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  Keyboard,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { NAV_ITEMS } from "@/features/library/constants";
 import { THEME } from "@/features/library/theme";
 import { useAddFolder } from "@/shared/context/AddFolderContext";
@@ -88,6 +96,31 @@ const AnimatedTabItem = ({
 
 const BottomNav = ({ state, navigation, insets }: any) => {
   const { setAddModalVisible } = useAddFolder();
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  if (isKeyboardVisible) {
+    return null;
+  }
+
   const activeTab = state.routes[state.index].name;
 
   return (

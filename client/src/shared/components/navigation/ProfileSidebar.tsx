@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { usePathname } from "expo-router";
+import { usePathname, router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -35,9 +35,13 @@ export default function ProfileSidebar() {
   const [slideAnim] = useState(() => new Animated.Value(DRAWER_WIDTH));
   const [fadeAnim] = useState(() => new Animated.Value(0));
 
-  const isMainTab = ["/library", "/game", "/streak", "/streakcomingsoon", "/payment"].some(
-    (route) => pathname === route || pathname.endsWith(`(tabs)${route}`),
-  );
+  const isMainTab = [
+    "/library",
+    "/game",
+    "/streak",
+    "/streakcomingsoon",
+    "/ai",
+  ].some((route) => pathname === route || pathname.endsWith(`(tabs)${route}`));
 
   const handleClose = React.useCallback(() => {
     Animated.parallel([
@@ -118,10 +122,13 @@ export default function ProfileSidebar() {
 
   useEffect(() => {
     if (!isSidebarOpen || Platform.OS === "web") return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      handleClose();
-      return true;
-    });
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        handleClose();
+        return true;
+      },
+    );
     return () => subscription.remove();
   }, [isSidebarOpen, handleClose]);
 
@@ -139,16 +146,49 @@ export default function ProfileSidebar() {
 
   return (
     <>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Open profile menu"
-        activeOpacity={0.8}
-        hitSlop={10}
-        onPress={openSidebar}
-        style={[styles.profileButton, { top: insets.top + spacing.sm }]}
+      {/* ── Top Header Actions: Pro Button + Profile Button ── */}
+      <View
+        style={[
+          styles.topActionsContainer,
+          { top: insets.top + (Platform.OS === "android" ? 6 : 6) },
+        ]}
       >
-        <MaterialCommunityIcons name="account-circle" size={34} color={colors.accent} />
-      </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Upgrade to Spacia Pro"
+          activeOpacity={0.85}
+          hitSlop={8}
+          onPress={() => router.push("/payment")}
+          style={styles.proButton}
+        >
+          <View style={styles.proIconContainer}>
+            <MaterialCommunityIcons name="crown" size={15} color="#FFD54A" />
+          </View>
+
+          <Text style={styles.proBadgeText}>PRO</Text>
+
+          <MaterialCommunityIcons
+            name="arrow-right"
+            size={15}
+            color={colors.background}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Open profile menu"
+          activeOpacity={0.8}
+          hitSlop={6}
+          onPress={openSidebar}
+          style={styles.profileButton}
+        >
+          <MaterialCommunityIcons
+            name="account-circle"
+            size={30}
+            color={colors.accent}
+          />
+        </TouchableOpacity>
+      </View>
 
       <Modal
         visible={isSidebarOpen}
@@ -174,20 +214,68 @@ export default function ProfileSidebar() {
           >
             <View style={styles.drawerHeader}>
               <Text style={styles.drawerTitle}>Profile</Text>
-              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close profile menu" onPress={handleClose} style={styles.closeButton}>
-                <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Close profile menu"
+                onPress={handleClose}
+                style={styles.closeButton}
+              >
+                <MaterialCommunityIcons
+                  name="close"
+                  size={20}
+                  color={colors.textSecondary}
+                />
               </TouchableOpacity>
             </View>
 
             <View style={styles.accountSection}>
-              <MaterialCommunityIcons name="account-circle" size={82} color={colors.accent} />
-              {isRestoring ? <Text style={styles.statusText}>Loading your profile…</Text> : user ? (
+              <MaterialCommunityIcons
+                name="account-circle"
+                size={82}
+                color={colors.accent}
+              />
+              {isRestoring ? (
+                <Text style={styles.statusText}>Loading your profile…</Text>
+              ) : user ? (
                 <>
                   <Text style={styles.userName}>{user.username}</Text>
-                  {!!user.email && <Text style={styles.email}>{user.email}</Text>}
+                  {!!user.email && (
+                    <Text style={styles.email}>{user.email}</Text>
+                  )}
                 </>
-              ) : <Text style={styles.statusText}>You&apos;re not logged in</Text>}
+              ) : (
+                <Text style={styles.statusText}>You&apos;re not logged in</Text>
+              )}
             </View>
+
+            {/* ── Upgrade to Pro Card inside drawer ── */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => {
+                handleClose();
+                router.push("/payment");
+              }}
+              style={styles.drawerProCard}
+            >
+              <View style={styles.drawerProHeader}>
+                <View style={styles.drawerProIconWrap}>
+                  <MaterialCommunityIcons
+                    name="credit-card-outline"
+                    size={20}
+                    color={colors.accent}
+                  />
+                </View>
+                <View style={styles.drawerProTextWrap}>
+                  <Text style={styles.drawerProTitle}>Spacia Premium</Text>
+                  <Text style={styles.drawerProSubtitle}>
+                    Unlimited AI & study tools
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.drawerProBadge}>
+                <Text style={styles.drawerProBadgeText}>UPGRADE</Text>
+              </View>
+            </TouchableOpacity>
 
             {!isRestoring && (
               <TouchableOpacity
@@ -195,11 +283,25 @@ export default function ProfileSidebar() {
                 accessibilityLabel={user ? "Log out" : "Log in"}
                 activeOpacity={0.85}
                 onPress={user ? handleLogout : handleLogin}
-                style={[styles.actionButton, user ? styles.logoutButton : styles.loginButton]}
+                style={[
+                  styles.actionButton,
+                  user ? styles.logoutButton : styles.loginButton,
+                ]}
                 disabled={pendingLogout}
               >
-                <MaterialCommunityIcons name={user ? "logout" : "login"} size={20} color={user ? colors.danger : colors.background} />
-                <Text style={[styles.actionText, user ? styles.logoutText : styles.loginText]}>{user ? "Log Out" : "Log In"}</Text>
+                <MaterialCommunityIcons
+                  name={user ? "logout" : "login"}
+                  size={20}
+                  color={user ? colors.danger : colors.background}
+                />
+                <Text
+                  style={[
+                    styles.actionText,
+                    user ? styles.logoutText : styles.loginText,
+                  ]}
+                >
+                  {user ? "Log Out" : "Log In"}
+                </Text>
               </TouchableOpacity>
             )}
           </Animated.View>
@@ -217,20 +319,168 @@ export default function ProfileSidebar() {
 }
 
 const styles = StyleSheet.create({
-  profileButton: { position: "absolute", right: spacing.md, zIndex: 100, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(13, 31, 23, 0.9)", borderWidth: 1, borderColor: colors.border, elevation: 6 },
+  topActionsContainer: {
+    position: "absolute",
+    right: spacing.md,
+    zIndex: 100,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  profileButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(13, 31, 23, 0.95)",
+    borderWidth: 1,
+    borderColor: colors.border,
+    elevation: 6,
+  },
+  proButton: {
+    height: 37,
+    minWidth: 84,
+    paddingHorizontal: 7,
+    borderRadius: 19,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: colors.accent,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+    elevation: 8,
+    shadowColor: colors.accent,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  proIconContainer: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.20)",
+  },
+  proBadgeText: {
+    color: colors.background,
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
   modalRoot: { flex: 1, flexDirection: "row", justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.overlay },
-  drawer: { width: DRAWER_WIDTH, height: "100%", backgroundColor: colors.surfaceElevated, borderTopLeftRadius: radius.lg, borderBottomLeftRadius: radius.lg, paddingHorizontal: spacing.lg },
-  drawerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  drawer: {
+    width: DRAWER_WIDTH,
+    height: "100%",
+    backgroundColor: colors.surfaceElevated,
+    borderTopLeftRadius: radius.lg,
+    borderBottomLeftRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  drawerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   drawerTitle: { color: colors.textPrimary, fontSize: 20, fontWeight: "800" },
-  closeButton: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(255,255,255,0.06)" },
-  accountSection: { alignItems: "center", paddingVertical: spacing.xxl },
-  userName: { color: colors.textPrimary, fontSize: 20, fontWeight: "800", marginTop: spacing.md },
-  email: { color: colors.textSecondary, fontSize: 14, marginTop: spacing.xs, textAlign: "center" },
-  statusText: { color: colors.textSecondary, fontSize: 16, fontWeight: "600", marginTop: spacing.md },
-  actionButton: { height: 52, borderRadius: radius.md, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: spacing.sm },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  accountSection: { alignItems: "center", paddingVertical: spacing.xl },
+  userName: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: "800",
+    marginTop: spacing.md,
+  },
+  email: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: spacing.xs,
+    textAlign: "center",
+  },
+  statusText: {
+    color: colors.textSecondary,
+    fontSize: 16,
+    fontWeight: "600",
+    marginTop: spacing.md,
+  },
+  drawerProCard: {
+    backgroundColor: "rgba(52, 211, 153, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(52, 211, 153, 0.3)",
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.xl,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  drawerProHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flex: 1,
+  },
+  drawerProIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "rgba(52, 211, 153, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  drawerProTextWrap: {
+    flex: 1,
+  },
+  drawerProTitle: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  drawerProSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  drawerProBadge: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+  },
+  drawerProBadgeText: {
+    color: colors.background,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  actionButton: {
+    height: 52,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
   loginButton: { backgroundColor: colors.accent },
-  logoutButton: { backgroundColor: colors.dangerMuted, borderWidth: 1, borderColor: colors.danger },
+  logoutButton: {
+    backgroundColor: colors.dangerMuted,
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
   actionText: { fontSize: 16, fontWeight: "800" },
   loginText: { color: colors.background },
   logoutText: { color: colors.danger },

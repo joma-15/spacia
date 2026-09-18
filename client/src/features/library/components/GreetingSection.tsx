@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   },
   main: {
     fontSize: 30, fontWeight: "800", color: THEME.textWhite,
-    letterSpacing: -0.8, marginBottom: 16,
+    letterSpacing: -0.8, marginBottom: 16, paddingRight: 130,
   },
   searchBar: {
     flexDirection: "row", alignItems: "center",

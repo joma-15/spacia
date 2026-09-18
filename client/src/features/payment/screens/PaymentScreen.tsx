@@ -7,17 +7,14 @@
  *  1. Pull all state + animations from usePaymentScreen
  *  2. Calculate layout offsets (nav height, scroll padding)
  *  3. Assemble the sub-components into the final layout
- *
- * CHANGE THE LOOK   → edit the component files
- * CHANGE THE LOGIC  → edit usePaymentScreen.ts
- * CHANGE THE COLORS → edit colors.ts
- * CHANGE THE DATA   → edit constants.ts
  */
 
 import React from "react";
-import { ScrollView, StyleSheet } from "react-native";
+import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 import { usePaymentScreen } from "../hooks/usePaymentScreen";
@@ -35,43 +32,56 @@ import { COLORS } from "../colors";
 
 export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const {
     isTablet,
     selectedPlan,
     loadingPurchase,
-    activeTab,
     headerFade,
     buttonSlide,
     buttonFade,
     shimmerOpacity,
     setSelectedPlan,
     handlePurchase,
-    handleTabPress,
     ctaLabel,
   } = usePaymentScreen();
 
-  // ── Layout offset calculations ─────────────────────────────────────────────
+  // Position the sticky CTA button comfortably above the bottom safe area
+  const bottomOffset = Math.max(insets.bottom, 16);
+  const CTA_HEIGHT = 80;
+  const scrollBottom = bottomOffset + CTA_HEIGHT + 32;
 
-  /**
-   * Total height from the bottom of the visible area to the top of the nav bar.
-   * Used to position the CTA button just above the nav bar.
-   */
-  const NAV_BAR_HEIGHT = isTablet ? 72 : 64;
-  const bottomOffset = NAV_BAR_HEIGHT + Math.max(insets.bottom, 8);
-
-  /**
-   * Extra padding at the bottom of the scroll view so the last item
-   * isn't hidden behind the sticky CTA button + nav bar.
-   */
-  const CTA_HEIGHT   = 110;
-  const scrollBottom = bottomOffset + CTA_HEIGHT;
-
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const canGoBack = router.canGoBack();
 
   return (
-    <SafeAreaView style={styles.root} edges={["top"]}>
+    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <StatusBar style="light" />
+
+      {/* ── Top Bar with Back Button when opened as a stack/modal screen ── */}
+      {canGoBack && (
+        <View
+          style={[
+            styles.topNav,
+            { paddingHorizontal: isTablet ? 40 : 20 },
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            hitSlop={8}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <MaterialCommunityIcons
+              name="arrow-left"
+              size={22}
+              color={COLORS.text}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <ScrollView
         contentContainerStyle={[
@@ -103,7 +113,7 @@ export default function PaymentScreen() {
         <PerkList />
       </ScrollView>
 
-      {/* ── Sticky CTA button floating above the nav bar ── */}
+      {/* ── Sticky CTA button floating above bottom edge ── */}
       <CtaButton
         label={ctaLabel}
         loading={loadingPurchase}
@@ -120,6 +130,22 @@ export default function PaymentScreen() {
 }
 
 const styles = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: COLORS.bg },
-  scroll: { paddingTop: 20 },
+  root: { flex: 1, backgroundColor: COLORS.bg },
+  topNav: {
+    paddingTop: 8,
+    paddingBottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scroll: { paddingTop: 12 },
 });

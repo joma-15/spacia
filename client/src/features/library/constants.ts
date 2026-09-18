@@ -52,5 +52,5 @@ export const NAV_ITEMS: {
    { id: "game", label: "Games", icon: "controller"           },
   { id: "add",     label: "",      isCenter: true },
   { id: "library",   label: "Library", icon: "folder"           },
-  { id: "payment",   label: "Premium", icon: "credit-card-outline"           },
+  { id: "ai",        label: "AI",      icon: "creation"         },
 ];
