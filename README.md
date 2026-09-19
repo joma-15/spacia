@@ -17,7 +17,7 @@
 Get personalized assistance, explanations, and guidance while studying.
 
 <p align="center">
-  <img src="client/assets/images/ai screen.jpg" alt="AI Study Assistant" width="300">
+  <img src="client/assets/images/ai screen.jpg" alt="AI Study Assistant" width="280">
 </p>
 
 ---
@@ -27,7 +27,7 @@ Get personalized assistance, explanations, and guidance while studying.
 Create and review custom flashcards to reinforce learning and improve retention.
 
 <p align="center">
-  <img src="client/assets/images/flashcards.jpg" alt="Flashcards" width="300">
+  <img src="client/assets/images/flashcards.jpg" alt="Flashcards" width="280">
 </p>
 
 ---
@@ -39,16 +39,16 @@ Turn studying into an engaging experience with interactive mini-games and challe
 <table align="center">
   <tr>
     <td align="center">
-      <img src="client/assets/images/games.jpg" alt="Games" width="200">
+      <img src="client/assets/images/games.jpg" alt="Games" width="180">
     </td>
     <td align="center">
-      <img src="client/assets/images/flip-sort.jpg" alt="Flip and Sort" width="200">
+      <img src="client/assets/images/flip-sort.png" alt="Flip and Sort" width="180">
     </td>
     <td align="center">
-      <img src="client/assets/images/ninja rush.jpg" alt="Ninja Rush" width="200">
+      <img src="client/assets/images/ninja rush.jpg" alt="Ninja Rush" width="180">
     </td>
     <td align="center">
-      <img src="client/assets/images/spaceblast.jpg" alt="Space Blast" width="200">
+      <img src="client/assets/images/spaceblast.jpg" alt="Space Blast" width="180">
     </td>
   </tr>
 </table>
@@ -60,7 +60,7 @@ Turn studying into an engaging experience with interactive mini-games and challe
 Maintain daily study streaks and build consistent learning habits.
 
 <p align="center">
-  <img src="client/assets/images/streak.jpg" alt="Study Streaks" width="300">
+  <img src="client/assets/images/streak.jpg" alt="Study Streaks" width="280">
 </p>
 
 ---
