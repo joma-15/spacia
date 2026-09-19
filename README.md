@@ -1,3 +1,3 @@
 # Spacia 
 
-![Spacia Logo](client/assets/images/icon.png)
+![Spacia Logo]<img src="client/assets/images/icon.png" alt="Spacia Logo" width="200">
