@@ -1,3 +1,3 @@
 # Spacia 
 
-![Spacia Logo][client/assets/icon.png]
+![Spacia Logo][client/assets/images/icon.png]
