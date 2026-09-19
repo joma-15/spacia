@@ -8,10 +8,16 @@ import {
   BannerAdSize,
   TestIds,
 } from "react-native-google-mobile-ads";
+import { useState } from "react";
+import { AdProvider } from "@/shared/context/AdContext";
 
 export default function TabsLayout() {
+  //check if the ad is visible or not 
+  const [isadVisible, setIsAdVisible] = useState(false);
+
   return (
     <>
+      <AdProvider isAdVisible={isadVisible}>
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -31,12 +37,14 @@ export default function TabsLayout() {
                 </View>
               )} */}
 
-              <View style={styles.adContainer}>
+              {/* <View style={styles.adContainer}>
                 <BannerAd
                   unitId={TestIds.BANNER}
                   size={BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER}
+                  onAdLoaded={() => setIsAdVisible(true)}
+                  onAdFailedToLoad={() => {setIsAdVisible(false)}}
                 />
-              </View>
+              </View> */}
 
               <BottomNav {...props} />
             </>
@@ -49,7 +57,8 @@ export default function TabsLayout() {
         <Tabs.Screen name="game" />
       </Tabs>
 
-      <ProfileSidebar />
+        <ProfileSidebar />
+        </AdProvider>
     </>
   );
 }

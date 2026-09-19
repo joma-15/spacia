@@ -40,11 +40,14 @@ import { EmptyChatState } from "../components/EmptyChatState";
 import { ChatInputBar } from "../components/ChatInputBar";
 import { useFolders } from "@/features/library/hooks/useFolders";
 
+import { useAd } from "@/shared/context/AdContext";
+
 const BOTTOM_NAV_HEIGHT = 64;
 
 export const AiChatScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { folders } = useFolders();
+  const { isAdVisible } = useAd();
 
   const [selectedFolder, setSelectedFolder] = useState<SelectedFolderContext>({
     id: null,
@@ -102,8 +105,8 @@ export const AiChatScreen: React.FC = () => {
   // ─ Keyboard open  → lift everything by keyboard height so nothing is hidden behind it
   // ─ Keyboard closed → lift everything above the pinned bottom nav bar
   const contentBottomPadding = isKeyboardVisible
-    ? Math.max(keyboardHeight - 125, 0)
-    : Math.max(BOTTOM_NAV_HEIGHT + Math.max(insets.bottom, 8) - 80, 0);
+    ? Math.max(keyboardHeight - 8, 0)
+    : Math.max(BOTTOM_NAV_HEIGHT + Math.max(insets.bottom, 8), 0);
 
   // Send message handler (supports both typing input and prompt chips)
   const handleSendMessage = useCallback(
