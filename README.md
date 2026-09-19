@@ -36,15 +36,22 @@ Create and review custom flashcards to reinforce learning and improve retention.
 
 Turn studying into an engaging experience with interactive mini-games and challenges.
 
-<p align="center">
-  <img src="client/assets/images/games.jpg" alt="Games" width="220">
-  <img src="client/assets/images/flip and sort.png" alt="Flip and Sort" width="220">
-</p>
-
-<p align="center">
-  <img src="client/assets/images/ninja rush.jpg" alt="Ninja Rush" width="220">
-  <img src="client/assets/images/spaceblast.jpg" alt="Space Blast" width="220">
-</p>
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="client/assets/images/games.jpg" alt="Games" width="200">
+    </td>
+    <td align="center">
+      <img src="client/assets/images/flip-sort.png" alt="Flip and Sort" width="200">
+    </td>
+    <td align="center">
+      <img src="client/assets/images/ninja rush.jpg" alt="Ninja Rush" width="200">
+    </td>
+    <td align="center">
+      <img src="client/assets/images/spaceblast.jpg" alt="Space Blast" width="200">
+    </td>
+  </tr>
+</table>
 
 ---
 
