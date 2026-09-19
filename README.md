@@ -1,29 +1,63 @@
-# Spacia 
+# Spacia
 
 <p align="center">
-  <img src="client/assets/images/icon.png" alt="Spacia Logo" width="200">
+  <img src="client/assets/images/icon.png" alt="Spacia Logo" width="150">
 </p>
 
-**Spacia** is an AI-powered study app that gamifies learning through AI assistance, personalized flashcards, interactive study features, streaks, and EXP-based rewards.
+<p align="center">
+  <strong>An AI-powered study app that makes learning interactive, personalized, and rewarding.</strong>
+</p>
+
+---
 
 ## ✨ Features
 
-- 🤖 **AI Study Assistant**  
-  Get personalized assistance and explanations while studying.
-  <img src="client/assets/images/ai screen.jpg" alt="ai">
+### 🤖 AI Study Assistant
 
-- 🃏 **Flashcards**  
-  Create and review custom flashcards to reinforce learning.
-  <img src="client/assets/images/icon.png" alt="flashcards">
+Get personalized assistance, explanations, and guidance while studying.
 
-- 🎮 **Gamified Learning**  
-  Turn studying into an engaging experience with interactive game features.
-  <img src="client/assets/images/games.jpg" alt="game">
-  <img src="client/assets/images/flip and sort.png" alt="game">
-  <img src="client/assets/images/ninja rush.jpg" alt="game">
-  <img src="client/assets/images/spaceblast.jpg" alt="game">
+<p align="center">
+  <img src="client/assets/images/ai screen.jpg" alt="AI Study Assistant" width="300">
+</p>
 
-- 🔥 **Study Streaks**  
-  Maintain daily study streaks and build consistent learning habits.
-   <img src="client/assets/images/streak.jpg" alt="game">
+---
 
+### 🃏 Flashcards
+
+Create and review custom flashcards to reinforce learning and improve retention.
+
+<p align="center">
+  <img src="client/assets/images/flashcards.jpg" alt="Flashcards" width="300">
+</p>
+
+---
+
+### 🎮 Gamified Learning
+
+Turn studying into an engaging experience with interactive mini-games and challenges.
+
+<p align="center">
+  <img src="client/assets/images/games.jpg" alt="Games" width="220">
+  <img src="client/assets/images/flip and sort.png" alt="Flip and Sort" width="220">
+</p>
+
+<p align="center">
+  <img src="client/assets/images/ninja rush.jpg" alt="Ninja Rush" width="220">
+  <img src="client/assets/images/spaceblast.jpg" alt="Space Blast" width="220">
+</p>
+
+---
+
+### 🔥 Study Streaks
+
+Maintain daily study streaks and build consistent learning habits.
+
+<p align="center">
+  <img src="client/assets/images/streak.jpg" alt="Study Streaks" width="300">
+</p>
+
+---
+
+## 🚀 Built to Make Studying More Engaging
+
+Spacia combines **AI assistance, flashcards, gamification, streaks, and rewards** into one study experience designed to make learning more interactive and enjoyable.
