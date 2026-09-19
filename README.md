@@ -42,7 +42,7 @@ Turn studying into an engaging experience with interactive mini-games and challe
       <img src="client/assets/images/games.jpg" alt="Games" width="180">
     </td>
     <td align="center">
-      <img src="client/assets/images/flip-sort.png" alt="Flip and Sort" width="180">
+      <img src="client/assets/images/flip-sort.jpg" alt="Flip and Sort" width="180">
     </td>
     <td align="center">
       <img src="client/assets/images/ninja rush.jpg" alt="Ninja Rush" width="180">
