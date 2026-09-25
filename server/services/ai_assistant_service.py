@@ -199,6 +199,7 @@ class AiAssistantService:
         history: list[dict],
         folder_name: str | None = None,
         folder_card_count: int = 0,
+        folder_flashcards: list[dict] | None = None,
     ) -> list[dict]:
         """
         Assemble the full message list to send to the AI provider.
@@ -226,7 +227,9 @@ class AiAssistantService:
         list[dict]
             Ready-to-send messages list for the Groq API.
         """
-        system_prompt = self._build_system_prompt(folder_name, folder_card_count)
+        system_prompt = self._build_system_prompt(
+            folder_name, folder_card_count, folder_flashcards
+        )
 
         # Trim history to avoid sending too many tokens
         trimmed_history = history[-MAX_HISTORY_MESSAGES:]
@@ -245,6 +248,7 @@ class AiAssistantService:
         self,
         folder_name: str | None,
         folder_card_count: int,
+        folder_flashcards: list[dict] | None = None,
     ) -> str:
         """
         Build the system-level instruction that defines the AI's behaviour.
@@ -268,8 +272,9 @@ class AiAssistantService:
             "clearly, and provide study strategies.\n\n"
             "Guidelines:\n"
             "- Be concise but thorough.\n"
-            "- Use clear structure: headings (###), bullet points, and numbered lists "
-            "when appropriate.\n"
+            "- Write in plain, natural text. Avoid Markdown and decorative special "
+            "characters such as #, *, |, backticks, and repeated symbols. Use short "
+            "paragraphs or simple numbered sentences only when they improve clarity.\n"
             "- When explaining concepts, use real-world analogies to aid understanding.\n"
             "- You can suggest follow-up questions to deepen understanding.\n"
             "- Never make up facts. If unsure, say so clearly.\n"
@@ -294,9 +299,34 @@ class AiAssistantService:
                 )
             folder_context += (
                 "Prioritize explanations and examples that are relevant to this subject. "
-                "When the student asks vague questions like 'explain this' or 'quiz me', "
-                f"assume they are referring to \"{folder_name}\" unless stated otherwise.\n"
+                f"The user selected \"{folder_name}\" in the app, so treat every message "
+                "in this conversation as referring to this folder unless they explicitly "
+                "name a different folder. When the student asks vague questions like "
+                "'explain this', 'summarize this', or 'quiz me', use this folder's cards.\n"
             )
+            if folder_flashcards:
+                # The selected folder is supplied as study context so requests such as
+                # "summarize this", "quiz me", and "explain this more deeply" work
+                # without asking the model to infer the material from the folder name.
+                # Deliberately exclude card IDs: they are implementation details, not
+                # learning content. The read tool remains available for other folders
+                # and for mutations that require an ID.
+                card_lines = []
+                # Keep a large deck from consuming the entire provider context.
+                for index, card in enumerate(folder_flashcards[:50], start=1):
+                    question = str(card.get("question") or "").strip()[:1_000]
+                    answer = str(card.get("answer") or "").strip()[:1_000]
+                    if question or answer:
+                        card_lines.append(
+                            f"{index}. Front: {question}\n   Back: {answer}"
+                        )
+                if card_lines:
+                    folder_context += (
+                        "\nSelected folder flashcards (use these as the source material "
+                        "for summaries, quizzes, and deeper explanations):\n"
+                        + "\n".join(card_lines)
+                        + "\n"
+                    )
             return base + folder_context
 
         return (

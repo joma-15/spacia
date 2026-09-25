@@ -56,6 +56,11 @@ def _created_folder_id(actions: list[dict]) -> str | None:
     return None
 
 
+def _has_successful_folder_creation(actions: list[dict]) -> bool:
+    """Whether the provider completed either folder-creation action."""
+    return _created_folder_id(actions) is not None
+
+
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
@@ -262,6 +267,14 @@ class MessageCollectionAPI(MethodView):
 
         folder_name = folder.subject if folder else None
         folder_card_count = len(folder.flashcards) if folder else 0
+        folder_flashcards = (
+            [
+                {"question": card.question, "answer": card.answer}
+                for card in folder.flashcards
+            ]
+            if folder
+            else None
+        )
 
         # 5 — build the AI message list
         messages = _ai_service.build_messages(
@@ -269,6 +282,7 @@ class MessageCollectionAPI(MethodView):
             history=history,
             folder_name=folder_name,
             folder_card_count=folder_card_count,
+            folder_flashcards=folder_flashcards,
         )
 
         # 6 — call the AI provider
@@ -294,6 +308,11 @@ class MessageCollectionAPI(MethodView):
                 conversation = _conversation_service.set_folder_context(
                     conversation_id, user_id, created_folder_id
                 )
+
+            # A creation tool result is authoritative. Do not show model-generated
+            # card questions, answers, or database IDs in the chat after success.
+            if _has_successful_folder_creation(actions):
+                ai_response = "Folder created successfully check the library"
         except RuntimeError as exc:
             # Configuration error (missing API key etc.)
             current_app.logger.error("AI configuration error: %s", exc)

@@ -92,7 +92,11 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           {renderFormattedContent(message.content)}
         </View>
 
-        {Array.isArray(message.actions) && message.actions
+        {Array.isArray(message.actions) && !message.actions.some(
+          (action) =>
+            ["create_folder", "create_folder_with_flashcards"].includes(action?.type) &&
+            action?.result && !action.result.error,
+        ) && message.actions
           .filter((action) => action?.result && !action.result.error)
           .map((action, index) => (
           <View key={`${action.type}-${index}`} style={styles.actionChip}>
