@@ -11,7 +11,7 @@
  */
 
 import { authenticatedFetch } from "@/shared/services/authenticatedFetch";
-import { Conversation, Message } from "../types";
+import { Conversation, Message, SendMessageResult } from "../types";
 
 // ---------------------------------------------------------------------------
 // Conversations
@@ -93,7 +93,7 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
 export async function sendMessage(
   conversationId: string,
   content: string,
-): Promise<Message> {
+): Promise<SendMessageResult> {
   const response = await authenticatedFetch(
     `/ai/conversations/${conversationId}/messages`,
     {
@@ -103,5 +103,8 @@ export async function sendMessage(
     },
   );
   const body = await response.json();
-  return body.message as Message;
+  return {
+    message: body.message as Message,
+    actions: (body.actions ?? []) as SendMessageResult["actions"],
+  };
 }

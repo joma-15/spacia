@@ -19,6 +19,8 @@ import { useCallback, useRef, useState } from "react";
 import { ChatMessage } from "../types";
 import * as aiChatService from "../services/aiChatService";
 import { ApiRequestError } from "@/shared/services/authenticatedFetch";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import { loadFolders } from "@/shared/services/folderDataService";
 
 interface UseAiChatReturn {
   /** Messages currently displayed in the chat list. */
@@ -56,7 +58,7 @@ function toLocalMessage(msg: {
   role: string;
   content: string;
   createdAt: string;
-}): ChatMessage {
+}, actions: ChatMessage["actions"] = []): ChatMessage {
   const date = new Date(msg.createdAt);
   const timestamp = isNaN(date.getTime())
     ? ""
@@ -67,10 +69,12 @@ function toLocalMessage(msg: {
     role: msg.role as "user" | "assistant",
     content: msg.content,
     timestamp,
+    actions,
   };
 }
 
 export function useAiChat(): UseAiChatReturn {
+  const { cacheOwnerId } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
@@ -139,8 +143,14 @@ export function useAiChat(): UseAiChatReturn {
     setError(null);
 
     try {
-      const aiMessage = await aiChatService.sendMessage(conversationId, content.trim());
-      const localAiMsg = toLocalMessage(aiMessage);
+      const result = await aiChatService.sendMessage(conversationId, content.trim());
+      const localAiMsg = toLocalMessage(result.message, result.actions);
+
+      if (cacheOwnerId && result.actions.some((action) =>
+        ["create_folder", "create_folder_with_flashcards"].includes(action.type) && !action.result.error,
+      )) {
+        void loadFolders(cacheOwnerId, "network-only").catch(() => undefined);
+      }
 
       // Replace nothing — just append the real AI response.
       // The optimistic user message stays (its content is correct).
@@ -155,7 +165,7 @@ export function useAiChat(): UseAiChatReturn {
     } finally {
       setIsThinking(false);
     }
-  }, [isThinking]);
+  }, [cacheOwnerId, isThinking]);
 
   // ---------------------------------------------------------------------------
   // startNewChat

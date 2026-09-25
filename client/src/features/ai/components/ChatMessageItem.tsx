@@ -92,6 +92,15 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           {renderFormattedContent(message.content)}
         </View>
 
+        {Array.isArray(message.actions) && message.actions
+          .filter((action) => action?.result && !action.result.error)
+          .map((action, index) => (
+          <View key={`${action.type}-${index}`} style={styles.actionChip}>
+            <MaterialCommunityIcons name="check-circle-outline" size={13} color={AI_THEME.primary} />
+            <Text style={styles.actionChipText}>{formatAction(action.type, action.result)}</Text>
+          </View>
+          ))}
+
         {/* ── Action Toolbar below assistant response ── */}
         <View style={styles.toolbar}>
           <TouchableOpacity
@@ -168,6 +177,17 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     </View>
   );
 };
+
+function formatAction(type: string, result: Record<string, unknown>): string {
+  const folder = result.folder as { subject?: string } | undefined;
+  const count = result.count as number | undefined;
+  if (type === "create_folder") return `Created ${folder?.subject ?? "folder"}`;
+  if (type === "create_flashcards") return `Added ${count ?? 0} flashcards`;
+  if (type === "create_folder_with_flashcards") return `Created ${folder?.subject ?? "folder"} with ${count ?? 0} flashcards`;
+  if (type === "update_flashcard") return "Updated flashcard";
+  if (type === "delete_flashcard") return "Deleted flashcard";
+  return "Read study data";
+}
 
 const styles = StyleSheet.create({
   // User bubble
@@ -247,6 +267,22 @@ const styles = StyleSheet.create({
   },
   lineSpacer: {
     height: 6,
+  },
+  actionChip: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: AI_THEME.primarySoft,
+  },
+  actionChipText: {
+    color: AI_THEME.primary,
+    fontSize: 11,
+    fontWeight: "600",
   },
   toolbar: {
     flexDirection: "row",

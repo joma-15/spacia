@@ -16,6 +16,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from errors import ApiError
 from services.ai_assistant_service import AiAssistantService
+from services.ai_study_action_service import AiStudyActionService
 from services.conversation_service import ConversationService
 from services.folder_service import FolderService
 from validation import require_fields, require_json_object
@@ -234,7 +235,17 @@ class MessageCollectionAPI(MethodView):
 
         # 6 — call the AI provider
         try:
-            ai_response = _ai_service.generate_response(messages)
+            action_service = AiStudyActionService(_ai_service.generate_flashcards)
+            ai_response, actions = _ai_service.generate_response_with_tools(
+                messages=messages,
+                tools=action_service.tool_definitions(),
+                execute_tool=lambda name, arguments: action_service.execute(
+                    name,
+                    arguments,
+                    user_id,
+                    conversation.folder_id,
+                ),
+            )
         except RuntimeError as exc:
             # Configuration error (missing API key etc.)
             current_app.logger.error("AI configuration error: %s", exc)
@@ -265,7 +276,7 @@ class MessageCollectionAPI(MethodView):
             user_id,
         )
 
-        return jsonify({"message": ai_msg.to_dict()}), 201
+        return jsonify({"message": ai_msg.to_dict(), "actions": actions}), 201
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,12 @@
 """AI prompt construction and Groq API integration for the chat assistant."""
 
+import json
 import os
+from collections.abc import Callable
 
 from groq import Groq
+
+from errors import ApiError
 
 # Maximum number of recent messages sent to the AI provider.
 # Keeps token usage predictable while preserving meaningful context.
@@ -71,6 +75,110 @@ class AiAssistantService:
             raise ValueError("AI provider returned an empty response.")
 
         return response_text.strip()
+
+    def generate_response_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        execute_tool: Callable[[str, dict], dict],
+    ) -> tuple[str, list[dict]]:
+        """Run a bounded tool-call loop and return the final text plus real actions."""
+        client = self._get_client()
+        working_messages = list(messages)
+        actions: list[dict] = []
+
+        for _ in range(6):
+            completion = client.chat.completions.create(
+                model=self._model,
+                messages=working_messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=0.3,
+                max_completion_tokens=1024,
+            )
+            message = completion.choices[0].message
+            tool_calls = message.tool_calls or []
+            if not tool_calls:
+                if not message.content:
+                    raise ValueError("AI provider returned an empty response.")
+                return message.content.strip(), actions
+
+            working_messages.append(
+                {
+                    "role": "assistant",
+                    "content": message.content or "",
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "type": "function",
+                            "function": {
+                                "name": call.function.name,
+                                "arguments": call.function.arguments,
+                            },
+                        }
+                        for call in tool_calls
+                    ],
+                }
+            )
+            for call in tool_calls:
+                try:
+                    arguments = json.loads(call.function.arguments or "{}")
+                    if not isinstance(arguments, dict):
+                        raise ValueError("Tool arguments must be an object.")
+                    result = execute_tool(call.function.name, arguments)
+                except ApiError as exc:
+                    result = {"error": exc.message}
+                except (ValueError, json.JSONDecodeError) as exc:
+                    result = {"error": str(exc)}
+                except Exception:
+                    # Never send database/provider implementation details back to the model.
+                    result = {"error": "The requested study action could not be completed."}
+                actions.append({"type": call.function.name, "result": result})
+                working_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": json.dumps(result),
+                    }
+                )
+
+        raise ValueError("AI requested too many actions for one message.")
+
+    def generate_flashcards(self, topic: str, count: int) -> list[dict]:
+        """Generate a bounded, validated card payload; persistence stays in FlashcardService."""
+        if not topic.strip():
+            raise ValueError("A flashcard topic is required.")
+        if not 1 <= count <= 25:
+            raise ValueError("Create between 1 and 25 flashcards at a time.")
+        client = self._get_client()
+        prompt = (
+            f"Create exactly {count} distinct study flashcards about {topic.strip()}. "
+            "Return JSON only: {\"flashcards\":[{\"question\":string,\"answer\":string,\"status\":\"review\"}]}. "
+            "Questions must cover different useful concepts."
+        )
+        completion = client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.4,
+            max_completion_tokens=2048,
+        )
+        content = completion.choices[0].message.content or ""
+        try:
+            data = json.loads(content)
+            cards = data["flashcards"]
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise ValueError("AI returned invalid flashcards.") from exc
+        if not isinstance(cards, list) or not cards:
+            raise ValueError("AI returned no flashcards.")
+        normalized = [
+            {"question": str(card["question"]).strip(), "answer": str(card["answer"]).strip(), "status": "review"}
+            for card in cards
+            if isinstance(card, dict) and card.get("question") and card.get("answer")
+        ]
+        if not normalized:
+            raise ValueError("AI returned no usable flashcards.")
+        return normalized[:count]
 
     def build_messages(
         self,
@@ -146,6 +254,12 @@ class AiAssistantService:
             "- Never make up facts. If unsure, say so clearly.\n"
             "- Keep responses focused and study-relevant.\n"
             "- Maintain conversation context from previous messages.\n"
+            "- You can use controlled study tools when the user clearly asks to create, "
+            "inspect, update, or delete study data. Never claim an action succeeded until "
+            "a tool reports success. Do not mutate data for vague requests.\n"
+            "- For folder or card questions, retrieve the current data with a read tool "
+            "instead of guessing. To modify or delete a card, first retrieve its contents "
+            "to obtain its ID. Delete only for an unambiguous, explicit request.\n"
         )
 
         if folder_name:

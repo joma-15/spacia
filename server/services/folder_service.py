@@ -12,15 +12,31 @@ class FolderService:
     # TODO: replace this temporary owner with the authenticated user identity.
     # DEFAULT_USER_ID = "66b851ba-e806-4eae-b109-ef676b9ca64b"
 
-    def create(self, subject: str, accent_color: str,user_id : str, folder_id: str | None = None) -> Folder:
+    def create(
+        self,
+        subject: str,
+        accent_color: str,
+        user_id: str,
+        folder_id: str | None = None,
+        *,
+        commit: bool = True,
+    ) -> Folder:
+        subject = subject.strip()
+        if not subject:
+            raise ApiError("Folder name cannot be empty.", 400)
+        if len(subject) > 100:
+            raise ApiError("Folder name must be 100 characters or fewer.", 400)
         folder = Folder(
             id=folder_id,
-            subject=subject.strip(),
+            subject=subject,
             accent_color=accent_color,
             user_id=user_id,
         )
         db.session.add(folder)
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         return folder
 
     def list_all(self, user_id : str) -> list[Folder]: 

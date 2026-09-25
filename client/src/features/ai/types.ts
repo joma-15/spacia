@@ -12,6 +12,13 @@ export interface ChatMessage {
   folderId?: string;
   folderName?: string;
   isThinking?: boolean;
+  actions?: AiAction[];
+}
+
+/** A server-confirmed action performed by the assistant. */
+export interface AiAction {
+  type: string;
+  result: Record<string, unknown>;
 }
 
 export interface QuickPrompt {
@@ -47,4 +54,9 @@ export interface Message {
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: string;
+}
+
+export interface SendMessageResult {
+  message: Message;
+  actions: AiAction[];
 }
