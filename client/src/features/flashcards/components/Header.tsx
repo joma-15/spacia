@@ -21,6 +21,7 @@ interface Props {
   onAiGenerate: () => void;
   onAddCard: () => void;
   onDeleteAll: () => void;
+  showPremiumCrown: boolean;
 }
 
 const Header: React.FC<Props> = ({
@@ -30,6 +31,7 @@ const Header: React.FC<Props> = ({
   onAiGenerate,
   onAddCard,
   onDeleteAll,
+  showPremiumCrown,
 }) => (
   <View style={styles.header}>
 
@@ -66,9 +68,11 @@ const Header: React.FC<Props> = ({
       <TouchableOpacity style={styles.aiChip} onPress={onAiGenerate} activeOpacity={0.75}>
         <Text style={styles.aiChipStar}>✦</Text>
         <Text style={styles.aiChipText}>AI</Text>
-        <View style={styles.aiChipCrown}>
-          <Text style={styles.aiChipCrownText}>👑</Text>
-        </View>
+        {showPremiumCrown && (
+          <View style={styles.aiChipCrown}>
+            <MaterialCommunityIcons name="crown" size={11} color="#5B3700" />
+          </View>
+        )}
       </TouchableOpacity>
 
       {/* Add card button */}
@@ -112,7 +116,6 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: COLORS.background,
     alignItems: "center", justifyContent: "center",
   },
-  aiChipCrownText: { fontSize: 8, lineHeight: 12 },
   addBtn: {
     width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.primary,
     alignItems: "center", justifyContent: "center",

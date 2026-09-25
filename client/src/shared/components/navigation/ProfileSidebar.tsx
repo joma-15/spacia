@@ -158,7 +158,7 @@ export default function ProfileSidebar() {
           accessibilityLabel="Upgrade to Spacia Pro"
           activeOpacity={0.85}
           hitSlop={8}
-          onPress={() => router.push("/payment")}
+          onPress={() => router.navigate("/payment")}
           style={styles.proButton}
         >
           <View style={styles.proIconContainer}>
@@ -253,7 +253,7 @@ export default function ProfileSidebar() {
               activeOpacity={0.85}
               onPress={() => {
                 handleClose();
-                router.push("/payment");
+                router.navigate("/payment");
               }}
               style={styles.drawerProCard}
             >

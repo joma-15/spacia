@@ -8,9 +8,10 @@
 import React, { useCallback, useState, useRef } from "react";
 import { View, Alert, StyleSheet, ScrollView, useWindowDimensions, Pressable, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import AuthModal from "@/features/auth/components/AuthModal";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useSubscription } from "@/shared/context/SubscriptionContext";
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 import { useFlashCards } from "../hooks/useFlashCards";
@@ -36,6 +37,7 @@ const CardScreen: React.FC = () => {
   const { width: screenWidth } = useWindowDimensions();
   const pageWidth = screenWidth - 32;
   const { isAuthenticated } = useAuth();
+  const { isSubscribed, isLoadingSubscription, refreshSubscription } = useSubscription();
 
   // ── Modal visibility state (UI-only, not business logic) ──────────────────
   const [addModalVisible, setAddModalVisible] = useState(false);
@@ -104,13 +106,16 @@ const CardScreen: React.FC = () => {
   );
 
   // ── AI button ──────────────────────────────────────────────────────────────
-  const handleAiGenerate = () => {
+  const handleAiGenerate = async () => {
     if (!isAuthenticated) {
       setAuthRequiredVisible(true);
       return;
     }
+    if (!await refreshSubscription()) {
+      router.navigate("/payment");
+      return;
+    }
     setTextbookUploadVisible(true);
-    // setPremiumModalVisible(true); // ← uncomment to gate behind paywall
   };
 
   // ── Confirm delete-all then close modal ────────────────────────────────────
@@ -167,6 +172,7 @@ const CardScreen: React.FC = () => {
         onAiGenerate={handleAiGenerate}
         onAddCard={() => setAddModalVisible(true)}
         onDeleteAll={() => setDeleteAllModalVisible(true)}
+        showPremiumCrown={!isLoadingSubscription && !isSubscribed}
       />
 
       {/* ── Totals + progress bar ── */}

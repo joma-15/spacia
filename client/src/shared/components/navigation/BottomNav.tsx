@@ -26,6 +26,10 @@ import { NAV_ITEMS } from "@/features/library/constants";
 import { THEME } from "@/features/library/theme";
 import { useAddFolder } from "@/shared/context/AddFolderContext";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import AuthModal from "@/features/auth/components/AuthModal";
+import { useSubscription } from "@/shared/context/SubscriptionContext";
 
 // interface Props {
 //   /** Currently selected tab — used to highlight the active item */
@@ -44,13 +48,15 @@ const AnimatedTabItem = ({
   item,
   isActive,
   onPress,
+  showPremiumCrown,
 }: {
   item: (typeof NAV_ITEMS)[number];
   isActive: boolean;
   onPress: () => void;
+  showPremiumCrown: boolean;
 }) => {
-  const scaleAnim = useRef(new Animated.Value(isActive ? 1 : 0.88)).current;
-  const dotOpacity = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+  const [scaleAnim] = useState(() => new Animated.Value(isActive ? 1 : 0.88));
+  const [dotOpacity] = useState(() => new Animated.Value(isActive ? 1 : 0));
 
   useEffect(() => {
     Animated.parallel([
@@ -66,7 +72,7 @@ const AnimatedTabItem = ({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [isActive]);
+  }, [dotOpacity, isActive, scaleAnim]);
 
   return (
     <TouchableOpacity
@@ -81,6 +87,11 @@ const AnimatedTabItem = ({
           size={24}
           color={isActive ? THEME.primary : THEME.textDim}
         />
+        {showPremiumCrown && (
+          <View style={styles.crownBadge}>
+            <MaterialCommunityIcons name="crown" size={11} color="#5B3700" />
+          </View>
+        )}
       </Animated.View>
 
       {/* Label — green + bold when active */}
@@ -96,7 +107,11 @@ const AnimatedTabItem = ({
 
 const BottomNav = ({ state, navigation, insets }: any) => {
   const { setAddModalVisible } = useAddFolder();
+  const { isAuthenticated } = useAuth();
+  const { isSubscribed, isLoadingSubscription, refreshSubscription } = useSubscription();
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [authRequiredVisible, setAuthRequiredVisible] = useState(false);
+  const isCheckingAiAccess = useRef(false);
 
   useEffect(() => {
     const showEvent =
@@ -117,18 +132,55 @@ const BottomNav = ({ state, navigation, insets }: any) => {
     };
   }, []);
 
-  if (isKeyboardVisible) {
-    return null;
-  }
+  const handleTabPress = async (tabId: string) => {
+    if (tabId !== "ai") {
+      navigation.navigate(tabId);
+      return;
+    }
+    if (!isAuthenticated) {
+      setAuthRequiredVisible(true);
+      return;
+    }
+    if (isCheckingAiAccess.current) return;
 
-  const activeTab = state.routes[state.index].name;
+    isCheckingAiAccess.current = true;
+    const hasPremiumAccess = await refreshSubscription();
+    isCheckingAiAccess.current = false;
+
+    if (!hasPremiumAccess) {
+      // `navigate` reuses the existing payment route instead of adding another
+      // copy every time the premium AI button is pressed.
+      router.navigate("/payment");
+      return;
+    }
+    navigation.navigate("ai");
+  };
+
+  const handleAuthenticatedAi = async () => {
+    setAuthRequiredVisible(false);
+    if (isCheckingAiAccess.current) return;
+
+    isCheckingAiAccess.current = true;
+    const hasPremiumAccess = await refreshSubscription();
+    isCheckingAiAccess.current = false;
+
+    // Do not visit the AI tab until entitlement is confirmed. This prevents
+    // the AI screen from flashing briefly after a newly logged-in free user.
+    if (!hasPremiumAccess) {
+      router.navigate("/payment");
+      return;
+    }
+    navigation.navigate("ai");
+  };
 
   return (
-    <View
-      style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}
-    >
-      <View style={styles.inner}>
-        {NAV_ITEMS.map((item) => {
+    <>
+      {!isKeyboardVisible && (
+        <View
+          style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}
+        >
+          <View style={styles.inner}>
+            {NAV_ITEMS.map((item) => {
           // ── Center "+" button — rendered differently from normal tabs ──
           if (item.isCenter) {
             return (
@@ -157,17 +209,27 @@ const BottomNav = ({ state, navigation, insets }: any) => {
           // ── Normal animated tab ──
           const isActive = state.routes[state.index].name === item.id;
 
-          return (
-            <AnimatedTabItem
-              key={item.id}
-              item={item}
-              isActive={isActive}
-              onPress={() => navigation.navigate(item.id)}
-            />
-          );
-        })}
-      </View>
-    </View>
+              return (
+                <AnimatedTabItem
+                  key={item.id}
+                  item={item}
+                  isActive={isActive}
+                  showPremiumCrown={item.id === "ai" && !isLoadingSubscription && !isSubscribed}
+                  onPress={() => void handleTabPress(item.id)}
+                />
+              );
+            })}
+          </View>
+        </View>
+      )}
+      <AuthModal
+        visible={authRequiredVisible}
+        initialMode="login"
+        notice="Sign in or create an account to use Spacia AI."
+        onClose={() => setAuthRequiredVisible(false)}
+        onAuthenticated={() => void handleAuthenticatedAi()}
+      />
+    </>
   );
 };
 
@@ -210,6 +272,19 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: THEME.primary,
+  },
+  crownBadge: {
+    position: "absolute",
+    top: -6,
+    right: -9,
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: "#FBBF24",
+    borderWidth: 1.5,
+    borderColor: THEME.navBg,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // ── Center "+" button ──

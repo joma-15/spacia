@@ -1,5 +1,6 @@
 from extensions import db
 from models.users import User
+from models.subscription import Subscription
 from sqlalchemy import or_
 from flask_jwt_extended import create_access_token, create_refresh_token
 import bcrypt
@@ -35,6 +36,8 @@ class AuthService:
         user = User(username=username, password_hash=password_hash, email=email)
         try:
             db.session.add(user)
+            db.session.flush()
+            db.session.add(Subscription(user_id=user.id, plan="free", status="cancelled"))
             db.session.commit()
             return user
         except:

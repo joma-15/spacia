@@ -38,9 +38,11 @@ export function usePaymentScreen() {
 
   // ── Entrance animations ───────────────────────────────────────────────────
 
-  const headerFade  = useRef(new Animated.Value(0)).current;
-  const buttonSlide = useRef(new Animated.Value(40)).current;
-  const buttonFade  = useRef(new Animated.Value(0)).current;
+  // The upgrade screen is a navigation destination, so it should be ready as
+  // soon as it is focused rather than waiting through an entrance sequence.
+  const headerFade  = useRef(new Animated.Value(1)).current;
+  const buttonSlide = useRef(new Animated.Value(0)).current;
+  const buttonFade  = useRef(new Animated.Value(1)).current;
 
   /**
    * Looping shimmer for the CTA button.
@@ -55,17 +57,6 @@ export function usePaymentScreen() {
   });
 
   useEffect(() => {
-    // Fade in the header immediately on mount
-    Animated.timing(headerFade, {
-      toValue: 1, duration: 600, useNativeDriver: true,
-    }).start();
-
-    // Slide + fade the CTA button up from below after a short delay
-    Animated.parallel([
-      Animated.timing(buttonFade,  { toValue: 1, duration: 500, delay: 800, useNativeDriver: true }),
-      Animated.timing(buttonSlide, { toValue: 0, duration: 500, delay: 800, useNativeDriver: true }),
-    ]).start();
-
     // Loop the shimmer forever
     Animated.loop(
       Animated.sequence([
