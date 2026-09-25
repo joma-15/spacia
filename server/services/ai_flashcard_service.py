@@ -16,6 +16,10 @@ class AiFlashcardService:
     """
 
     MODEL = os.getenv("GROQ_MODEL")
+    # Keep the prompt comfortably within the context window for every
+    # supported Groq model. A textbook can otherwise make the request fail
+    # before the model has a chance to create any cards.
+    MAX_SOURCE_CHARS = 24_000
 
     def __init__(
         self,
@@ -41,9 +45,12 @@ class AiFlashcardService:
         4. Validates and saves the cards to the database for this folder.
         """
         chunks = self._document_extractor.extract_chunks(file_path)
+        content = "\n\n".join(chunks).strip()
+        if not content:
+            raise ValueError("The uploaded document does not contain readable text.")
 
-        # Merge all chunks with two newlines in between, then get AI response
-        raw_response = self._generate_response("\n\n".join(chunks))
+        # Merge the extracted chunks while enforcing the request-size limit.
+        raw_response = self._generate_response(content[: self.MAX_SOURCE_CHARS])
 
         # Turn the raw text response from the AI into a structured list of dictionaries
         cards = self._parse_cards(raw_response)
@@ -56,6 +63,9 @@ class AiFlashcardService:
         Builds the prompt, calls the Groq AI API, and requests the response
         strictly formatted as a JSON object.
         """
+        if not self.MODEL:
+            raise RuntimeError("GROQ_MODEL is not configured.")
+
         client = self._get_client()
         response = client.chat.completions.create(
             model=self.MODEL,
@@ -63,7 +73,6 @@ class AiFlashcardService:
             # This flag forces the model to return structured JSON instead of general chat text.
             response_format={"type": "json_object"},
         )
-        print(response)
         # Safely return the text content from the first response option
         return response.choices[0].message.content or ""
 
@@ -73,7 +82,7 @@ class AiFlashcardService:
         Constructs the detailed instruction prompt for the AI.
         It guides the AI to output exactly 10 flashcards matching our required database schema.
         """
-        return f"""You are a professional study helper. Generate (make sure to cover all the topic especially the higlighted ones) flashcards in English based on the provided content.
+        return f"""You are a professional study helper. Generate 10 flashcards in English based on the provided content.
 Return the output as a valid JSON object containing a "flashcards" key, which points to an array of flashcards.
 Each flashcard in the array must be an object with exactly three keys:
 - "question": a clue-based question or the description of the highlighted words in the handout 

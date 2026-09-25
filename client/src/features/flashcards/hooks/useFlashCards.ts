@@ -6,6 +6,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, InteractionManager } from "react-native";
+import { fetch } from "expo/fetch";
+import { File } from "expo-file-system";
 import { FlashCard, CardStatus, TabType } from "../types";
 import {
   replaceFlashcardsForFolder,
@@ -17,13 +19,11 @@ import {
   deleteAllFlashcardsForFolder,
 } from "@/shared/database/flashcardRepository";
 import { uuidv4 } from "@/shared/database/database";
-import * as FileSystem from "expo-file-system/legacy";
 import { BASE_URL } from "@/shared/config/api";
 import { getAccessToken } from "@/shared/components/auth/session";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { authenticatedFetch } from "@/shared/services/authenticatedFetch";
 
-// const BASE_URL = "http://192.168.8.39:5000";
 const FETCH_TIMEOUT_MS = 8000;
 
 export interface TextbookUpload {
@@ -515,6 +515,10 @@ export function useFlashCards(folderId: string) {
   /** 
    * Uploads a textbook document (PDF/Word) to the backend server and triggers 
    * the AI generation service. Once completed, it reloads the new flashcards list.
+   *
+   * Expo's fetch implementation understands File instances. Supplying the
+   * picker URI as a React Native `{ uri, name, type }` object to the global
+   * fetch implementation can fail before the HTTP request is sent.
    */
   const fetchAiCards = useCallback(async (file: TextbookUpload): Promise<boolean> => {
     if (!folderId || !isMountedRef.current || !userId) return false;
@@ -523,32 +527,30 @@ export function useFlashCards(folderId: string) {
     clearPoll();
 
     try {
-      // Upload the PDF or DOCX file using Expo's legacy FileSystem utility.
-      // Uses "MULTIPART" format (similar to an HTML form file upload).
       const token = await getAccessToken();
       if (!token) return false;
-      const uploadResult = await FileSystem.uploadAsync(
-        `${BASE_URL}/flashcards/${folderId}`,
-        file.uri,
-        {
-          fieldName: "file",
-          httpMethod: "POST",
-          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-          mimeType: file.mimeType ?? "application/pdf",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+
+      const formData = new FormData();
+      formData.append("file", new File(file.uri));
+
+      // Do not set Content-Type; expo/fetch supplies the multipart boundary.
+      const response = await fetch(`${BASE_URL}/flashcards/${folderId}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
       let data: any = null;
       try {
-        data = JSON.parse(uploadResult.body);
+        data = await response.json();
       } catch (e) {
         console.error("Failed to parse response body:", e);
       }
 
-      // Check HTTP status code (200-299 is success)
-      if (uploadResult.status < 200 || uploadResult.status >= 300) {
-        throw new Error(data?.error ?? "Failed to generate flashcards.");
+      if (!response.ok) {
+        throw new Error(data?.error ?? data?.message ?? "Failed to generate flashcards.");
       }
 
       if (isMountedRef.current) {

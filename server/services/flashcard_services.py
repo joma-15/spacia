@@ -113,14 +113,14 @@ class FlashcardService:
             for card in cards
         ]
 
-        # Double check all of them have valid statuses before committing
+        # Validate every generated card before changing the database.
         for flashcard in flashcards:
             self._validate_status(flashcard.status)
 
-            # Batch insert all of them
-            db.session.add_all(flashcards)
-            db.session.commit()
-            return flashcards
+        # Batch insert all cards in one transaction.
+        db.session.add_all(flashcards)
+        db.session.commit()
+        return flashcards
 
     @staticmethod
     def _validate_status(status: str) -> None:
