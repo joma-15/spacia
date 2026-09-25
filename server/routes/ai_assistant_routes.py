@@ -16,7 +16,9 @@ from flask import Blueprint, current_app, jsonify, request
 from flask.views import MethodView
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
+from extensions import db
 from errors import ApiError
+from models.users import User
 from services.ai_assistant_service import AiAssistantService
 from services.ai_study_action_service import AiStudyActionService
 from services.conversation_service import ConversationService
@@ -267,6 +269,10 @@ class MessageCollectionAPI(MethodView):
 
         folder_name = folder.subject if folder else None
         folder_card_count = len(folder.flashcards) if folder else 0
+        # Resolve the username from the authenticated JWT identity. It is never
+        # accepted from the client, so another user's name cannot be injected.
+        user = db.session.get(User, user_id)
+        user_name = user.username.strip() if user and user.username else None
         folder_flashcards = (
             [
                 {"question": card.question, "answer": card.answer}
@@ -283,6 +289,7 @@ class MessageCollectionAPI(MethodView):
             folder_name=folder_name,
             folder_card_count=folder_card_count,
             folder_flashcards=folder_flashcards,
+            user_name=user_name,
         )
 
         # 6 — call the AI provider

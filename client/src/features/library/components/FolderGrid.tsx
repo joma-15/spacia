@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",  // cards wrap to next line when row is full
-    gap: 14,
-    marginBottom: 22,
+    gap: 10,
+    marginBottom: 16,
   },
 });

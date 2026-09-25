@@ -23,8 +23,12 @@ import { BASE_URL } from "@/shared/config/api";
 import { getAccessToken } from "@/shared/components/auth/session";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { authenticatedFetch } from "@/shared/services/authenticatedFetch";
+import { readResource, writeResource } from "@/shared/database/resourceCacheRepository";
+import { setResourceMemory } from "@/shared/services/resourceStore";
 
 const FETCH_TIMEOUT_MS = 8000;
+const FLASHCARD_CACHE_STALE_MS = 5 * 60 * 1000;
+const flashcardResourceKey = (folderId: string) => `flashcards:${folderId}`;
 
 export interface TextbookUpload {
   /** Expo's file picker supplies a local URI, display name, and optional MIME type. */
@@ -79,6 +83,17 @@ export function useFlashCards(folderId: string) {
     }
   }, []);
 
+  // A resource entry records that this folder has been loaded, including when
+  // it contains zero cards. SQLite stores the cards themselves; this entry
+  // prevents an empty (but already visited) folder from fetching on every open.
+  const markFolderCacheFresh = useCallback((fId: string) => {
+    if (!userId || !fId) return;
+    const updatedAt = Date.now();
+    const resource = flashcardResourceKey(fId);
+    writeResource(userId, resource, null, updatedAt);
+    setResourceMemory(userId, resource, null, updatedAt);
+  }, [userId]);
+
   const syncPendingFlashcards = useCallback(async (fId: string) => {
     try {
       const token = await getAccessToken();
@@ -123,10 +138,11 @@ export function useFlashCards(folderId: string) {
           deleteFlashcard(userId, card.id);
         }
       }
+      markFolderCacheFresh(fId);
     } catch (error) {
       console.error("Failed to sync flashcards with server:", error);
     }
-  }, [userId]);
+  }, [markFolderCacheFresh, userId]);
 
   // Helper function: Converts card data received from the backend API structure 
   // into the standard TypeScript format used inside our React Native screens.
@@ -178,6 +194,7 @@ export function useFlashCards(folderId: string) {
     // Save changes to local database cache for offline availability immediately
     if (!userId) return;
     updateFlashcardStatus(userId, id, newStatus);
+    markFolderCacheFresh(folderId);
 
     try {
       // Send changes to the backend
@@ -193,7 +210,7 @@ export function useFlashCards(folderId: string) {
     } catch (error) {
       console.error("Status update failed:", error);
     }
-  }, [userId]);
+  }, [folderId, markFolderCacheFresh, userId]);
 
   const handleUnderstand = useCallback(
     (id: string) => updateCardStatus(id, "understood"),
@@ -212,10 +229,11 @@ export function useFlashCards(folderId: string) {
 
     // Eagerly update SQLite cache
     deleteFlashcard(userId, id);
+    markFolderCacheFresh(folderId);
 
     // Perform sync in background
     void syncPendingFlashcards(folderId);
-  }, [folderId, syncPendingFlashcards, userId]);
+  }, [folderId, markFolderCacheFresh, syncPendingFlashcards, userId]);
 
   /** Update question/answer for an existing card */
   const handleEdit = useCallback(
@@ -238,6 +256,7 @@ export function useFlashCards(folderId: string) {
     // Eagerly update SQLite cache
     try {
       deleteAllFlashcardsForFolder(userId, folderId);
+      markFolderCacheFresh(folderId);
     } catch (e) {
       console.error("Failed to delete all local flashcards:", e);
     }
@@ -257,7 +276,7 @@ export function useFlashCards(folderId: string) {
     } catch (error) {
       console.error("Delete all backend sync failed:", error);
     }
-  }, [folderId, userId]);
+  }, [folderId, markFolderCacheFresh, userId]);
 
   /**
    * Moves every "understood" card in this folder back to "review" so the
@@ -285,6 +304,7 @@ export function useFlashCards(folderId: string) {
         console.error("Failed to reset card status locally:", id, e);
       }
     });
+    markFolderCacheFresh(folderId);
 
     // Batch-send the status resets to the backend
     try {
@@ -300,7 +320,7 @@ export function useFlashCards(folderId: string) {
     } catch (error) {
       console.error("Re-review all backend sync failed:", error);
     }
-  }, [cards, userId]);
+  }, [cards, folderId, markFolderCacheFresh, userId]);
 
   /**
    * Moves every "review" card in this folder to "understood" so the
@@ -328,6 +348,7 @@ export function useFlashCards(folderId: string) {
         console.error("Failed to set card status locally:", id, e);
       }
     });
+    markFolderCacheFresh(folderId);
 
     // Batch-send the status updates to the backend
     try {
@@ -343,7 +364,7 @@ export function useFlashCards(folderId: string) {
     } catch (error) {
       console.error("Mark all done backend sync failed:", error);
     }
-  }, [cards, userId]);
+  }, [cards, folderId, markFolderCacheFresh, userId]);
 
   // ── Data Syncing and Cache Loading ──────────────────────────────────────────
 
@@ -408,6 +429,7 @@ export function useFlashCards(folderId: string) {
 
         // Save server cards to cache (only replacing synced cards)
         replaceFlashcardsForFolder(userId, folderId, saved.map((card) => ({ ...card, folderId })), "synced");
+        markFolderCacheFresh(folderId);
 
         // Run background sync for pending creations/deletes
         void syncPendingFlashcards(folderId);
@@ -432,7 +454,7 @@ export function useFlashCards(folderId: string) {
         }
       }
     },
-    [folderId, loadCachedCards, syncPendingFlashcards, userId],
+    [folderId, loadCachedCards, markFolderCacheFresh, syncPendingFlashcards, userId],
   );
 
   const handleAddCard = useCallback(
@@ -491,15 +513,27 @@ export function useFlashCards(folderId: string) {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Load from local SQLite cache first
-    const hasCache = loadCachedCards();
-    if (!hasCache) {
+    // Load from local SQLite cache first. The resource marker distinguishes a
+    // folder that has never been loaded from a previously loaded empty folder.
+    const hasCards = loadCachedCards();
+    const cacheEntry = readResource<null>(userId, flashcardResourceKey(folderId));
+    const isStale = !cacheEntry || Date.now() - cacheEntry.updatedAt >= FLASHCARD_CACHE_STALE_MS;
+    const hasPendingChanges = ["pending_create", "pending_delete"].some((status) =>
+      (getFlashcardsBySyncStatus(userId, status) as any[]).some(
+        (card) => card.folder_id === folderId,
+      ),
+    );
+    if (!hasCards && !cacheEntry) {
       setInitialLoading(true);
+    } else {
+      setInitialLoading(false);
     }
 
-    // Delay the network request until the screen slide animation completes
+    // Opening a fresh cached folder never hits the server. A background
+    // refresh is only scheduled for a first visit, a stale cache, or pending
+    // local mutations that need reconciliation.
     const task = InteractionManager.runAfterInteractions(() => {
-      if (!isMountedRef.current || controller.signal.aborted) return;
+      if (!isMountedRef.current || controller.signal.aborted || (!isStale && !hasPendingChanges)) return;
       void loadSavedCards(controller.signal, true);
     });
 

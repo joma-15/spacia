@@ -134,14 +134,6 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             hitSlop={6}
             accessibilityLabel="Turn into flashcard"
           >
-            <MaterialCommunityIcons
-              name="credit-card-outline"
-              size={13}
-              color={AI_THEME.primary}
-            />
-            <Text style={[styles.toolbarBtnText, { color: AI_THEME.primary }]}>
-              + Card
-            </Text>
           </TouchableOpacity>
 
           <View style={styles.feedbackGroup}>

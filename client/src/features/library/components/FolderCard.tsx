@@ -128,7 +128,7 @@ const FolderCard: React.FC<Props> = ({ folder, onDelete, onRename, onPress }) =>
           <Text style={[styles.folderEmoji, { color: accentColor }]}>
             <MaterialCommunityIcons
               name="folder-open"
-              size={25}
+              size={20}
               color="yellow"
             />
           </Text>
@@ -155,7 +155,7 @@ const FolderCard: React.FC<Props> = ({ folder, onDelete, onRename, onPress }) =>
           </TouchableOpacity>
         </View>
       ) : (
-        <Text style={styles.title} numberOfLines={2}>{subject}</Text>
+        <Text style={styles.title} numberOfLines={1}>{subject}</Text>
       )}
 
       {/* ── Card count badge ── */}
@@ -189,8 +189,8 @@ const styles = StyleSheet.create({
     width: "47%",
     backgroundColor: THEME.bgCard,
     borderRadius: THEME.radiusMd,
-    padding: 16,
-    paddingTop: 12,
+    minHeight: 112,
+    padding: 10,
     position: "relative",
     borderWidth: 1,
     borderColor: THEME.border,
@@ -198,45 +198,45 @@ const styles = StyleSheet.create({
 
   topActions: {
     position: "absolute",
-    top: 8,
-    right: 8,
+    top: 6,
+    right: 6,
     flexDirection: "row",
     gap: 4,
     zIndex: 1,
   },
   iconBtn: {
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 6,
     backgroundColor: "rgba(255,255,255,0.06)",
   },
 
-  iconWrap: { marginTop: 18, marginBottom: 14, alignSelf: "flex-start" },
+  iconWrap: { marginTop: 2, marginBottom: 7, alignSelf: "flex-start" },
   folderTab: {
-    width: 28,
-    height: 8,
-    borderTopLeftRadius: 5,
-    borderTopRightRadius: 5,
+    width: 22,
+    height: 6,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     marginBottom: -1,
     opacity: 0.85,
   },
   folderBody: {
-    width: 62,
-    height: 48,
-    borderRadius: 8,
+    width: 48,
+    height: 36,
+    borderRadius: 7,
     borderTopLeftRadius: 0,
     justifyContent: "center",
     alignItems: "center",
   },
-  folderEmoji: { fontSize: 22 },
+  folderEmoji: { fontSize: 18 },
 
   title: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
     color: THEME.textWhite,
-    marginBottom: 6,
+    marginBottom: 5,
   },
 
   // Inline rename
@@ -276,11 +276,11 @@ const styles = StyleSheet.create({
   countBadge: {
     alignSelf: "flex-start",
     borderRadius: THEME.radiusFull,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
   },
-  countText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.2 },
+  countText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.1 },
 });

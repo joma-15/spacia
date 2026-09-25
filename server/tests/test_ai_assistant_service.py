@@ -35,6 +35,15 @@ class AiAssistantServiceTestCase(unittest.TestCase):
 
         self.assertIn("Avoid Markdown and decorative special characters", prompt)
 
+    def test_prompt_includes_authenticated_username(self):
+        prompt = AiAssistantService().build_messages(
+            user_message="Hello",
+            history=[],
+            user_name="marcel",
+        )[0]["content"]
+
+        self.assertIn('currently authenticated student is "marcel"', prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

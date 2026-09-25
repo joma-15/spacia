@@ -105,7 +105,7 @@ export function useAiChat(): UseAiChatReturn {
       const history = await aiChatService.getMessages(conversation.id);
       const localMessages = history
         .filter((m) => m.role === "user" || m.role === "assistant")
-        .map(toLocalMessage);
+        .map((message) => toLocalMessage(message));
 
       setMessages(localMessages);
     } catch (err) {

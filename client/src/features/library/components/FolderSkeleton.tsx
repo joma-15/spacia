@@ -8,9 +8,9 @@ export const FolderSkeleton: React.FC = () => {
     <View style={[styles.card, THEME.cardShadow]}>
       {/* ── Folder icon skeleton ── */}
       <View style={styles.iconWrap}>
-        <Skeleton width={28} height={8} borderRadius={4} style={styles.folderTab} />
+        <Skeleton width={22} height={6} borderRadius={4} style={styles.folderTab} />
         <View style={styles.folderBodyOuter}>
-          <Skeleton width={62} height={48} borderRadius={8} style={styles.folderBody} />
+          <Skeleton width={48} height={36} borderRadius={7} style={styles.folderBody} />
         </View>
       </View>
 
@@ -39,28 +39,27 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 14,
-    marginBottom: 22,
+    gap: 10,
+    marginBottom: 16,
   },
   card: {
     width: "47%",
     backgroundColor: THEME.bgCard,
     borderRadius: THEME.radiusMd,
-    padding: 16,
-    paddingTop: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: THEME.border,
-    height: 154,
+    height: 112,
   },
-  iconWrap: { marginTop: 18, marginBottom: 14, alignSelf: "flex-start" },
+  iconWrap: { marginTop: 2, marginBottom: 7, alignSelf: "flex-start" },
   folderTab: {
     marginBottom: -1,
     opacity: 0.15,
   },
   folderBodyOuter: {
-    width: 62,
-    height: 48,
-    borderRadius: 8,
+    width: 48,
+    height: 36,
+    borderRadius: 7,
     borderTopLeftRadius: 0,
     overflow: "hidden",
   },
@@ -68,7 +67,7 @@ const styles = StyleSheet.create({
     opacity: 0.1,
   },
   title: {
-    marginBottom: 10,
+    marginBottom: 7,
     opacity: 0.15,
   },
   countBadge: {

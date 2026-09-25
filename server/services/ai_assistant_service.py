@@ -200,6 +200,7 @@ class AiAssistantService:
         folder_name: str | None = None,
         folder_card_count: int = 0,
         folder_flashcards: list[dict] | None = None,
+        user_name: str | None = None,
     ) -> list[dict]:
         """
         Assemble the full message list to send to the AI provider.
@@ -228,7 +229,7 @@ class AiAssistantService:
             Ready-to-send messages list for the Groq API.
         """
         system_prompt = self._build_system_prompt(
-            folder_name, folder_card_count, folder_flashcards
+            folder_name, folder_card_count, folder_flashcards, user_name
         )
 
         # Trim history to avoid sending too many tokens
@@ -249,6 +250,7 @@ class AiAssistantService:
         folder_name: str | None,
         folder_card_count: int,
         folder_flashcards: list[dict] | None = None,
+        user_name: str | None = None,
     ) -> str:
         """
         Build the system-level instruction that defines the AI's behaviour.
@@ -266,7 +268,7 @@ class AiAssistantService:
             "answer this:\n"
             "Spacia was developed by Jhon Marcel Adelantar, a Computer Engineering student "
             "and software developer from the Philippines. He created Spacia as an AI-powered "
-            "study and flashcard application designed to help students learn more effectively.\n\n"
+            "study and flashcard application designed to help students learn more effectively. and\n\n"
 
             "their study material, answer academic questions, explain concepts "
             "clearly, and provide study strategies.\n\n"
@@ -287,6 +289,13 @@ class AiAssistantService:
             "instead of guessing. To modify or delete a card, first retrieve its contents "
             "to obtain its ID. Delete only for an unambiguous, explicit request.\n"
         )
+
+        if user_name:
+            base += (
+                f"\nThe currently authenticated student is \"{user_name}\". "
+                "You may use their name naturally when it is helpful, but do not "
+                "pretend to know personal details that were not provided.\n"
+            )
 
         if folder_name:
             folder_context = (
