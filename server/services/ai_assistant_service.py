@@ -142,6 +142,19 @@ class AiAssistantService:
                     }
                 )
 
+            # Validation/authorization failures are already clear and safe to
+            # show the user. Return them directly instead of making another AI
+            # provider call that could replace a useful message (for example,
+            # the 25-card limit) with a generic availability error.
+            failures = [
+                action["result"]["error"]
+                for action in actions
+                if isinstance(action.get("result"), dict)
+                and action["result"].get("error")
+            ]
+            if failures:
+                return f"I couldn't complete that: {failures[0]}", actions
+
         raise ValueError("AI requested too many actions for one message.")
 
     def generate_flashcards(self, topic: str, count: int) -> list[dict]:

@@ -99,6 +99,15 @@ class ConversationService:
         db.session.delete(conversation)
         db.session.commit()
 
+    def set_folder_context(
+        self, conversation_id: str, user_id: str, folder_id: str
+    ) -> AiConversation:
+        """Persist a verified folder as the conversation's current study context."""
+        conversation = self.get_owned(conversation_id, user_id)
+        conversation.folder_id = folder_id
+        db.session.commit()
+        return conversation
+
     # ------------------------------------------------------------------
     # Messages — read
     # ------------------------------------------------------------------
@@ -134,10 +143,11 @@ class ConversationService:
                 AiMessage.conversation_id == conversation_id,
                 AiMessage.role.in_(["user", "assistant"]),
             )
-            .order_by(AiMessage.created_at.asc())
+            .order_by(AiMessage.created_at.desc())
             .limit(limit)
             .all()
         )
+        messages.reverse()
         return [{"role": m.role, "content": m.content} for m in messages]
 
     # ------------------------------------------------------------------

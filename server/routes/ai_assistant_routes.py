@@ -10,6 +10,8 @@ The route methods contain no AI logic and no raw ORM queries — those live
 in their respective service classes.
 """
 
+import re
+
 from flask import Blueprint, current_app, jsonify, request
 from flask.views import MethodView
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -27,6 +29,31 @@ assistant_bp = Blueprint("assistant", __name__)
 _ai_service = AiAssistantService()
 _conversation_service = ConversationService()
 _folder_service = FolderService()
+
+
+def _flashcard_count_limit_message(content: str) -> str | None:
+    """Reject oversized creation requests before an AI-provider call is needed."""
+    match = re.search(r"\b(\d+)\s+flashcards?\b", content, re.IGNORECASE)
+    if match and int(match.group(1)) > AiStudyActionService.MAX_FLASHCARDS_PER_ACTION:
+        return (
+            "I can only generate a maximum of "
+            f"{AiStudyActionService.MAX_FLASHCARDS_PER_ACTION} flashcards at a time."
+        )
+    return None
+
+
+def _created_folder_id(actions: list[dict]) -> str | None:
+    """Extract only a server-confirmed folder ID from an AI action result."""
+    for action in actions:
+        result = action.get("result") if isinstance(action, dict) else None
+        if not isinstance(result, dict):
+            continue
+        if action.get("type") not in {"create_folder", "create_folder_with_flashcards"}:
+            continue
+        folder = result.get("folder")
+        if isinstance(folder, dict) and isinstance(folder.get("id"), str):
+            return folder["id"]
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +232,17 @@ class MessageCollectionAPI(MethodView):
         # 2 — security: verify this conversation belongs to the caller
         conversation = _conversation_service.get_owned(conversation_id, user_id)
 
+        # This is a deterministic product limit, not a question for the AI.
+        # Checking it here guarantees a useful answer even if Groq is offline.
+        limit_message = _flashcard_count_limit_message(user_content)
+        if limit_message:
+            _, ai_msg = _conversation_service.add_message_pair(
+                conversation_id=conversation_id,
+                user_content=user_content,
+                assistant_content=limit_message,
+            )
+            return jsonify({"message": ai_msg.to_dict(), "actions": []}), 201
+
         # 3 — load previous messages for conversation memory
         history = _conversation_service.get_messages_for_ai(conversation_id)
 
@@ -246,6 +284,16 @@ class MessageCollectionAPI(MethodView):
                     conversation.folder_id,
                 ),
             )
+
+            # A confirmed folder creation becomes structured context for the
+            # next turn. This avoids asking the model to remember an ID from
+            # prose when the user says "add cards to that folder".
+            created_folder_id = _created_folder_id(actions)
+            if created_folder_id:
+                _folder_service.get_owned(created_folder_id, user_id)
+                conversation = _conversation_service.set_folder_context(
+                    conversation_id, user_id, created_folder_id
+                )
         except RuntimeError as exc:
             # Configuration error (missing API key etc.)
             current_app.logger.error("AI configuration error: %s", exc)
