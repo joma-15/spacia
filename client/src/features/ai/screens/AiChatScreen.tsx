@@ -13,6 +13,13 @@
  *    On iOS, keyboardEndCoordinates.height already includes the home indicator.
  *    On Android, we add insets.bottom to compensate for gesture nav bars.
  *  - No KeyboardAvoidingView is used — it fights with the absolute nav bar.
+ *
+ * Data flow:
+ *  - All chat state and API calls are managed by `useAiChat`.
+ *  - When the selected folder changes, we call `loadConversation` to
+ *    resume or create the conversation for that folder.
+ *  - "New Chat" calls `startNewChat` which creates a fresh conversation.
+ *  - Sending a message calls `sendMessage` — optimistic UI is handled by the hook.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -23,6 +30,8 @@ import {
   KeyboardEvent,
   Platform,
   StyleSheet,
+  Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import {
@@ -30,7 +39,8 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { AI_THEME, generateMockAiResponse } from "../constants";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { AI_THEME } from "../constants";
 import { ChatMessage, SelectedFolderContext } from "../types";
 import { AiHeader } from "../components/AiHeader";
 import { FolderSelectModal } from "../components/FolderSelectModal";
@@ -39,8 +49,9 @@ import { TypingIndicator } from "../components/TypingIndicator";
 import { EmptyChatState } from "../components/EmptyChatState";
 import { ChatInputBar } from "../components/ChatInputBar";
 import { useFolders } from "@/features/library/hooks/useFolders";
-
 import { useAd } from "@/shared/context/AdContext";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useAiChat } from "../hooks/useAiChat";
 
 const BOTTOM_NAV_HEIGHT = 64;
 
@@ -48,6 +59,25 @@ export const AiChatScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { folders } = useFolders();
   const { isAdVisible } = useAd();
+  const { isAuthenticated } = useAuth();
+
+  // ── AI chat state (backed by the real backend) ──
+  const {
+    messages,
+    isLoading,
+    isThinking,
+    error,
+    loadConversation,
+    sendMessage,
+    startNewChat,
+    clearError,
+  } = useAiChat();
+
+  // ── UI state ──
+  const [inputText, setInputText] = useState("");
+  const [folderModalVisible, setFolderModalVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   const [selectedFolder, setSelectedFolder] = useState<SelectedFolderContext>({
     id: null,
@@ -56,17 +86,34 @@ export const AiChatScreen: React.FC = () => {
     accentColor: AI_THEME.gold,
   });
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState("");
-  const [isThinking, setIsThinking] = useState(false);
-  const [folderModalVisible, setFolderModalVisible] = useState(false);
-
-  // Track keyboard height and visibility
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
 
+  // ── Load conversation when screen mounts or auth state becomes available ──
+  useEffect(() => {
+    if (isAuthenticated) {
+      void loadConversation(selectedFolder.id);
+    }
+  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Note: we only re-run on auth change here; folder changes are handled below.
+
+  // ── Load conversation when the selected folder changes ──
+  const previousFolderIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    // Skip the very first render (handled by the auth effect above)
+    if (previousFolderIdRef.current === undefined) {
+      previousFolderIdRef.current = selectedFolder.id;
+      return;
+    }
+    // Only reload if the folder actually changed
+    if (previousFolderIdRef.current !== selectedFolder.id) {
+      previousFolderIdRef.current = selectedFolder.id;
+      if (isAuthenticated) {
+        void loadConversation(selectedFolder.id);
+      }
+    }
+  }, [selectedFolder.id, isAuthenticated, loadConversation]);
+
+  // ── Keyboard handling ──
   useEffect(() => {
     const showEvent =
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -74,8 +121,6 @@ export const AiChatScreen: React.FC = () => {
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
     const showSub = Keyboard.addListener(showEvent, (e: KeyboardEvent) => {
-      // e.endCoordinates.height is the keyboard height INCLUDING
-      // the home indicator on iOS. On Android we compensate with insets.bottom.
       const height =
         Platform.OS === "android"
           ? e.endCoordinates.height + insets.bottom
@@ -101,69 +146,38 @@ export const AiChatScreen: React.FC = () => {
     };
   }, [insets.bottom]);
 
-  // Compute the bottom padding for the whole screen content:
-  // ─ Keyboard open  → lift everything by keyboard height so nothing is hidden behind it
-  // ─ Keyboard closed → lift everything above the pinned bottom nav bar
   const contentBottomPadding = isKeyboardVisible
     ? Math.max(keyboardHeight - 8, 0)
     : Math.max(BOTTOM_NAV_HEIGHT + Math.max(insets.bottom, 8), 0);
 
-  // Send message handler (supports both typing input and prompt chips)
+  // ── Message send handler ──
   const handleSendMessage = useCallback(
-    (explicitPrompt?: string) => {
+    async (explicitPrompt?: string) => {
       const text = (explicitPrompt ?? inputText).trim();
-      if (!text || isThinking) return;
+      if (!text || isThinking || isLoading) return;
 
-      const userMsg: ChatMessage = {
-        id: `user-${Date.now()}`,
-        role: "user",
-        content: text,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        folderId: selectedFolder.id ?? undefined,
-        folderName: selectedFolder.name,
-      };
-
-      setMessages((prev) => [...prev, userMsg]);
       setInputText("");
-      setIsThinking(true);
+      await sendMessage(text);
 
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-
-      // Simulate AI thinking and response generation
-      setTimeout(() => {
-        const responseText = generateMockAiResponse(text, selectedFolder.name);
-        const aiMsg: ChatMessage = {
-          id: `ai-${Date.now()}`,
-          role: "assistant",
-          content: responseText,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        };
-
-        setMessages((prev) => [...prev, aiMsg]);
-        setIsThinking(false);
-
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 150);
-      }, 1000);
+      }, 150);
     },
-    [inputText, isThinking, selectedFolder],
+    [inputText, isThinking, isLoading, sendMessage],
   );
 
-  const handleNewChat = useCallback(() => {
-    setMessages([]);
-    setInputText("");
-    setIsThinking(false);
+  // ── New chat handler ──
+  const handleNewChat = useCallback(async () => {
+    await startNewChat(selectedFolder.id);
+  }, [selectedFolder.id, startNewChat]);
+
+  // ── Folder selection handler ──
+  const handleSelectFolder = useCallback((folder: SelectedFolderContext) => {
+    setSelectedFolder(folder);
+    // Conversation loading is triggered by the selectedFolder.id effect above
   }, []);
 
+  // ── Flashcard creation (UI-only for now) ──
   const handleCreateFlashcard = useCallback((content: string) => {
     Alert.alert(
       "Create Flashcard",
@@ -191,6 +205,27 @@ export const AiChatScreen: React.FC = () => {
         onNewChat={handleNewChat}
       />
 
+      {/* ── Error Banner ── */}
+      {error !== null && (
+        <View style={styles.errorBanner}>
+          <MaterialCommunityIcons
+            name="alert-circle-outline"
+            size={14}
+            color="#FCA5A5"
+          />
+          <Text style={styles.errorBannerText} numberOfLines={2}>
+            {error}
+          </Text>
+          <TouchableOpacity onPress={clearError} hitSlop={8}>
+            <MaterialCommunityIcons
+              name="close"
+              size={14}
+              color="rgba(255,255,255,0.5)"
+            />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/*
         ── Chat area + Input dock in a flex column ──
         paddingBottom shifts the whole column up by exactly the keyboard
@@ -201,7 +236,7 @@ export const AiChatScreen: React.FC = () => {
         {messages.length === 0 ? (
           <EmptyChatState
             selectedFolder={selectedFolder}
-            onSelectPrompt={(p) => handleSendMessage(p)}
+            onSelectPrompt={(p) => void handleSendMessage(p)}
             onChangeFolder={() => setFolderModalVisible(true)}
           />
         ) : (
@@ -230,17 +265,17 @@ export const AiChatScreen: React.FC = () => {
         <ChatInputBar
           value={inputText}
           onChangeText={setInputText}
-          onSend={() => handleSendMessage()}
+          onSend={() => void handleSendMessage()}
           selectedFolder={selectedFolder}
           onResetFolder={() =>
-            setSelectedFolder({
+            handleSelectFolder({
               id: null,
               name: "All Folders",
               cardCount: 0,
               accentColor: AI_THEME.gold,
             })
           }
-          isThinking={isThinking}
+          isThinking={isThinking || isLoading}
           isKeyboardVisible={isKeyboardVisible}
         />
       </View>
@@ -250,7 +285,7 @@ export const AiChatScreen: React.FC = () => {
         visible={folderModalVisible}
         folders={folders}
         currentFolder={selectedFolder}
-        onSelect={setSelectedFolder}
+        onSelect={handleSelectFolder}
         onClose={() => setFolderModalVisible(false)}
       />
     </SafeAreaView>
@@ -269,5 +304,21 @@ const styles = StyleSheet.create({
   },
   messageListContent: {
     paddingVertical: 14,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(239, 68, 68, 0.3)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: "#FCA5A5",
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

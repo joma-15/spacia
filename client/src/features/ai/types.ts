@@ -28,3 +28,23 @@ export interface SelectedFolderContext {
   cardCount: number;
   accentColor: string;
 }
+
+// --- Backend API shapes ---
+
+/** Matches the `to_dict()` output of AiConversation on the server. */
+export interface Conversation {
+  id: string;
+  folderId: string | null;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Matches the `to_dict()` output of AiMessage on the server. */
+export interface Message {
+  id: string;
+  conversationId: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  createdAt: string;
+}

@@ -83,12 +83,14 @@ def create_app(test_config: dict | None = None) -> Flask:
     from models.schedules import Schedule  # noqa: F401
     from models.users import User  # noqa: F401
     from models.studysessions import StudySession  # noqa: F401
+    from models.ai_conversation import AiConversation, AiMessage  # noqa: F401
     from routes.flashcard_routes import flashcards_bp
     from routes.folder_routes import folders_bp
     from routes.schedule_routes import schedules_bp
     from routes.auth_routes import auth_bp
     from routes.study_session_routes import studysession_bp
     from routes.streak_routes import streak_bp
+    from routes.ai_assistant_routes import assistant_bp
 
     # Register blueprints. Blueprints are just groups of routes.
     # For example, all /flashcards/... routes are grouped inside flashcards_bp.
@@ -98,6 +100,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(studysession_bp)
     app.register_blueprint(streak_bp)
+    app.register_blueprint(assistant_bp)
 
     @app.get("/")
     def health_check():

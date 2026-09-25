@@ -1,4 +1,4 @@
-# Shared Contexts (`/client/src/shared/context`)
+ # Shared Contexts (`/client/src/shared/context`)
 
 ## 1. Purpose
 
