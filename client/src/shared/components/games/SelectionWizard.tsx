@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   FlatList,
   StatusBar,
   StyleSheet,
@@ -45,7 +44,7 @@ const COLORS = {
 /* -------------------------------------------------------------------------- */
 
 const FolderItem = React.memo(
-  ({ item, onPress }: FolderItemProps) => {
+  function FolderItem({ item, onPress }: FolderItemProps) {
     return (
       <TouchableOpacity
         style={styles.card}
@@ -79,27 +78,6 @@ const FolderItem = React.memo(
 
           <View style={styles.textWrapper}>
             <Text style={styles.folderName}>{item.subject}</Text>
-
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: `${item.accentColor}22`,
-                  borderColor: `${item.accentColor}55`,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.badgeText,
-                  {
-                    color: item.accentColor,
-                  },
-                ]}
-              >
-                {item.cardCount} cards
-              </Text>
-            </View>
           </View>
         </View>
 
@@ -424,20 +402,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 16,
     fontWeight: "700",
-    marginBottom: 6,
-  },
-
-  badge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-
-  badgeText: {
-    fontSize: 12,
-    fontWeight: "600",
   },
 
   emptyState: {

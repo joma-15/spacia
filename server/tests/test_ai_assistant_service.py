@@ -44,6 +44,25 @@ class AiAssistantServiceTestCase(unittest.TestCase):
 
         self.assertIn('currently authenticated student is "marcel"', prompt)
 
+    def test_folder_creation_reply_does_not_expose_internal_study_data(self):
+        prompt = AiAssistantService().build_messages(
+            user_message="Create a biology folder",
+            history=[],
+        )[0]["content"]
+
+        self.assertIn("never reveal internal IDs", prompt)
+        self.assertIn("flashcards, card details, or card counts", prompt)
+        self.assertIn("do not direct the student to the Library", prompt)
+
+    def test_prompt_supports_adding_cards_to_an_existing_folder(self):
+        prompt = AiAssistantService().build_messages(
+            user_message="Add cards to my Biology folder",
+            history=[],
+        )[0]["content"]
+
+        self.assertIn("use create_flashcards", prompt)
+        self.assertIn("selected folder automatically", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,9 +11,10 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
 import ForgotPasswordForm from "./ForgotPasswordForm";
@@ -36,6 +37,9 @@ export default function AuthModal({
   onClose,
   onAuthenticated,
 }: AuthModalProps) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const translateY = useRef(new Animated.Value(40)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -139,7 +143,18 @@ export default function AuthModal({
         </Animated.View>
 
         <KeyboardAvoidingView
-        style={styles.centerWrap}
+        style={[
+          styles.centerWrap,
+          isTablet && [
+            styles.tabletCenterWrap,
+            {
+              paddingTop: Math.max(insets.top, spacing.lg),
+              paddingBottom: Math.max(insets.bottom, spacing.lg),
+              paddingLeft: Math.max(insets.left, spacing.lg),
+              paddingRight: Math.max(insets.right, spacing.lg),
+            },
+          ],
+        ]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={0}
         pointerEvents="box-none"
@@ -147,11 +162,12 @@ export default function AuthModal({
         <Animated.View
           style={[
             styles.sheet,
+            isTablet && styles.tabletSheet,
             shadow.card,
             { opacity, transform: [{ translateY }] },
           ]}
         >
-          <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
+          <SafeAreaView edges={isTablet ? ["top", "bottom", "left", "right"] : ["bottom"]} style={styles.safeArea}>
             <View style={styles.header}>
               <Text style={styles.headerTitle}>{titleForMode[mode]}</Text>
               <TouchableOpacity
@@ -206,11 +222,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
   },
+  tabletCenterWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   sheet: {
     backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     maxHeight: "88%",
+  },
+  tabletSheet: {
+    alignSelf: "center",
+    borderRadius: radius.lg,
+    maxWidth: 560,
+    width: "100%",
+    maxHeight: "86%",
   },
   safeArea: {
     paddingHorizontal: spacing.lg,

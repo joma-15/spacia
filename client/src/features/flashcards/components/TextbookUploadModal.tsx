@@ -30,15 +30,18 @@ const formatBytes = (bytes?: number) => {
 export default function TextbookUploadModal({ visible, onClose, onGenerate }: Props) {
   const insets = useSafeAreaInsets();
   const [file, setFile] = useState<TextbookUpload | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   /** Clear the previous selection so reopening the modal always starts fresh. */
   const close = () => {
+    if (isGenerating) return;
     setFile(null);
     onClose();
   };
 
   /** The picker copies the file into the app cache, keeping its URI readable during upload. */
   const chooseFile = async () => {
+    if (isGenerating) return;
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: TEXTBOOK_TYPES, copyToCacheDirectory: true });
       if (result.canceled) return;
@@ -66,11 +69,20 @@ export default function TextbookUploadModal({ visible, onClose, onGenerate }: Pr
 
   /** Leave the sheet open on failure so the user can choose a different file. */
   const generate = async () => {
+    if (isGenerating) return;
     if (!file) {
       Alert.alert("Choose a textbook", "Select an English PDF or DOCX textbook first.");
       return;
     }
-    if (await onGenerate(file)) close();
+    setIsGenerating(true);
+    try {
+      if (await onGenerate(file)) {
+        setFile(null);
+        onClose();
+      }
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const getFileIcon = (mimeType?: string | null) => {
@@ -91,7 +103,7 @@ export default function TextbookUploadModal({ visible, onClose, onGenerate }: Pr
   return (
     <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
       <View style={styles.overlay}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} />
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} disabled={isGenerating} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
           <View style={styles.handle} />
           
@@ -100,14 +112,14 @@ export default function TextbookUploadModal({ visible, onClose, onGenerate }: Pr
               <Text style={styles.title}>Generate Flashcards</Text>
               <Text style={styles.subtitle}>AI-Powered Study Deck Creator</Text>
             </View>
-            <TouchableOpacity style={styles.closeIconButton} onPress={close}>
+            <TouchableOpacity style={styles.closeIconButton} onPress={close} disabled={isGenerating}>
               <MaterialCommunityIcons name="close" size={20} color={COLORS.textMuted} />
             </TouchableOpacity>
           </View>
 
           {/* ── Drag & Drop style Upload Zone ── */}
           {!file ? (
-            <TouchableOpacity style={styles.uploadZone} onPress={chooseFile} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.uploadZone} onPress={chooseFile} activeOpacity={0.8} disabled={isGenerating}>
               <View style={styles.iconCircle}>
                 <MaterialCommunityIcons name="cloud-upload-outline" size={32} color={COLORS.primary} />
               </View>
@@ -137,7 +149,7 @@ export default function TextbookUploadModal({ visible, onClose, onGenerate }: Pr
                   {formatBytes(file.size)} • {file.name.split(".").pop()?.toUpperCase()}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.removeButton} onPress={() => setFile(null)}>
+              <TouchableOpacity style={styles.removeButton} onPress={() => setFile(null)} disabled={isGenerating}>
                 <MaterialCommunityIcons name="trash-can-outline" size={20} color={COLORS.danger} />
               </TouchableOpacity>
             </View>
@@ -171,16 +183,16 @@ export default function TextbookUploadModal({ visible, onClose, onGenerate }: Pr
 
           {/* ── Actions ── */}
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={close}>
+            <TouchableOpacity style={styles.cancelButton} onPress={close} disabled={isGenerating}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.generateButton, !file && styles.generateButtonDisabled]}
+              style={[styles.generateButton, (!file || isGenerating) && styles.generateButtonDisabled]}
               onPress={generate}
-              disabled={!file}
+              disabled={!file || isGenerating}
             >
               <MaterialCommunityIcons name="flash-outline" size={16} color="#fff" style={styles.buttonIcon} />
-              <Text style={styles.generateText}>Generate Cards</Text>
+              <Text style={styles.generateText}>{isGenerating ? "Generating…" : "Generate Cards"}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -6,7 +6,6 @@
  * Shows:
  *  - A colored folder icon (tab + body)
  *  - The subject name
- *  - How many cards are inside
  *  - A pencil button to rename the folder
  *  - An ✕ button to delete the folder
  *
@@ -26,8 +25,7 @@ import {
 } from "react-native";
 import { THEME } from "../theme";
 import type { Folder } from "../types";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 
 interface Props {
   folder: Folder;
@@ -40,7 +38,7 @@ interface Props {
 }
 
 const FolderCard: React.FC<Props> = ({ folder, onDelete, onRename, onPress }) => {
-  const { subject, cardCount, accentColor } = folder;
+  const { subject, accentColor } = folder;
 
   // ── Rename state ──────────────────────────────────────────────────────────
   const [isEditing, setIsEditing] = useState(false);
@@ -158,26 +156,6 @@ const FolderCard: React.FC<Props> = ({ folder, onDelete, onRename, onPress }) =>
         <Text style={styles.title} numberOfLines={1}>{subject}</Text>
       )}
 
-      {/* ── Card count badge ── */}
-      <View
-        style={[
-          styles.countBadge,
-          {
-            backgroundColor: accentColor + "22",
-            borderColor: accentColor + "55",
-          },
-        ]}
-      >
-        <MaterialCommunityIcons
-          name="cards-outline"
-          size={10}
-          color={accentColor}
-          style={{ marginRight: 3 }}
-        />
-        <Text style={[styles.countText, { color: accentColor }]}>
-          {cardCount} cards
-        </Text>
-      </View>
     </TouchableOpacity>
   );
 };
@@ -273,14 +251,4 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
   },
 
-  countBadge: {
-    alignSelf: "flex-start",
-    borderRadius: THEME.radiusFull,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  countText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.1 },
 });

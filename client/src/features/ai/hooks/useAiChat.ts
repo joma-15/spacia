@@ -21,6 +21,63 @@ import * as aiChatService from "../services/aiChatService";
 import { ApiRequestError } from "@/shared/services/authenticatedFetch";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { loadFolders } from "@/shared/services/folderDataService";
+import { saveFlashcards } from "@/shared/database/flashcardRepository";
+import { writeResource } from "@/shared/database/resourceCacheRepository";
+import { setResourceMemory } from "@/shared/services/resourceStore";
+
+const flashcardResourceKey = (folderId: string) => `flashcards:${folderId}`;
+
+type GeneratedCard = {
+  id: string;
+  question: string;
+  answer: string;
+  status?: string;
+  folder_id?: string;
+};
+
+/**
+ * The Library reads flashcards from SQLite first. Mirror cards returned by a
+ * successful AI tool action into that cache, so an AI-created card is visible
+ * immediately instead of waiting for the normal five-minute cache refresh.
+ */
+function cacheAiGeneratedCards(userId: string, actions: ChatMessage["actions"]): void {
+  for (const action of actions ?? []) {
+    if (
+      !["create_flashcards", "create_folder_with_flashcards"].includes(action.type) ||
+      action.result.error
+    ) {
+      continue;
+    }
+
+    const folder = action.result.folder as { id?: unknown } | undefined;
+    const cards = action.result.flashcards;
+    const folderId = typeof folder?.id === "string" ? folder.id : undefined;
+    if (!folderId || !Array.isArray(cards)) continue;
+
+    const validCards = cards.filter(
+      (card): card is GeneratedCard =>
+        typeof card === "object" &&
+        card !== null &&
+        typeof (card as GeneratedCard).id === "string" &&
+        typeof (card as GeneratedCard).question === "string" &&
+        typeof (card as GeneratedCard).answer === "string",
+    );
+    if (!validCards.length) continue;
+
+    saveFlashcards(
+      userId,
+      validCards.map((card) => ({
+        ...card,
+        folderId,
+        status: card.status ?? "review",
+      })),
+      "synced",
+    );
+    const resource = flashcardResourceKey(folderId);
+    writeResource(userId, resource, null);
+    setResourceMemory(userId, resource, null);
+  }
+}
 
 interface UseAiChatReturn {
   /** Messages currently displayed in the chat list. */
@@ -145,6 +202,10 @@ export function useAiChat(): UseAiChatReturn {
     try {
       const result = await aiChatService.sendMessage(conversationId, content.trim());
       const localAiMsg = toLocalMessage(result.message, result.actions);
+
+      if (cacheOwnerId) {
+        cacheAiGeneratedCards(cacheOwnerId, result.actions);
+      }
 
       if (cacheOwnerId && result.actions.some((action) =>
         ["create_folder", "create_folder_with_flashcards"].includes(action.type) && !action.result.error,

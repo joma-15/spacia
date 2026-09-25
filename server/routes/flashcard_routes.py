@@ -1,6 +1,7 @@
 """HTTP controllers for flashcards and uploaded-file AI generation."""
 
 from pathlib import Path
+from threading import Lock
 from uuid import uuid4
 
 from flask import Blueprint, current_app, jsonify, request
@@ -20,6 +21,10 @@ flashcards_bp = Blueprint("flashcards", __name__)
 # Instantiate the services we need to fetch, generate, and save cards.
 flashcard_service = FlashcardService()
 ai_flashcard_service = AiFlashcardService(flashcard_service)
+# Document extraction and AI generation are expensive. A single serialization lock keeps
+# concurrent uploads from overwhelming the model/provider or writing cards into
+# the same database session at once; later requests wait for the active job.
+document_generation_queue = Lock()
 
 
 class FlashcardGenerationAPI(MethodView):
@@ -60,8 +65,10 @@ class FlashcardGenerationAPI(MethodView):
         uploaded_file.save(source_file)
 
         try:
-            # Generate flashcards using our AI service
-            flashcards = ai_flashcard_service.generate_from_file(folder_id, user_id, str(source_file))
+            # Generate one document at a time. Requests arriving while another
+            # document is running wait here instead of competing for the AI provider.
+            with document_generation_queue:
+                flashcards = ai_flashcard_service.generate_from_file(folder_id, user_id, str(source_file))
         finally:
             # The 'finally' block always runs, even if generate_from_file crashes!
             # This is crucial so we never leave temporary PDF files lying around on the server.

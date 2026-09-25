@@ -288,6 +288,12 @@ class AiAssistantService:
             "- For folder or card questions, retrieve the current data with a read tool "
             "instead of guessing. To modify or delete a card, first retrieve its contents "
             "to obtain its ID. Delete only for an unambiguous, explicit request.\n"
+            "- When the student asks to add or generate flashcards in an existing folder, "
+            "use create_flashcards. Use the selected folder automatically, or pass the "
+            "folder name the student gives; ask for a folder only when neither is available.\n"
+            "- After a successful folder-creation tool call, write your own short, friendly "
+            "confirmation. You may mention the folder name, but never reveal internal IDs, "
+            "flashcards, card details, or card counts, and do not direct the student to the Library.\n"
         )
 
         if user_name:
