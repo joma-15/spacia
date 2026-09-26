@@ -70,4 +70,4 @@ Maintain daily study streaks and build consistent learning habits.
 Spacia combines **AI assistance, flashcards, gamification, streaks, and rewards** into one study experience designed to make learning more interactive and enjoyable.
 
 Application Link here : 
-https://expo.dev/accounts/marcelhahaha/projects/spacia/builds/f4dd5f88-2250-452c-9533-129d32adf288
+https://expo.dev/accounts/marcelhahaha/projects/spacia/builds/4fc21681-9d2d-4cab-952a-21ff4fbc2625?fbclid=IwY2xjawUjQKVleHRuA2FlbQIxMABwZG9mBWJyaWQRMWlzRnpKOEVjalZNRkQ2RklzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEelHb4pogzuvEXTA3gxX3xGz7PWobYnWuhMYpLo8S3KJ10lg5N6ZKj_DE3vYw_aem_IO0t4IeDrrKAOI6e4CeRdw
