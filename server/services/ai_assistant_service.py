@@ -132,7 +132,9 @@ class AiAssistantService:
                     result = {"error": str(exc)}
                 except Exception:
                     # Never send database/provider implementation details back to the model.
-                    result = {"error": "The requested study action could not be completed."}
+                    result = {
+                        "error": "The requested study action could not be completed."
+                    }
                 actions.append({"type": call.function.name, "result": result})
                 working_messages.append(
                     {
@@ -166,7 +168,7 @@ class AiAssistantService:
         client = self._get_client()
         prompt = (
             f"Create exactly {count} distinct study flashcards about {topic.strip()}. "
-            "Return JSON only: {\"flashcards\":[{\"question\":string,\"answer\":string,\"status\":\"review\"}]}. "
+            'Return JSON only: {"flashcards":[{"question":string,"answer":string,"status":"review"}]}. '
             "Questions must cover different useful concepts."
         )
         completion = client.chat.completions.create(
@@ -185,7 +187,11 @@ class AiAssistantService:
         if not isinstance(cards, list) or not cards:
             raise ValueError("AI returned no flashcards.")
         normalized = [
-            {"question": str(card["question"]).strip(), "answer": str(card["answer"]).strip(), "status": "review"}
+            {
+                "question": str(card["question"]).strip(),
+                "answer": str(card["answer"]).strip(),
+                "status": "review",
+            }
             for card in cards
             if isinstance(card, dict) and card.get("question") and card.get("answer")
         ]
@@ -206,7 +212,7 @@ class AiAssistantService:
         Assemble the full message list to send to the AI provider.
 
         Order:
-            1. System instruction (Spacia identity + folder context)
+            1. System instruction (Spavi identity + folder context)
             2. Previous conversation history (trimmed to MAX_HISTORY_MESSAGES)
             3. Latest user message
 
@@ -222,6 +228,8 @@ class AiAssistantService:
             Name of the currently selected folder, or None for general chat.
         folder_card_count : int
             Number of flashcards in the folder (for context richness).
+        user_name : str | None
+            The authenticated user's display name, used to personalise responses.
 
         Returns
         -------
@@ -260,16 +268,14 @@ class AiAssistantService:
         - Folder selected → same assistant, but focused on that subject.
         """
         base = (
-            "You are Spacia AI, an expert study assistant built into the Spacia "
+            "You are Spavi AI, an expert study assistant built into the Spavi "
             "flashcard and learning app. Your role is to help students understand "
-            "Spacia was developed by Jhon Marcel Adelantar\n" 
-            
-            "If the user asks who developed, created, or built Spacia, "  
+            "Spavi was developed by Jhon Marcel Adelantar\n"
+            "If the user asks who developed, created, or built Spavi, "
             "answer this:\n"
-            "Spacia was developed by Jhon Marcel Adelantar, a Computer Engineering student "
-            "and software developer from the Philippines. He created Spacia as an AI-powered "
-            "study and flashcard application designed to help students learn more effectively. and\n\n"
-
+            "Spavi was developed by Jhon Marcel Adelantar, a Computer Engineering student "
+            "and software developer from the Philippines. He created Spavi as an AI-powered "
+            "study and flashcard application designed to help students learn more effectively.\n\n"
             "their study material, answer academic questions, explain concepts "
             "clearly, and provide study strategies.\n\n"
             "Guidelines:\n"
@@ -288,25 +294,15 @@ class AiAssistantService:
             "- For folder or card questions, retrieve the current data with a read tool "
             "instead of guessing. To modify or delete a card, first retrieve its contents "
             "to obtain its ID. Delete only for an unambiguous, explicit request.\n"
-            "- When the student asks to add or generate flashcards in an existing folder, "
-            "use create_flashcards. Use the selected folder automatically, or pass the "
-            "folder name the student gives; ask for a folder only when neither is available.\n"
-            "- After a successful folder-creation tool call, write your own short, friendly "
-            "confirmation. You may mention the folder name, but never reveal internal IDs, "
-            "flashcards, card details, or card counts, and do not direct the student to the Library.\n"
         )
 
         if user_name:
-            base += (
-                f"\nThe currently authenticated student is \"{user_name}\". "
-                "You may use their name naturally when it is helpful, but do not "
-                "pretend to know personal details that were not provided.\n"
-            )
+            base += f"\nThe student's name is {user_name}. Address them by name when it feels natural.\n"
 
         if folder_name:
             folder_context = (
                 f"\nCurrent Study Context:\n"
-                f"The student is currently studying the subject: \"{folder_name}\".\n"
+                f'The student is currently studying the subject: "{folder_name}".\n'
             )
             if folder_card_count > 0:
                 folder_context += (
@@ -314,7 +310,7 @@ class AiAssistantService:
                 )
             folder_context += (
                 "Prioritize explanations and examples that are relevant to this subject. "
-                f"The user selected \"{folder_name}\" in the app, so treat every message "
+                f'The user selected "{folder_name}" in the app, so treat every message '
                 "in this conversation as referring to this folder unless they explicitly "
                 "name a different folder. When the student asks vague questions like "
                 "'explain this', 'summarize this', or 'quiz me', use this folder's cards.\n"
@@ -345,8 +341,7 @@ class AiAssistantService:
             return base + folder_context
 
         return (
-            base
-            + "\nThe student has not selected a specific subject folder. "
+            base + "\nThe student has not selected a specific subject folder. "
             "Provide general academic help across all subjects.\n"
         )
 
@@ -356,8 +351,7 @@ class AiAssistantService:
             api_key = os.getenv("GROQ_API_KEY")
             if not api_key:
                 raise RuntimeError(
-                    "GROQ_API_KEY is not configured. "
-                    "Add it to the server/.env file."
+                    "GROQ_API_KEY is not configured. " "Add it to the server/.env file."
                 )
             self._client = Groq(api_key=api_key)
         return self._client

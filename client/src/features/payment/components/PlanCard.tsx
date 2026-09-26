@@ -4,7 +4,7 @@
  * A tappable card representing one subscription plan (Monthly or Annual).
  *
  * Shows:
- *  - A radio button (filled when selected)
+ *  - A MaterialCommunityIcons radio button (filled when selected)
  *  - Plan label + price
  *  - Optional "per month" breakdown (used on annual plan)
  *  - Optional badge in the top-right corner (e.g. "SAVE 17%")
@@ -14,6 +14,7 @@
 
 import React, { useRef } from "react";
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../colors";
 
 interface Props {
@@ -65,10 +66,13 @@ const PlanCard: React.FC<Props> = ({
           </View>
         )}
 
-        {/* ── Radio button indicator ── */}
-        <View style={[styles.radio, selected && styles.radioSelected]}>
-          {selected && <View style={styles.radioDot} />}
-        </View>
+        {/* ── Radio button indicator (MaterialCommunityIcons) ── */}
+        <MaterialCommunityIcons
+          name={selected ? "radiobox-marked" : "radiobox-blank"}
+          size={20}
+          color={selected ? COLORS.accent : COLORS.textDim}
+          style={styles.radio}
+        />
 
         {/* ── Plan name + price ── */}
         <Text style={[styles.label, selected && styles.labelSelected]}>
@@ -110,21 +114,18 @@ const styles = StyleSheet.create({
   },
 
   badge: {
-    position: "absolute", top: -1, right: -1,
+    position: "absolute",
+    top: -1,
+    right: -1,
     backgroundColor: COLORS.accent,
-    borderBottomLeftRadius: 10, borderTopRightRadius: 15,
-    paddingHorizontal: 8, paddingVertical: 3,
+    borderBottomLeftRadius: 10,
+    borderTopRightRadius: 15,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   badgeText: { color: COLORS.bg, fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
 
-  radio: {
-    width: 18, height: 18, borderRadius: 9,
-    borderWidth: 2, borderColor: COLORS.textDim,
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 10,
-  },
-  radioSelected: { borderColor: COLORS.accent },
-  radioDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: COLORS.accent },
+  radio: { marginBottom: 10 },
 
   label: { color: COLORS.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 4 },
   labelSelected: { color: COLORS.accentText },

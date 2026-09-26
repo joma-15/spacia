@@ -23,7 +23,7 @@ export interface PricingPlan {
 
 /** Shape of a single perks/features section */
 export interface Perk {
-  emoji: string;    // icon shown next to the title
+  icon: string;     // MaterialCommunityIcons name shown next to the title
   title: string;    // section heading
-  items: string[];  // list of individual feature bullet points
+  items: { icon: string; label: string }[];  // list of individual feature bullet points
 }

@@ -8,7 +8,7 @@
  *  - Looping shimmer glow animation on the button itself
  *  - Loading spinner while purchase is processing
  *  - Tablet-aware sizing
- *  - Legal sub-text below the button
+ *  - Legal sub-text with lock icon below the button
  */
 
 import React from "react";
@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../colors";
 
 interface Props {
@@ -53,9 +54,9 @@ const CtaButton: React.FC<Props> = ({
   <Animated.View style={[
     styles.wrapper,
     {
-      bottom:           bottomOffset,
-      opacity:          buttonFade,
-      transform:        [{ translateY: buttonSlide }],
+      bottom:            bottomOffset,
+      opacity:           buttonFade,
+      transform:         [{ translateY: buttonSlide }],
       paddingHorizontal: horizontalPadding,
     },
   ]}>
@@ -69,7 +70,6 @@ const CtaButton: React.FC<Props> = ({
         disabled={loading}
       >
         {loading ? (
-          /* ── Spinner shown while purchase processes ── */
           <ActivityIndicator color={COLORS.bg} />
         ) : (
           <>
@@ -80,8 +80,11 @@ const CtaButton: React.FC<Props> = ({
       </TouchableOpacity>
     </Animated.View>
 
-    {/* ── Legal disclaimer below the button ── */}
-    <Text style={styles.legal}>Secure payment · Subscriptions auto-renew</Text>
+    {/* ── Legal disclaimer with lock icon ── */}
+    <View style={styles.legalRow}>
+      <MaterialCommunityIcons name="lock-outline" size={11} color={COLORS.textDim} />
+      <Text style={styles.legal}>Secure payment · Subscriptions auto-renew</Text>
+    </View>
   </Animated.View>
 );
 
@@ -90,24 +93,36 @@ export default CtaButton;
 const styles = StyleSheet.create({
   wrapper: {
     position: "absolute",
-    left: 0, right: 0,
+    left: 0,
+    right: 0,
     alignItems: "center",
-    paddingTop: 12, paddingBottom: 10,
+    paddingTop: 12,
+    paddingBottom: 10,
     backgroundColor: COLORS.bg,
-    borderTopWidth: 1, borderTopColor: COLORS.border,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
   button: {
     width: "100%",
     backgroundColor: COLORS.accent,
-    borderRadius: 16, paddingVertical: 16,
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: "center",
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45, shadowRadius: 16,
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
     elevation: 8,
   },
   buttonTablet: { paddingVertical: 18, borderRadius: 20 },
   label: { color: COLORS.bg, fontSize: 16, fontWeight: "800", letterSpacing: 0.2 },
   sub:   { color: COLORS.accentDim, fontSize: 11, marginTop: 2, fontWeight: "500" },
-  legal: { color: COLORS.textDim, fontSize: 11, marginTop: 8, textAlign: "center" },
+
+  legalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 8,
+  },
+  legal: { color: COLORS.textDim, fontSize: 11, textAlign: "center" },
 });

@@ -95,7 +95,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       {/* ── Disclaimer (hidden during active typing) ── */}
       {!isKeyboardVisible && (
         <Text style={styles.disclaimer}>
-          Spacia AI can make mistakes. Verify critical facts with your course notes.
+          Spavi AI can make mistakes. Verify critical facts with your course notes.
         </Text>
       )}
     </View>

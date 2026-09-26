@@ -41,33 +41,33 @@ export const SAVINGS_PERCENT = Math.round(
 /** The three feature sections shown on the payment screen */
 export const PERKS: Perk[] = [
   {
-    emoji: "🤖",
+    icon: "robot-outline",
     title: "AI-Powered Learning",
     items: [
-      "Unlimited AI Flashcard Generation",
-      "Generate up to 50 flashcards at once",
-      "Regenerate flashcards anytime",
-      "Higher quality AI flashcards",
+      { icon: "infinity",             label: "Unlimited AI Flashcard Generation" },
+      { icon: "lightning-bolt",       label: "Generate up to 50 flashcards at once" },
+      { icon: "refresh",              label: "Regenerate flashcards anytime" },
+      { icon: "star-outline",         label: "Higher quality AI flashcards" },
     ],
   },
   {
-    emoji: "📄",
+    icon: "file-document-outline",
     title: "Study From Any Material",
     items: [
-      "Import PDFs",
-      "Turn lecture notes into flashcards",
-      "Convert study guides into quizzes",
-      "Extract key concepts automatically",
+      { icon: "file-pdf-box",         label: "Import PDFs" },
+      { icon: "note-text-outline",    label: "Turn lecture notes into flashcards" },
+      { icon: "book-open-variant",    label: "Convert study guides into quizzes" },
+      { icon: "magnify",              label: "Extract key concepts automatically" },
     ],
   },
   {
-    emoji: "🧠",
+    icon: "brain",
     title: "Smarter Studying",
     items: [
-      "Spaced Repetition System",
-      "Smart Review Recommendations",
-      "Progress Tracking",
-      "Study Streaks",
+      { icon: "calendar-clock",       label: "Spaced Repetition System" },
+      { icon: "chart-line",           label: "Smart Review Recommendations" },
+      { icon: "chart-bar",            label: "Progress Tracking" },
+      { icon: "fire",                 label: "Study Streaks" },
     ],
   },
 ];

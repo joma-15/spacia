@@ -9,11 +9,14 @@
 
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../colors";
 
 const SavingsCallout: React.FC = () => (
   <View style={styles.banner}>
-    <Text style={styles.emoji}>🎉</Text>
+    <View style={styles.iconWrap}>
+      <MaterialCommunityIcons name="tag-outline" size={15} color={COLORS.accentText} />
+    </View>
     <Text style={styles.text}>You're saving $5.00 a year vs monthly!</Text>
   </View>
 );
@@ -29,10 +32,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 24,
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
     borderColor: COLORS.borderGlow,
   },
-  emoji: { fontSize: 16 },
-  text:  { color: COLORS.accentText, fontSize: 13, fontWeight: "600" },
+  iconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: COLORS.borderGlow,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  text: { color: COLORS.accentText, fontSize: 13, fontWeight: "600" },
 });

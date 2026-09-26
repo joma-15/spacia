@@ -24,10 +24,10 @@ const BASE_DELAY_MS = 300;
 
 const PerkList: React.FC = () => (
   <View>
-    {PERKS.map((perk, index) => (
+  {PERKS.map((perk, index) => (
       <PerkSection
         key={index}
-        emoji={perk.emoji}
+        icon={perk.icon}
         title={perk.title}
         items={perk.items}
         delay={BASE_DELAY_MS + index * STAGGER_DELAY_MS}
