@@ -35,7 +35,7 @@ import {
 import { ApiRequestError } from "@/shared/services/authenticatedFetch";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { loadFolders } from "@/shared/services/folderDataService";
-import { saveFlashcards } from "@/shared/database/flashcardRepository";
+import { saveFlashcards, deleteAllFlashcardsForFolder } from "@/shared/database/flashcardRepository";
 import { writeResource } from "@/shared/database/resourceCacheRepository";
 import { setResourceMemory } from "@/shared/services/resourceStore";
 
@@ -318,6 +318,9 @@ export function useAiChat(): UseAiChatReturn {
             const folder = action.result.folder as { id?: unknown } | undefined;
             const folderId = typeof folder?.id === "string" ? folder.id : undefined;
             if (folderId) {
+              // Delete from SQLite so the UI empties immediately
+              deleteAllFlashcardsForFolder(cacheOwnerId, folderId);
+              // Also clear the resource-level cache
               const resource = flashcardResourceKey(folderId);
               writeResource(cacheOwnerId, resource, null);
               setResourceMemory(cacheOwnerId, resource, null);

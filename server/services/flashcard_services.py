@@ -91,7 +91,9 @@ class FlashcardService:
         Returns the number of cards that were deleted.
         """
         self._get_owned_folder(folder_id, user_id)
-        deleted_count = Flashcard.query.filter_by(folder_id=folder_id).delete()
+        deleted_count = Flashcard.query.filter_by(folder_id=folder_id).delete(
+            synchronize_session="fetch"
+        )
         db.session.commit()
         return deleted_count
 

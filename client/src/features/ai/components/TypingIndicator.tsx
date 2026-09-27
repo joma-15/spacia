@@ -103,7 +103,7 @@ export const TypingIndicator: React.FC = () => {
             ]}
           />
         </View>
-        <Text style={styles.thinkingText}>Spacia AI is thinking…</Text>
+        <Text style={styles.thinkingText}>Spavi AI is thinking…</Text>
       </View>
     </View>
   );
