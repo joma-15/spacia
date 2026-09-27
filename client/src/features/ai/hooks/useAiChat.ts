@@ -3,21 +3,35 @@
  * ─────────────────────────────────────────────
  * Business hook for the AI chat feature.
  *
- * Manages all chat state and delegates network calls to aiChatService.
- * AiChatScreen only needs to call these methods — no API logic lives
- * in the screen component.
+ * Caching strategy — cache-then-network:
+ *   1. On loadConversation, read conversation + messages from SQLite instantly.
+ *      → UI shows cached messages with ZERO network latency.
+ *   2. In the background, fetch fresh data from the server.
+ *      → Write results back to SQLite, then update UI silently.
+ *   3. On sendMessage, append both the user message and AI reply to SQLite
+ *      immediately after they are confirmed by the server.
+ *   4. On startNewChat (user pressed "New Chat"), clear the cache for the
+ *      old conversation and write the newly created one.
  *
  * State owned here:
  *   - messages       — the chat history displayed in the UI
  *   - conversationId — the active conversation's server-side ID
  *   - isThinking     — true while waiting for the AI response
- *   - isLoading      — true while the initial conversation is being loaded
+ *   - isLoading      — true only on the very first cold load (no cache yet)
  *   - error          — the last error message (null when healthy)
  */
 
 import { useCallback, useRef, useState } from "react";
 import { ChatMessage } from "../types";
 import * as aiChatService from "../services/aiChatService";
+import {
+  getCachedConversation,
+  saveConversation,
+  getCachedMessages,
+  replaceMessages,
+  saveMessage,
+  deleteCachedConversation,
+} from "@/shared/database/aiChatRepository";
 import { ApiRequestError } from "@/shared/services/authenticatedFetch";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { loadFolders } from "@/shared/services/folderDataService";
@@ -82,7 +96,10 @@ function cacheAiGeneratedCards(userId: string, actions: ChatMessage["actions"]):
 interface UseAiChatReturn {
   /** Messages currently displayed in the chat list. */
   messages: ChatMessage[];
-  /** True while loading the conversation or fetching history on mount. */
+  /**
+   * True only on a cold load where there is no cache at all.
+   * When cached messages exist this stays false — the UI is instant.
+   */
   isLoading: boolean;
   /** True while the backend / AI is processing a sent message. */
   isThinking: boolean;
@@ -90,12 +107,13 @@ interface UseAiChatReturn {
   error: string | null;
   /**
    * Load (or create) the active conversation for a given folder.
-   * Call this when the screen mounts or the selected folder changes.
+   * Reads from SQLite cache first, then refreshes from network in background.
    */
   loadConversation: (folderId: string | null) => Promise<void>;
   /**
    * Send a new user message.
    * Adds the user message optimistically, then adds the AI reply when it arrives.
+   * Both are written to SQLite on success.
    */
   sendMessage: (content: string) => Promise<void>;
   /**
@@ -144,34 +162,104 @@ export function useAiChat(): UseAiChatReturn {
   const clearError = useCallback(() => setError(null), []);
 
   // ---------------------------------------------------------------------------
-  // loadConversation
+  // loadConversation — cache-then-network
   // ---------------------------------------------------------------------------
 
   const loadConversation = useCallback(async (folderId: string | null) => {
-    setIsLoading(true);
-    setError(null);
-    setMessages([]);
+    const userId = cacheOwnerId;
     conversationIdRef.current = null;
+    setError(null);
+
+    // ── Step 1: Try the SQLite cache immediately ──────────────────────────────
+    if (userId) {
+      const cachedConv = getCachedConversation(userId, folderId);
+      if (cachedConv) {
+        conversationIdRef.current = cachedConv.id;
+        const cachedMsgs = getCachedMessages(cachedConv.id);
+        if (cachedMsgs.length > 0) {
+          // Show cached messages instantly — no spinner needed
+          setMessages(cachedMsgs.map((m) => toLocalMessage(m)));
+          // Background-refresh from network (no loading state shown)
+          void refreshFromNetwork(userId, folderId, cachedConv.id);
+          return;
+        }
+      }
+    }
+
+    // ── Step 2: Cache miss — show spinner and fetch from network ──────────────
+    setIsLoading(true);
+    setMessages([]);
 
     try {
-      // Get or create the active conversation for this folder
+      const userId_ = cacheOwnerId; // may still be null on first render
       const conversation = await aiChatService.getOrCreateConversation(folderId);
       conversationIdRef.current = conversation.id;
 
-      // Fetch the existing message history so the user can see prior context
+      if (userId_) {
+        saveConversation(userId_, conversation);
+      }
+
       const history = await aiChatService.getMessages(conversation.id);
       const localMessages = history
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((message) => toLocalMessage(message));
 
       setMessages(localMessages);
+
+      if (userId_) {
+        replaceMessages(conversation.id, history);
+      }
     } catch (err) {
       const message = friendlyError(err, "Failed to load conversation.");
       setError(message);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [cacheOwnerId]);
+
+  /**
+   * Background network refresh — called when we already have a cache hit.
+   * Updates SQLite and UI silently without any loading state or message reset.
+   */
+  async function refreshFromNetwork(
+    userId: string,
+    folderId: string | null,
+    cachedConvId: string,
+  ): Promise<void> {
+    try {
+      const conversation = await aiChatService.getOrCreateConversation(folderId);
+
+      // If the server returned a different conversation (e.g. old one deleted),
+      // update the ref and clear the stale cached one.
+      if (conversation.id !== cachedConvId) {
+        deleteCachedConversation(cachedConvId);
+        conversationIdRef.current = conversation.id;
+      }
+
+      saveConversation(userId, conversation);
+
+      const history = await aiChatService.getMessages(conversation.id);
+
+      // Only update the UI if the fresh data differs from what we're showing
+      const freshLocal = history
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => toLocalMessage(m));
+
+      setMessages((prev) => {
+        if (
+          prev.length === freshLocal.length &&
+          prev.every((m, i) => m.id === freshLocal[i].id && m.content === freshLocal[i].content)
+        ) {
+          return prev; // nothing changed — avoid re-render
+        }
+        return freshLocal;
+      });
+
+      replaceMessages(conversation.id, history);
+    } catch {
+      // Silent background failure — cached data stays visible, no error shown
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // sendMessage
@@ -203,6 +291,9 @@ export function useAiChat(): UseAiChatReturn {
       const result = await aiChatService.sendMessage(conversationId, content.trim());
       const localAiMsg = toLocalMessage(result.message, result.actions);
 
+      // Write the confirmed user message + AI reply to SQLite
+      saveMessage(result.message);
+
       if (cacheOwnerId) {
         cacheAiGeneratedCards(cacheOwnerId, result.actions);
       }
@@ -213,8 +304,30 @@ export function useAiChat(): UseAiChatReturn {
         void loadFolders(cacheOwnerId, "network-only").catch(() => undefined);
       }
 
-      // Replace nothing — just append the real AI response.
-      // The optimistic user message stays (its content is correct).
+      // Reload folder list when a folder was deleted by the AI
+      if (cacheOwnerId && result.actions.some((action) =>
+        action.type === "delete_folder" && !action.result.error,
+      )) {
+        void loadFolders(cacheOwnerId, "network-only").catch(() => undefined);
+      }
+
+      // Bust the flashcard cache for a folder whose cards were wiped by the AI
+      if (cacheOwnerId) {
+        for (const action of result.actions) {
+          if (action.type === "delete_flashcards_in_folder" && !action.result.error) {
+            const folder = action.result.folder as { id?: unknown } | undefined;
+            const folderId = typeof folder?.id === "string" ? folder.id : undefined;
+            if (folderId) {
+              const resource = flashcardResourceKey(folderId);
+              writeResource(cacheOwnerId, resource, null);
+              setResourceMemory(cacheOwnerId, resource, null);
+            }
+          }
+        }
+      }
+
+      // The optimistic user message content is already correct — keep it
+      // and just append the confirmed AI reply.
       setMessages((prev) => [...prev, localAiMsg]);
     } catch (err) {
       // Remove the optimistic message on failure so the user knows it wasn't sent
@@ -241,13 +354,17 @@ export function useAiChat(): UseAiChatReturn {
     try {
       const conversation = await aiChatService.createConversation(folderId);
       conversationIdRef.current = conversation.id;
+
+      if (cacheOwnerId) {
+        saveConversation(cacheOwnerId, conversation);
+      }
     } catch (err) {
       const message = friendlyError(err, "Failed to start a new chat.");
       setError(message);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [cacheOwnerId]);
 
   // ---------------------------------------------------------------------------
 

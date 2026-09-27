@@ -294,6 +294,10 @@ class AiAssistantService:
             "- For folder or card questions, retrieve the current data with a read tool "
             "instead of guessing. To modify or delete a card, first retrieve its contents "
             "to obtain its ID. Delete only for an unambiguous, explicit request.\n"
+            "- You can delete an entire folder (and all its flashcards) or clear all "
+            "flashcards inside a folder when the user makes an explicit, unambiguous "
+            "request. Always confirm the folder name before deleting. Never delete "
+            "proactively or speculatively.\n"
         )
 
         if user_name:

@@ -35,6 +35,8 @@ class AiStudyActionService:
             {"type": "function", "function": {"name": "create_folder_with_flashcards", "description": "Atomically create a new folder and generate flashcards in it when the user explicitly asks for both.", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "topic": {"type": "string"}, "count": {"type": "integer", "minimum": 1, "maximum": 25}, "accent_color": {"type": "string"}}, "required": ["name", "topic", "count"], "additionalProperties": False}}},
             {"type": "function", "function": {"name": "update_flashcard", "description": "Update an identified flashcard only when the user explicitly asks to change it.", "parameters": {"type": "object", "properties": {"flashcard_id": {"type": "string"}, "question": {"type": "string"}, "answer": {"type": "string"}}, "required": ["flashcard_id"], "additionalProperties": False}}},
             {"type": "function", "function": {"name": "delete_flashcard", "description": "Delete an identified flashcard only after an explicit user deletion request.", "parameters": {"type": "object", "properties": {"flashcard_id": {"type": "string"}}, "required": ["flashcard_id"], "additionalProperties": False}}},
+            {"type": "function", "function": {"name": "delete_folder", "description": "Permanently delete a folder and ALL its flashcards. Only call this after the user makes an unambiguous, explicit request to delete the folder. Always confirm the folder name before proceeding.", "parameters": {"type": "object", "properties": {"folder_id": {"type": "string"}, "folder_name": {"type": "string"}}, "additionalProperties": False}}},
+            {"type": "function", "function": {"name": "delete_flashcards_in_folder", "description": "Delete ALL flashcards inside a folder without removing the folder itself. Only call this after the user explicitly asks to clear or delete all cards in the folder.", "parameters": {"type": "object", "properties": {"folder_id": {"type": "string"}, "folder_name": {"type": "string"}}, "additionalProperties": False}}},
         ]
 
     def execute(self, name: str, arguments: dict, user_id: str, current_folder_id: str | None) -> dict:
@@ -46,6 +48,8 @@ class AiStudyActionService:
             "create_folder_with_flashcards": self._create_folder_with_flashcards,
             "update_flashcard": self._update_flashcard,
             "delete_flashcard": self._delete_flashcard,
+            "delete_folder": self._delete_folder,
+            "delete_flashcards_in_folder": self._delete_flashcards_in_folder,
         }
         handler = handlers.get(name)
         if handler is None:
@@ -126,3 +130,15 @@ class AiStudyActionService:
         card_id = arguments["flashcard_id"]
         self._flashcards.delete(card_id, user_id)
         return {"action": "flashcard_deleted", "flashcard_id": card_id}
+
+    def _delete_folder(self, arguments: dict, user_id: str, current_folder_id: str | None) -> dict:
+        folder = self._resolve_folder(arguments, user_id, current_folder_id)
+        folder_id = str(folder.id)
+        folder_name = folder.subject
+        self._folders.delete(folder_id, user_id, folder)
+        return {"action": "folder_deleted", "folder_id": folder_id, "folder_name": folder_name}
+
+    def _delete_flashcards_in_folder(self, arguments: dict, user_id: str, current_folder_id: str | None) -> dict:
+        folder = self._resolve_folder(arguments, user_id, current_folder_id)
+        deleted_count = self._flashcards.delete_for_folder(str(folder.id), user_id)
+        return {"action": "flashcards_deleted", "folder": folder.to_dict(), "deleted_count": deleted_count}

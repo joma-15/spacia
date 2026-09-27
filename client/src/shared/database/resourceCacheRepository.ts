@@ -20,6 +20,15 @@ export function writeResource<T>(userId: string, key: string, data: T, updatedAt
 
 export function removeUserResources(userId: string) {
   db.withTransactionSync(() => {
+    // Delete AI messages first (FK child), then conversations (FK parent)
+    db.runSync(
+      `DELETE FROM ai_messages
+         WHERE conversation_id IN (
+           SELECT id FROM ai_conversations WHERE user_id = ?
+         )`,
+      [userId],
+    );
+    db.runSync("DELETE FROM ai_conversations WHERE user_id = ?", [userId]);
     db.runSync("DELETE FROM resource_cache WHERE user_id = ?", [userId]);
     db.runSync("DELETE FROM flashcards WHERE user_id = ?", [userId]);
     db.runSync("DELETE FROM folders WHERE user_id = ?", [userId]);

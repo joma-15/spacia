@@ -63,6 +63,26 @@ export function initializeDatabase() {
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, resource_key)
     );
+
+    -- 5. AI Conversations: one row per chat session (general or folder-scoped)
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      folder_id TEXT,                  -- NULL = general (no folder) chat
+      title TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    -- 6. AI Messages: individual chat turns linked to a conversation
+    CREATE TABLE IF NOT EXISTS ai_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id)
+    );
   `);
 
   // Run migrations to add sync_status to existing tables
@@ -96,6 +116,9 @@ export function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_flashcards_folder ON flashcards(folder_id);
     CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id);
     CREATE INDEX IF NOT EXISTS idx_flashcards_user_folder ON flashcards(user_id, folder_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_conv_user_folder ON ai_conversations(user_id, folder_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_conv_updated ON ai_conversations(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ai_msg_conv ON ai_messages(conversation_id, created_at ASC);
   `);
 }
 
