@@ -1,6 +1,13 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
+  Animated,
   StyleSheet,
   Text,
   View,
@@ -23,7 +30,12 @@ import { FlashCard } from "@/features/flashcards/types";
 
 /**
  * QUIZZY — single-file React Native + TypeScript multiple choice quiz game.
- * Theme: dark green / neon green "pixel arcade" style, matching the app banner.
+ *
+ * Visual direction: a calm, dark-green study surface. The question is set in
+ * a serif face like a printed flashcard, the answer options are full-width
+ * rows, and the "Next" button is pinned to the bottom of the screen where
+ * the thumb already is. Color is used to show meaning (right / wrong /
+ * progress) instead of decoration, so there are no glows or neon text.
  *
  * Questions are built from a folder's real flashcards (via useFlashcardSync):
  * each card's `answer` is the correct option, and the 3 distractors are pulled
@@ -31,12 +43,11 @@ import { FlashCard } from "@/features/flashcards/types";
  * enough unique answers to fill A–D, distractors repeat until all questions
  * have been generated.
  *
- * SYNC MODEL (see summary in the accompanying explanation):
+ * SYNC MODEL:
  * Every answer during the game updates LOCAL state only (score, xp, streak,
  * question index, per-card correctness). Nothing is sent to the backend
  * until the game finishes, at which point ONE batched result — including
- * every card's answer — is sent via `onGameComplete`. This replaces the old
- * per-question `onAnswer(cardId, correct)` call that fired on every tap.
+ * every card's answer — is sent via `onGameComplete`.
  */
 
 // ---------------------------------------------------------------------------
@@ -53,10 +64,9 @@ interface QuizQuestion {
 }
 
 /**
- * The single payload sent to the backend when the game ends. Field names are
- * deliberately close to the example contract from the refactor request —
- * adjust in `useFlashcardSync` (or wherever the actual request is built) to
- * match the real endpoint if it differs.
+ * The single payload sent to the backend when the game ends. Adjust in
+ * `useFlashcardSync` (or wherever the actual request is built) to match the
+ * real endpoint if it differs.
  */
 export interface QuizSessionResult {
   folderId: string;
@@ -77,19 +87,29 @@ const OPTION_KEYS: OptionKey[] = ["A", "B", "C", "D"];
 // Theme
 // ---------------------------------------------------------------------------
 
+/**
+ * Colors used by this screen. The greens are deliberately softer than a
+ * pure neon so long study sessions are easy on the eyes.
+ */
 const theme = {
-  bg: "#050f06",
-  panel: "#0b1a0c",
-  panelBorder: "#1f3d21",
-  neon: "#7CFC00",
-  neonDim: "#3f7a2e",
-  neonSoft: "rgba(124,252,0,0.12)",
-  white: "#f2f7f0",
-  grey: "#7e8a7c",
-  danger: "#ff5c5c",
-  gold: "#e8c14a",
-  purple: "#b98af0",
+  bg: "#08110b",
+  panel: "#101b13",
+  panelBorder: "#213526",
+  neon: "#8ee36b",
+  neonDim: "#4d7a3f",
+  neonSoft: "rgba(142,227,107,0.10)",
+  white: "#eaf1e6",
+  grey: "#8a998c",
+  danger: "#f0736a",
+  gold: "#e2c275",
 };
+
+/** Serif family for the question text, so it reads like a printed card. */
+const SERIF = Platform.select({
+  ios: "Georgia",
+  android: "serif",
+  default: "serif",
+});
 
 // ---------------------------------------------------------------------------
 // Helpers — turn flashcards into multiple-choice questions
@@ -201,8 +221,7 @@ function QuizzyGame({
   // Local-only gameplay tracking for the eventual ONE backend sync.
   // These are refs (not state) on purpose: they're written synchronously
   // inside `handleSelect`, so `submitFinalResult` always reads the true,
-  // up-to-the-moment totals — no risk of reading a stale `score` the way
-  // you would from `setScore(score + 1)` followed immediately by a read.
+  // up-to-the-moment totals.
   // ---------------------------------------------------------------------
   const answersRef = useRef<QuizAnswerRecord[]>([]);
   const correctCountRef = useRef(0);
@@ -328,20 +347,40 @@ function QuizzyGame({
     });
   }, [router]);
 
-  // Progress is shown as a fixed-width fill bar (percentage of totalQuestions)
-  // rather than one dot per question, so it can never overflow the card no
-  // matter how many questions the deck has.
+  // Progress is a fixed-width fill bar (percentage of totalQuestions), so it
+  // can never overflow no matter how many questions the deck has.
   const progressPercent =
     totalQuestions > 0 ? ((questionIndex + 1) / totalQuestions) * 100 : 0;
+
+  // Animate the fill toward its new width whenever the question changes.
+  const progressAnim = useRef(new Animated.Value(progressPercent)).current;
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: progressPercent,
+      duration: 250,
+      useNativeDriver: false, // width can't use the native driver
+    }).start();
+  }, [progressPercent, progressAnim]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ["0%", "100%"],
+  });
 
   // -------------------------------------------------------------------------
   // Render helpers
   // -------------------------------------------------------------------------
 
-  const renderTopBar = () => (
+  /**
+   * Back button on the left, folder picker on the right, and a short title
+   * in the middle (the question counter while playing, "Quizzy" elsewhere).
+   */
+  const renderTopBar = (title: string) => (
     <View style={styles.topBar}>
       <Pressable
         onPress={handleBack}
+        accessibilityRole="button"
+        accessibilityLabel="Back to games"
         style={({ pressed }) => [
           styles.topBarButton,
           pressed && styles.topBarButtonPressed,
@@ -351,8 +390,12 @@ function QuizzyGame({
         <Icon name="chevron-left" size={22} color={theme.white} />
       </Pressable>
 
+      <Text style={styles.topBarTitle}>{title}</Text>
+
       <Pressable
         onPress={handleChangeFolder}
+        accessibilityRole="button"
+        accessibilityLabel="Choose another folder"
         style={({ pressed }) => [
           styles.topBarButton,
           pressed && styles.topBarButtonPressed,
@@ -364,53 +407,58 @@ function QuizzyGame({
     </View>
   );
 
+  /** One answer row: letter badge, answer text, and a result mark. */
   const renderOption = (key: OptionKey) => {
     if (!question) return null;
+    const revealed = answerState !== "idle";
     const isSelected = selected === key;
     const isCorrectOption = key === question.correct;
 
-    let optionStyle = styles.option;
-    let letterStyle = styles.optionLetter;
-    let textStyle = styles.optionText;
-
-    if (answerState !== "idle") {
-      if (isCorrectOption) {
-        optionStyle = { ...styles.option, ...styles.optionCorrect };
-        letterStyle = { ...styles.optionLetter, ...styles.optionLetterActive };
-      } else if (isSelected && !isCorrectOption) {
-        optionStyle = { ...styles.option, ...styles.optionWrong };
-        letterStyle = { ...styles.optionLetter, ...styles.optionLetterWrong };
-      } else {
-        optionStyle = { ...styles.option, ...styles.optionDisabled };
-      }
-    }
-
-    const showCorrectMark = answerState !== "idle" && isCorrectOption;
-    const showWrongMark =
-      answerState !== "idle" && isSelected && !isCorrectOption;
+    const showCorrectMark = revealed && isCorrectOption;
+    const showWrongMark = revealed && isSelected && !isCorrectOption;
+    const isDimmed = revealed && !showCorrectMark && !showWrongMark;
 
     return (
       <Pressable
         key={key}
         onPress={() => handleSelect(key)}
-        disabled={answerState !== "idle"}
+        disabled={revealed}
+        accessibilityRole="button"
+        accessibilityLabel={`Option ${key}: ${question.options[key]}`}
+        accessibilityState={{ disabled: revealed, selected: isSelected }}
         style={({ pressed }) => [
-          optionStyle,
-          pressed && answerState === "idle" && styles.optionPressed,
+          styles.option,
+          pressed && !revealed && styles.optionPressed,
+          showCorrectMark && styles.optionCorrect,
+          showWrongMark && styles.optionWrong,
+          isDimmed && styles.optionDimmed,
         ]}
       >
-        <View style={letterStyle}>
-          <Text style={styles.optionLetterText}>{key}</Text>
+        <View
+          style={[
+            styles.optionLetter,
+            showCorrectMark && styles.optionLetterCorrect,
+            showWrongMark && styles.optionLetterWrong,
+          ]}
+        >
+          <Text
+            style={[
+              styles.optionLetterText,
+              (showCorrectMark || showWrongMark) && styles.optionLetterTextOnFill,
+            ]}
+          >
+            {key}
+          </Text>
         </View>
-        <Text style={textStyle}>{question.options[key]}</Text>
+        <Text style={styles.optionText}>{question.options[key]}</Text>
 
         {/* Fixed-width slot, always present, so text never reflows when marks appear */}
         <View style={styles.resultMarkSlot}>
           {showCorrectMark && (
-            <Icon name="check-bold" size={16} color={theme.neon} />
+            <Icon name="check-bold" size={18} color={theme.neon} />
           )}
           {showWrongMark && (
-            <Icon name="close-thick" size={16} color={theme.danger} />
+            <Icon name="close-thick" size={18} color={theme.danger} />
           )}
         </View>
       </Pressable>
@@ -427,17 +475,10 @@ function QuizzyGame({
         style={styles.safeArea}
         edges={["top", "bottom", "left", "right"]}
       >
-        {renderTopBar()}
+        {renderTopBar("Quizzy")}
         <View style={[styles.container, styles.centered]}>
-          <Text style={styles.logo}>QUIZZY</Text>
-          <ActivityIndicator
-            color={theme.neon}
-            size="large"
-            style={{ marginTop: 24 }}
-          />
-          <Text style={[styles.tagline, { marginTop: 16 }]}>
-            LOADING QUESTIONS…
-          </Text>
+          <ActivityIndicator color={theme.neon} size="large" />
+          <Text style={styles.statusText}>Loading questions</Text>
         </View>
       </SafeAreaView>
     );
@@ -453,17 +494,22 @@ function QuizzyGame({
         style={styles.safeArea}
         edges={["top", "bottom", "left", "right"]}
       >
-        {renderTopBar()}
+        {renderTopBar("Quizzy")}
         <View style={[styles.container, styles.centered]}>
-          <Text style={styles.logo}>QUIZZY</Text>
-          <Text style={[styles.tagline, { marginTop: 6 }]}>
-            THINK. CHOOSE. SCORE.
-          </Text>
+          <Icon name="cards-outline" size={40} color={theme.neonDim} />
+          <Text style={styles.emptyTitle}>No flashcards in this folder</Text>
           <Text style={styles.emptyText}>
-            This folder doesn't have any flashcards yet.
+            Add some flashcards to it, or pick a different folder to play.
           </Text>
-          <Pressable style={styles.primaryButton} onPress={handleChangeFolder}>
-            <Text style={styles.primaryButtonText}>CHOOSE ANOTHER FOLDER</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={handleChangeFolder}
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryButtonText}>Choose a folder</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -475,43 +521,75 @@ function QuizzyGame({
   // -------------------------------------------------------------------------
 
   if (finished) {
+    // Each correct answer is worth 100 points, so this is derived from score.
+    const correctCount = Math.round(score / 100);
+
     return (
       <SafeAreaView
         style={styles.safeArea}
         edges={["top", "bottom", "left", "right"]}
       >
-        {renderTopBar()}
-        <View style={[styles.container, styles.centered]}>
-          <Text style={styles.logo}>QUIZZY</Text>
-          <Text style={styles.tagline}>THINK. CHOOSE. SCORE.</Text>
+        {renderTopBar("Quizzy")}
+        <View
+          style={[
+            styles.finishedBody,
+            isTablet && styles.containerTablet,
+          ]}
+        >
+          <View>
+            <Text style={styles.finishedTitle}>Round complete</Text>
+            <Text style={styles.finishedSummary}>
+              {correctCount} of {totalQuestions} correct
+            </Text>
 
-          <View style={styles.resultCard}>
-            <Text style={styles.resultTitle}>Quiz Complete!</Text>
-            <View style={styles.statsRow}>
-              <StatBlock
-                icon="trophy"
-                label="SCORE"
+            <View style={styles.ledger}>
+              <LedgerRow
+                icon="trophy-outline"
+                label="Score"
                 value={String(score)}
                 color={theme.gold}
               />
-              <StatBlock
+              <LedgerRow
                 icon="lightning-bolt"
-                label="XP GAINED"
+                label="XP gained"
                 value={`+${xp}`}
                 color={theme.neon}
               />
-              <StatBlock
-                icon="star"
-                label="BEST STREAK"
+              <LedgerRow
+                icon="fire"
+                label="Streak"
                 value={`x${streak}`}
-                color={theme.purple}
+                color={theme.white}
+                isLast
               />
             </View>
           </View>
 
-          <Pressable style={styles.primaryButton} onPress={handleRestart}>
-            <Text style={styles.primaryButtonText}>PLAY AGAIN</Text>
-          </Pressable>
+          <View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                styles.fullWidthButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={handleRestart}
+              accessibilityRole="button"
+            >
+              <Text style={styles.primaryButtonText}>Play again</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={handleChangeFolder}
+              accessibilityRole="button"
+            >
+              <Text style={styles.secondaryButtonText}>
+                Choose another folder
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -523,76 +601,73 @@ function QuizzyGame({
 
   if (!question) return null; // safety net — shouldn't happen given guards above
 
+  const isLastQuestion = questionIndex + 1 >= totalQuestions;
+
   return (
     <SafeAreaView
       style={styles.safeArea}
       edges={["top", "bottom", "left", "right"]}
     >
-      {renderTopBar()}
+      {renderTopBar(`Question ${questionIndex + 1} of ${totalQuestions}`)}
+
+      <View style={styles.progressTrack}>
+        <Animated.View
+          style={[styles.progressFill, { width: progressWidth }]}
+        />
+      </View>
+
       <ScrollView
         contentContainerStyle={[
           styles.container,
           isTablet && styles.containerTablet,
-          { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+          { paddingBottom: 24 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.logo}>QUIZZY</Text>
-          <Text style={styles.tagline}>THINK. CHOOSE. SCORE.</Text>
-        </View>
-
-        <View style={styles.questionCard}>
-          <View style={styles.questionHeaderRow}>
-            <Text style={styles.questionLabel}>
-              QUESTION {questionIndex + 1}/{totalQuestions}
-            </Text>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${progressPercent}%` },
-                ]}
-              />
-            </View>
-          </View>
-
-          <Text style={styles.questionText}>{question.question}</Text>
-
-          <View style={styles.optionsList}>
-            {OPTION_KEYS.map(renderOption)}
-          </View>
-
-          {answerState !== "idle" && (
-            <Pressable style={styles.nextButton} onPress={handleNext}>
-              <Text style={styles.nextButtonText}>
-                {questionIndex + 1 >= totalQuestions ? "SEE RESULTS" : "NEXT →"}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-
-        <View style={styles.statsFooter}>
-          <StatBlock
-            icon="trophy"
-            label="SCORE"
+        <View style={styles.statsRow}>
+          <InlineStat
+            icon="trophy-outline"
             value={String(score)}
+            label="Score"
             color={theme.gold}
           />
-          <StatBlock
+          <InlineStat
             icon="lightning-bolt"
-            label="XP GAINED"
             value={`+${xp}`}
+            label="XP gained"
             color={theme.neon}
           />
-          <StatBlock
-            icon="star"
-            label="STREAK"
+          <InlineStat
+            icon="fire"
             value={`x${streak}`}
-            color={theme.purple}
+            label="Streak"
+            color={theme.white}
           />
         </View>
+
+        <Text style={styles.questionText}>{question.question}</Text>
+
+        <View style={styles.optionsList}>{OPTION_KEYS.map(renderOption)}</View>
       </ScrollView>
+
+      {/* Footer keeps a fixed height so the layout never jumps when the button appears */}
+      <View style={[styles.footer, isTablet && styles.footerTablet]}>
+        {answerState !== "idle" && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              styles.fullWidthButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={handleNext}
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryButtonText}>
+              {isLastQuestion ? "See results" : "Next question"}
+            </Text>
+          </Pressable>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -649,7 +724,9 @@ const QuizzyScreen: React.FC = () => {
   if (!folderId) {
     return (
       <View style={styles.errorScreen}>
-        <Text style={styles.errorText}>No folder selected.</Text>
+        <Text style={styles.errorText}>
+          No folder selected. Go back and choose one to start.
+        </Text>
       </View>
     );
   }
@@ -666,25 +743,58 @@ const QuizzyScreen: React.FC = () => {
 export default QuizzyScreen;
 
 // ---------------------------------------------------------------------------
-// Small sub-component
+// Small sub-components
 // ---------------------------------------------------------------------------
 
-function StatBlock({
+/**
+ * A compact icon + value pair shown above the question (score, xp, streak).
+ * The label is only used for screen readers; the icon carries the meaning.
+ */
+function InlineStat({
+  icon,
+  value,
+  label,
+  color,
+}: {
+  icon: React.ComponentProps<typeof Icon>["name"];
+  value: string;
+  label: string;
+  color: string;
+}) {
+  return (
+    <View
+      style={styles.inlineStat}
+      accessible
+      accessibilityLabel={`${label}: ${value}`}
+    >
+      <Icon name={icon} size={16} color={color} />
+      <Text style={[styles.inlineStatValue, { color }]}>{value}</Text>
+    </View>
+  );
+}
+
+/**
+ * One line of the results list on the finished screen: icon, label on the
+ * left, value on the right, with a thin divider under it (except the last).
+ */
+function LedgerRow({
   icon,
   label,
   value,
   color,
+  isLast,
 }: {
   icon: React.ComponentProps<typeof Icon>["name"];
   label: string;
   value: string;
   color: string;
+  isLast?: boolean;
 }) {
   return (
-    <View style={styles.statBlock}>
+    <View style={[styles.ledgerRow, !isLast && styles.ledgerRowDivider]}>
       <Icon name={icon} size={20} color={color} />
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.ledgerLabel}>{label}</Text>
+      <Text style={[styles.ledgerValue, { color }]}>{value}</Text>
     </View>
   );
 }
@@ -700,30 +810,57 @@ const styles = StyleSheet.create({
     backgroundColor: theme.bg,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 32,
   },
-  errorText: { color: theme.grey, fontSize: 16 },
+  errorText: {
+    color: theme.grey,
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: "center",
+  },
+
+  // Top bar
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 8,
+    paddingBottom: 12,
   },
   topBarButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: theme.panel,
-    borderWidth: 1,
-    borderColor: theme.panelBorder,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
   topBarButtonPressed: {
-    borderColor: theme.neonDim,
     backgroundColor: theme.neonSoft,
   },
-  container: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 20 },
+  topBarTitle: {
+    color: theme.grey,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+
+  // Progress
+  progressTrack: {
+    height: 3,
+    marginHorizontal: 20,
+    borderRadius: 2,
+    backgroundColor: theme.panelBorder,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: theme.neon,
+    borderRadius: 2,
+  },
+
+  // Layout containers
+  container: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 24 },
   containerTablet: {
     paddingHorizontal: 64,
     alignSelf: "center",
@@ -731,87 +868,69 @@ const styles = StyleSheet.create({
     maxWidth: 700,
   },
   centered: { justifyContent: "center", alignItems: "center" },
-  header: { alignItems: "center", marginBottom: 24 },
-  logo: {
-    fontSize: 40,
-    fontWeight: "900",
-    color: theme.white,
-    letterSpacing: 4,
-    textShadowColor: theme.neon,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
+
+  // Loading / empty
+  statusText: {
+    marginTop: 16,
+    color: theme.grey,
+    fontSize: 15,
   },
-  tagline: {
-    marginTop: 6,
-    fontSize: 13,
+  emptyTitle: {
+    marginTop: 16,
+    color: theme.white,
+    fontFamily: SERIF,
+    fontSize: 22,
     fontWeight: "700",
-    color: theme.neon,
-    letterSpacing: 3,
+    textAlign: "center",
   },
   emptyText: {
-    marginTop: 20,
+    marginTop: 8,
     color: theme.grey,
-    fontSize: 14,
+    fontSize: 15,
+    lineHeight: 22,
     textAlign: "center",
     paddingHorizontal: 24,
   },
-  questionCard: {
-    backgroundColor: theme.panel,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: theme.panelBorder,
-    padding: 20,
-    shadowColor: theme.neon,
-    shadowOpacity: Platform.OS === "ios" ? 0.15 : 0,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 4,
-  },
-  questionHeaderRow: {
+
+  // Stats above the question
+  statsRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
+    gap: 20,
+    marginBottom: 28,
   },
-  questionLabel: {
-    color: theme.neon,
-    fontWeight: "800",
-    fontSize: 13,
-    letterSpacing: 2,
+  inlineStat: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
-  // Fixed-width progress bar — replaces the old one-dot-per-question row,
-  // which had no width cap and overflowed the card once there were enough
-  // questions. The track width never changes; only the fill percentage does.
-  progressTrack: {
-    width: 90,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.panelBorder,
-    overflow: "hidden",
+  inlineStatValue: {
+    fontSize: 15,
+    fontWeight: "700",
   },
-  progressFill: {
-    height: "100%",
-    backgroundColor: theme.neon,
-    borderRadius: 3,
-  },
+
+  // Question
   questionText: {
     color: theme.white,
-    fontSize: 20,
+    fontFamily: SERIF,
+    fontSize: 26,
     fontWeight: "700",
-    lineHeight: 27,
-    marginBottom: 20,
+    lineHeight: 34,
+    marginBottom: 28,
   },
-  optionsList: { gap: 12 },
+
+  // Options
+  optionsList: { gap: 10 },
   option: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.02)",
-    borderWidth: 1.5,
+    backgroundColor: theme.panel,
+    borderWidth: 1,
     borderColor: theme.panelBorder,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    gap: 12,
+    gap: 14,
   },
   optionPressed: {
     borderColor: theme.neonDim,
@@ -820,95 +939,128 @@ const styles = StyleSheet.create({
   optionCorrect: { borderColor: theme.neon, backgroundColor: theme.neonSoft },
   optionWrong: {
     borderColor: theme.danger,
-    backgroundColor: "rgba(255,92,92,0.10)",
+    backgroundColor: "rgba(240,115,106,0.10)",
   },
-  optionDisabled: { opacity: 0.45 },
+  optionDimmed: { opacity: 0.4 },
   optionLetter: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: theme.neonDim,
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.panelBorder,
     alignItems: "center",
     justifyContent: "center",
   },
-  optionLetterActive: { borderColor: theme.neon, backgroundColor: theme.neon },
+  optionLetterCorrect: {
+    borderColor: theme.neon,
+    backgroundColor: theme.neon,
+  },
   optionLetterWrong: {
     borderColor: theme.danger,
     backgroundColor: theme.danger,
   },
-  optionLetterText: { color: theme.white, fontWeight: "800", fontSize: 13 },
+  optionLetterText: { color: theme.grey, fontWeight: "700", fontSize: 13 },
+  optionLetterTextOnFill: { color: theme.bg },
   optionText: {
     color: theme.white,
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "500",
     flexShrink: 1,
+    flexGrow: 1,
   },
   resultMarkSlot: {
-    marginLeft: "auto",
-    width: 16,
+    width: 18,
     alignItems: "center",
     justifyContent: "center",
   },
-  nextButton: {
-    marginTop: 20,
+
+  // Footer with the Next button
+  footer: {
+    minHeight: 76,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
+    justifyContent: "center",
+  },
+  footerTablet: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 700,
+    paddingHorizontal: 64,
+  },
+
+  // Buttons
+  primaryButton: {
     backgroundColor: theme.neon,
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 15,
+    paddingHorizontal: 28,
     alignItems: "center",
-  },
-  nextButtonText: {
-    color: theme.bg,
-    fontWeight: "900",
-    fontSize: 14,
-    letterSpacing: 2,
-  },
-  statsFooter: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 28,
-  },
-  statBlock: { alignItems: "center", gap: 4 },
-  statValue: { fontSize: 18, fontWeight: "900" },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: theme.grey,
-    letterSpacing: 1,
-  },
-  resultCard: {
-    backgroundColor: theme.panel,
-    borderWidth: 1,
-    borderColor: theme.panelBorder,
-    borderRadius: 18,
-    paddingVertical: 28,
-    paddingHorizontal: 24,
     marginTop: 24,
-    width: "100%",
-    alignItems: "center",
   },
-  resultTitle: {
-    color: theme.white,
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 20,
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-  },
-  primaryButton: {
-    marginTop: 28,
-    backgroundColor: theme.neon,
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-  },
+  fullWidthButton: { alignSelf: "stretch", marginTop: 0 },
   primaryButtonText: {
     color: theme.bg,
-    fontWeight: "900",
+    fontWeight: "800",
+    fontSize: 16,
+  },
+  secondaryButton: {
+    alignSelf: "stretch",
+    alignItems: "center",
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  secondaryButtonText: {
+    color: theme.grey,
+    fontWeight: "600",
     fontSize: 15,
-    letterSpacing: 2,
+  },
+  buttonPressed: { opacity: 0.8 },
+
+  // Finished screen
+  finishedBody: {
+    flex: 1,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 32,
+    paddingBottom: 12,
+  },
+  finishedTitle: {
+    color: theme.grey,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  finishedSummary: {
+    marginTop: 6,
+    color: theme.white,
+    fontFamily: SERIF,
+    fontSize: 38,
+    fontWeight: "700",
+    lineHeight: 46,
+  },
+  ledger: {
+    marginTop: 32,
+    borderTopWidth: 1,
+    borderTopColor: theme.panelBorder,
+  },
+  ledgerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 16,
+  },
+  ledgerRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: theme.panelBorder,
+  },
+  ledgerLabel: {
+    flex: 1,
+    color: theme.white,
+    fontSize: 16,
+  },
+  ledgerValue: {
+    fontSize: 18,
+    fontWeight: "800",
   },
 });
