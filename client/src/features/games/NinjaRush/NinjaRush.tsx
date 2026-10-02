@@ -4,6 +4,13 @@
  * A fast-paced endless-runner built with React Native Views and sprite animations.
  * Theme: Spacia's dark green design system (#0D1F17 background, #34D399 accent).
  *
+ * POWER MODE:
+ *  - Hit a scroll and answer correctly -> the ninja turns RED for a limited time.
+ *  - While red, tap the screen to throw shurikens (swipe still changes lanes).
+ *  - A shuriken that hits an obstacle removes it and plays an explosion.
+ *  - When the timer is almost up, the ninja blinks red/green until time is over.
+ *  - All timing values live in the "RED POWER MODE SETTINGS" block below.
+ *
  * SYNC MODEL:
  *  - Questions and answers are dynamically built from the selected study folder's
  *    real flashcards (loaded offline-first from SQLite, synced in background).
@@ -79,7 +86,7 @@ const OBSTACLE_OBJECT = require("@/assets/images/obstacle1.png");
 // Sprite for scroll (power-up)
 const SCROLL_OBJECT = require("@/assets/images/scroll1.png");
 
-// Frames for the ninja while moving
+// Frames for the ninja while moving (normal / green)
 const NINJA_RUN_FRAMES = [
   require("../../../../assets/images/ninja-run-1.png"),
   require("../../../../assets/images/ninja-run-2.png"),
@@ -90,15 +97,15 @@ const NINJA_RUN_FRAMES = [
 ];
 const NINJA_FRAME_INTERVAL_MS = 100;
 
-//running frames for power up 
+// Running frames for power mode (red)
 const NINJA_RED_RUN_FRAMES = [
-  require("@/assets/images/ninja-red-running1.png"), 
-  require("@/assets/images/ninja-red-running2.png"), 
-  require("@/assets/images/ninja-red-running3.png"), 
-  require("@/assets/images/ninja-red-running4.png"), 
-  require("@/assets/images/ninja-red-running5.png"), 
-  require("@/assets/images/ninja-red-running6.png"), 
-]
+  require("@/assets/images/ninja-red-running1.png"),
+  require("@/assets/images/ninja-red-running2.png"),
+  require("@/assets/images/ninja-red-running3.png"),
+  require("@/assets/images/ninja-red-running4.png"),
+  require("@/assets/images/ninja-red-running5.png"),
+  require("@/assets/images/ninja-red-running6.png"),
+];
 
 // Dash — one-shot 3-frame animation
 const NINJA_DASH_FRAMES = [
@@ -106,8 +113,45 @@ const NINJA_DASH_FRAMES = [
   require("../../../../assets/images/ninja-dash-2.png"),
   require("../../../../assets/images/ninja-dash-3.png"),
 ];
+
+const NINJA_RED_DASH_FRAMES = [
+  require("@/assets/images/ninja-red-dash-1.png"),
+  require("@/assets/images/ninja-red-dash-2.png"),
+  require("@/assets/images/ninja-red-dash-3.png"),
+];
 const NINJA_DASH_FRAME_INTERVAL_MS = 60;
 const NINJA_DASH_TRAIL = require("../../../../assets/images/ninja-dash-trail.png");
+const NINJA_RED_DASH_TRAIL = require("@/assets/images/ninja-red-dash-trail.png");
+
+// Shuriken spin frames
+const SHURIKENS = [
+  require("@/assets/images/shuriken1.png"),
+  require("@/assets/images/shuriken2.png"),
+  require("@/assets/images/shuriken3.png"),
+  require("@/assets/images/shuriken4.png"),
+  require("@/assets/images/shuriken5.png"),
+  require("@/assets/images/shuriken6.png"),
+];
+
+// Explosion shown when a shuriken destroys an obstacle
+const EXPLOSION = require("@/assets/images/explosion-correct.webp");
+
+/**
+ * RED POWER MODE SETTINGS — change these numbers to tune the feel.
+ */
+const POWER_MODE_DURATION_MS = 8000; // how long the red mode lasts
+const POWER_MODE_WARNING_MS = 2000; // blinking starts when this much time is left
+const POWER_MODE_BLINK_INTERVAL_MS = 150; // speed of the red/green blinking
+
+const SHURIKEN_SIZE = 36;
+const SHURIKEN_SPEED = 14; // pixels moved upward per game tick
+const SHURIKEN_COOLDOWN_MS = 250; // minimum time between two throws
+const SHURIKEN_FRAME_INTERVAL_MS = 60; // spin animation speed
+
+const EXPLOSION_SIZE = 100;
+const EXPLOSION_DURATION_MS = 400; // how long the explosion stays visible
+
+const TAP_MAX_MOVE = 10; // finger movement (px) still counted as a tap
 
 const POWER_UP_SIZE = 70;
 
@@ -165,6 +209,18 @@ interface Obstacle {
 }
 
 interface PowerUp {
+  id: number;
+  lane: number;
+  y: number;
+}
+
+interface Shuriken {
+  id: number;
+  lane: number;
+  y: number;
+}
+
+interface Explosion {
   id: number;
   lane: number;
   y: number;
@@ -345,6 +401,33 @@ function NinjaRushGame({
     powerUpsRef.current = powerUps;
   }, [powerUps]);
 
+  // --- Red power mode ---
+  const [showRed, setShowRed] = useState<boolean>(false); // which color to draw right now
+  const isPoweredRef = useRef<boolean>(false); // is power mode active?
+  const powerTimeLeftRef = useRef<number>(0); // milliseconds left
+
+  // --- Shurikens ---
+  const [shurikens, setShurikens] = useState<Shuriken[]>([]);
+  const shurikensRef = useRef<Shuriken[]>([]);
+  const nextShurikenId = useRef<number>(0);
+  const lastThrowRef = useRef<number>(0);
+  const [shurikenFrame, setShurikenFrame] = useState<number>(0);
+
+  // --- Explosions ---
+  const [explosions, setExplosions] = useState<Explosion[]>([]);
+  const nextExplosionId = useRef<number>(0);
+
+  /** Spins the shuriken by cycling through its sprite frames. */
+  useEffect(() => {
+    if (gameOver || activeQuestion) return;
+
+    const spin = setInterval(() => {
+      setShurikenFrame((prev) => (prev + 1) % SHURIKENS.length);
+    }, SHURIKEN_FRAME_INTERVAL_MS);
+
+    return () => clearInterval(spin);
+  }, [gameOver, activeQuestion]);
+
   const obstacleSpawnTimerRef = useRef<number>(0);
   const powerUpSpawnTimerRef = useRef<number>(0);
 
@@ -380,6 +463,39 @@ function NinjaRushGame({
     }
     setDashFrame(0);
     setIsDashing(true);
+  }, []);
+
+  /** Turns on red power mode and (re)starts the timer. */
+  const activatePowerMode = useCallback(() => {
+    isPoweredRef.current = true;
+    powerTimeLeftRef.current = POWER_MODE_DURATION_MS;
+    setShowRed(true);
+  }, []);
+
+  /** Throws one shuriken from the ninja's lane. Only works in power mode. */
+  const throwShuriken = useCallback(() => {
+    if (!isPoweredRef.current || gameOverRef.current || pausedRef.current) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastThrowRef.current < SHURIKEN_COOLDOWN_MS) return;
+    lastThrowRef.current = now;
+
+    const startY =
+      gameAreaHeightRef.current -
+      PLAYER_BOTTOM_OFFSET -
+      PLAYER_SIZE -
+      SHURIKEN_SIZE / 2;
+
+    const newShuriken: Shuriken = {
+      id: nextShurikenId.current++,
+      lane: playerLaneRef.current,
+      y: startY,
+    };
+
+    shurikensRef.current = [...shurikensRef.current, newShuriken];
+    setShurikens(shurikensRef.current);
   }, []);
 
   useEffect(() => {
@@ -453,6 +569,75 @@ function NinjaRushGame({
         gameAreaHeightRef.current - PLAYER_BOTTOM_OFFSET - PLAYER_SIZE;
       const currentPlayerLane = playerLaneRef.current;
 
+      // ---- Red power mode timer + blinking ----
+      if (isPoweredRef.current) {
+        powerTimeLeftRef.current -= GAME_TICK_MS;
+
+        if (powerTimeLeftRef.current <= 0) {
+          // Time is up: back to the normal green ninja, remove flying shurikens
+          isPoweredRef.current = false;
+          setShowRed(false);
+          shurikensRef.current = [];
+          setShurikens([]);
+        } else {
+          const inWarning = powerTimeLeftRef.current <= POWER_MODE_WARNING_MS;
+          // Solid red normally; alternate red/green during the warning period
+          const blinkRed = inWarning
+            ? Math.floor(
+                powerTimeLeftRef.current / POWER_MODE_BLINK_INTERVAL_MS,
+              ) %
+                2 ===
+              0
+            : true;
+          setShowRed(blinkRed);
+        }
+      }
+
+      // ---- Move shurikens + check hits against obstacles ----
+      const hitObstacleIds = new Set<number>();
+      const newExplosions: Explosion[] = [];
+      const movedShurikens: Shuriken[] = [];
+
+      for (const shuriken of shurikensRef.current) {
+        const newY = shuriken.y - SHURIKEN_SPEED;
+
+        const hitObstacle = obstaclesRef.current.find(
+          (o) =>
+            !hitObstacleIds.has(o.id) &&
+            o.lane === shuriken.lane &&
+            newY <= o.y + OBSTACLE_HEIGHT &&
+            newY + SHURIKEN_SIZE >= o.y,
+        );
+
+        if (hitObstacle) {
+          // Shuriken and obstacle both disappear, explosion appears
+          hitObstacleIds.add(hitObstacle.id);
+          newExplosions.push({
+            id: nextExplosionId.current++,
+            lane: hitObstacle.lane,
+            y: hitObstacle.y,
+          });
+          continue;
+        }
+
+        // Keep the shuriken only while it is still on screen
+        if (newY + SHURIKEN_SIZE > 0) {
+          movedShurikens.push({ ...shuriken, y: newY });
+        }
+      }
+
+      shurikensRef.current = movedShurikens;
+      setShurikens(movedShurikens);
+
+      if (newExplosions.length > 0) {
+        setExplosions((prev) => [...prev, ...newExplosions]);
+        newExplosions.forEach((explosion) => {
+          setTimeout(() => {
+            setExplosions((prev) => prev.filter((e) => e.id !== explosion.id));
+          }, EXPLOSION_DURATION_MS);
+        });
+      }
+
       obstacleSpawnTimerRef.current += GAME_TICK_MS;
       powerUpSpawnTimerRef.current += GAME_TICK_MS;
 
@@ -487,6 +672,9 @@ function NinjaRushGame({
         let didCollide = false;
 
         for (const obstacle of prevObstacles) {
+          // This obstacle was destroyed by a shuriken, so drop it
+          if (hitObstacleIds.has(obstacle.id)) continue;
+
           const newY = obstacle.y + effectiveFallSpeed;
 
           const isInPlayerRow =
@@ -591,6 +779,12 @@ function NinjaRushGame({
           setFacingRight(false);
           setPlayerLane((prevLane) => clampLane(prevLane - 1));
           startDash();
+        } else if (
+          Math.abs(gestureState.dx) < TAP_MAX_MOVE &&
+          Math.abs(gestureState.dy) < TAP_MAX_MOVE
+        ) {
+          // A tap, not a swipe
+          throwShuriken();
         }
       },
     }),
@@ -620,10 +814,14 @@ function NinjaRushGame({
   );
 
   const handleContinueAfterQuestion = useCallback(() => {
+    // A correct answer turns the ninja red
+    if (questionAnswerState === "correct") {
+      activatePowerMode();
+    }
     setActiveQuestion(null);
     setSelectedOption(null);
     setQuestionAnswerState("idle");
-  }, []);
+  }, [questionAnswerState, activatePowerMode]);
 
   const handleRestart = useCallback(() => {
     setObstacles([]);
@@ -642,6 +840,12 @@ function NinjaRushGame({
     setNinjaFrame(0);
     setIsDashing(false);
     setDashFrame(0);
+    isPoweredRef.current = false;
+    powerTimeLeftRef.current = 0;
+    setShowRed(false);
+    shurikensRef.current = [];
+    setShurikens([]);
+    setExplosions([]);
     availableQuestionsRef.current = [...questions];
     onRestart?.();
   }, [highScore, questions, onRestart]);
@@ -792,7 +996,41 @@ function NinjaRushGame({
           />
         ))}
 
-        {/* Player sprite */}
+        {/* Shurikens */}
+        {shurikens.map((shuriken) => (
+          <Image
+            key={`shuriken-${shuriken.id}`}
+            source={SHURIKENS[shurikenFrame]}
+            style={[
+              styles.shuriken,
+              {
+                left: getLaneX(shuriken.lane, SHURIKEN_SIZE),
+                top: shuriken.y,
+              },
+            ]}
+            resizeMode="contain"
+            fadeDuration={0}
+          />
+        ))}
+
+        {/* Explosions */}
+        {explosions.map((explosion) => (
+          <Image
+            key={`explosion-${explosion.id}`}
+            source={EXPLOSION}
+            style={[
+              styles.explosion,
+              {
+                left: getLaneX(explosion.lane, EXPLOSION_SIZE),
+                top: explosion.y + OBSTACLE_HEIGHT / 2 - EXPLOSION_SIZE / 2,
+              },
+            ]}
+            resizeMode="contain"
+            fadeDuration={0}
+          />
+        ))}
+
+        {/* Player sprite — all frame sets stay mounted, only opacity changes */}
         <View
           style={[
             styles.playerWrap,
@@ -804,12 +1042,25 @@ function NinjaRushGame({
         >
           <Image
             source={NINJA_DASH_TRAIL}
-            style={[styles.dashTrail, { opacity: isDashing ? 1 : 0 }]}
+            style={[
+              styles.dashTrail,
+              { opacity: isDashing && !showRed ? 1 : 0 },
+            ]}
+            resizeMode="contain"
+            fadeDuration={0}
+          />
+          <Image
+            source={NINJA_RED_DASH_TRAIL}
+            style={[
+              styles.dashTrail,
+              { opacity: isDashing && showRed ? 1 : 0 },
+            ]}
             resizeMode="contain"
             fadeDuration={0}
           />
 
-          {NINJA_RED_RUN_FRAMES.map((frame, i) => (
+          {/* Green running */}
+          {NINJA_RUN_FRAMES.map((frame, i) => (
             <Image
               key={`run-${i}`}
               source={frame}
@@ -818,7 +1069,7 @@ function NinjaRushGame({
                 {
                   transform: [{ scaleX: facingRight ? 1 : -1 }],
                   position: i === 0 ? "relative" : "absolute",
-                  opacity: !isDashing && ninjaFrame === i ? 1 : 0,
+                  opacity: !isDashing && !showRed && ninjaFrame === i ? 1 : 0,
                 },
               ]}
               resizeMode="contain"
@@ -826,6 +1077,25 @@ function NinjaRushGame({
             />
           ))}
 
+          {/* Red running */}
+          {NINJA_RED_RUN_FRAMES.map((frame, i) => (
+            <Image
+              key={`red-run-${i}`}
+              source={frame}
+              style={[
+                styles.playerSprite,
+                {
+                  transform: [{ scaleX: facingRight ? 1 : -1 }],
+                  position: "absolute",
+                  opacity: !isDashing && showRed && ninjaFrame === i ? 1 : 0,
+                },
+              ]}
+              resizeMode="contain"
+              fadeDuration={0}
+            />
+          ))}
+
+          {/* Green dash */}
           {NINJA_DASH_FRAMES.map((frame, i) => (
             <Image
               key={`dash-${i}`}
@@ -835,7 +1105,25 @@ function NinjaRushGame({
                 {
                   transform: [{ scaleX: facingRight ? 1 : -1 }],
                   position: "absolute",
-                  opacity: isDashing && dashFrame === i ? 1 : 0,
+                  opacity: isDashing && !showRed && dashFrame === i ? 1 : 0,
+                },
+              ]}
+              resizeMode="contain"
+              fadeDuration={0}
+            />
+          ))}
+
+          {/* Red dash */}
+          {NINJA_RED_DASH_FRAMES.map((frame, i) => (
+            <Image
+              key={`red-dash-${i}`}
+              source={frame}
+              style={[
+                styles.playerSprite,
+                {
+                  transform: [{ scaleX: facingRight ? 1 : -1 }],
+                  position: "absolute",
+                  opacity: isDashing && showRed && dashFrame === i ? 1 : 0,
                 },
               ]}
               resizeMode="contain"
@@ -1218,6 +1506,16 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: OBSTACLE_WIDTH,
     height: OBSTACLE_HEIGHT,
+  },
+  shuriken: {
+    position: "absolute",
+    width: SHURIKEN_SIZE,
+    height: SHURIKEN_SIZE,
+  },
+  explosion: {
+    position: "absolute",
+    width: EXPLOSION_SIZE,
+    height: EXPLOSION_SIZE,
   },
   powerUp: {
     position: "absolute",
