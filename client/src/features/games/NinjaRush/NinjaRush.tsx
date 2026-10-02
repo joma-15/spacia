@@ -90,6 +90,16 @@ const NINJA_RUN_FRAMES = [
 ];
 const NINJA_FRAME_INTERVAL_MS = 100;
 
+//running frames for power up 
+const NINJA_RED_RUN_FRAMES = [
+  require("@/assets/images/ninja-red-running1.png"), 
+  require("@/assets/images/ninja-red-running2.png"), 
+  require("@/assets/images/ninja-red-running3.png"), 
+  require("@/assets/images/ninja-red-running4.png"), 
+  require("@/assets/images/ninja-red-running5.png"), 
+  require("@/assets/images/ninja-red-running6.png"), 
+]
+
 // Dash — one-shot 3-frame animation
 const NINJA_DASH_FRAMES = [
   require("../../../../assets/images/ninja-dash-1.png"),
@@ -799,7 +809,7 @@ function NinjaRushGame({
             fadeDuration={0}
           />
 
-          {NINJA_RUN_FRAMES.map((frame, i) => (
+          {NINJA_RED_RUN_FRAMES.map((frame, i) => (
             <Image
               key={`run-${i}`}
               source={frame}
