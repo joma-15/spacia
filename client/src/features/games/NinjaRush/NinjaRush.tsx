@@ -6,7 +6,8 @@
  *
  * POWER MODE:
  *  - Hit a scroll and answer correctly -> the ninja turns RED for a limited time.
- *  - While red, tap the screen to throw shurikens (swipe still changes lanes).
+ *  - While red, tap anywhere on the screen to throw a shuriken toward that point
+ *    (any direction, no limit on how many you throw). Swipe still changes lanes.
  *  - A shuriken that hits an obstacle removes it and plays an explosion.
  *  - When the timer is almost up, the ninja blinks red/green until time is over.
  *  - All timing values live in the "RED POWER MODE SETTINGS" block below.
@@ -139,14 +140,15 @@ const EXPLOSION = require("@/assets/images/explosion-correct.webp");
 /**
  * RED POWER MODE SETTINGS — change these numbers to tune the feel.
  */
-const POWER_MODE_DURATION_MS = 8000; // how long the red mode lasts
+const POWER_MODE_DURATION_MS = 9000; // how long the red mode lasts
 const POWER_MODE_WARNING_MS = 2000; // blinking starts when this much time is left
 const POWER_MODE_BLINK_INTERVAL_MS = 150; // speed of the red/green blinking
 
 const SHURIKEN_SIZE = 36;
-const SHURIKEN_SPEED = 14; // pixels moved upward per game tick
-const SHURIKEN_COOLDOWN_MS = 250; // minimum time between two throws
+const SHURIKEN_SPEED = 14; // pixels moved per game tick (in the aimed direction)
+const SHURIKEN_COOLDOWN_MS = 0; // 0 = unlimited throws (set e.g. 80 to limit spam)
 const SHURIKEN_FRAME_INTERVAL_MS = 60; // spin animation speed
+const MIN_AIM_DISTANCE = 12; // taps this close to the ninja just throw straight up
 
 const EXPLOSION_SIZE = 100;
 const EXPLOSION_DURATION_MS = 400; // how long the explosion stays visible
@@ -214,10 +216,16 @@ interface PowerUp {
   y: number;
 }
 
+/**
+ * A thrown shuriken. It flies in a straight line, so it keeps its own
+ * center position (x, y) and velocity (vx, vy) in pixels per game tick.
+ */
 interface Shuriken {
   id: number;
-  lane: number;
-  y: number;
+  x: number; // center x
+  y: number; // center y
+  vx: number; // horizontal speed per tick
+  vy: number; // vertical speed per tick
 }
 
 interface Explosion {
@@ -330,6 +338,9 @@ function NinjaRushGame({
   );
   const bottomReserve = Math.max(insets.bottom, 12) + 12;
   const playerY = gameAreaHeight - PLAYER_BOTTOM_OFFSET - PLAYER_SIZE;
+
+  /** Ref to the game area View, used to convert tap positions to game coordinates. */
+  const gameAreaRef = useRef<View>(null);
 
   const [playerLane, setPlayerLane] = useState<number>(1);
   const playerLaneRef = useRef<number>(playerLane);
@@ -472,26 +483,52 @@ function NinjaRushGame({
     setShowRed(true);
   }, []);
 
-  /** Throws one shuriken from the ninja's lane. Only works in power mode. */
-  const throwShuriken = useCallback(() => {
+  /**
+   * Throws one shuriken from the ninja toward a target point.
+   * Only works while red power mode is active. There is no limit on how many
+   * can be thrown (see SHURIKEN_COOLDOWN_MS).
+   *
+   * @param targetX - x position of the tap, in game-area coordinates
+   * @param targetY - y position of the tap, in game-area coordinates
+   */
+  const throwShuriken = useCallback((targetX: number, targetY: number) => {
     if (!isPoweredRef.current || gameOverRef.current || pausedRef.current) {
       return;
     }
 
     const now = Date.now();
-    if (now - lastThrowRef.current < SHURIKEN_COOLDOWN_MS) return;
+    if (
+      SHURIKEN_COOLDOWN_MS > 0 &&
+      now - lastThrowRef.current < SHURIKEN_COOLDOWN_MS
+    ) {
+      return;
+    }
     lastThrowRef.current = now;
 
-    const startY =
-      gameAreaHeightRef.current -
-      PLAYER_BOTTOM_OFFSET -
-      PLAYER_SIZE -
-      SHURIKEN_SIZE / 2;
+    // Center of the ninja = where the shuriken starts
+    const originX =
+      getLaneX(playerLaneRef.current, PLAYER_SIZE) + PLAYER_SIZE / 2;
+    const originY =
+      gameAreaHeightRef.current - PLAYER_BOTTOM_OFFSET - PLAYER_SIZE / 2;
+
+    // Direction from the ninja to the tap point
+    let dx = targetX - originX;
+    let dy = targetY - originY;
+    let dist = Math.hypot(dx, dy);
+
+    // Tapping right on the ninja throws straight up
+    if (dist < MIN_AIM_DISTANCE) {
+      dx = 0;
+      dy = -1;
+      dist = 1;
+    }
 
     const newShuriken: Shuriken = {
       id: nextShurikenId.current++,
-      lane: playerLaneRef.current,
-      y: startY,
+      x: originX,
+      y: originY,
+      vx: (dx / dist) * SHURIKEN_SPEED,
+      vy: (dy / dist) * SHURIKEN_SPEED,
     };
 
     shurikensRef.current = [...shurikensRef.current, newShuriken];
@@ -597,17 +634,24 @@ function NinjaRushGame({
       const hitObstacleIds = new Set<number>();
       const newExplosions: Explosion[] = [];
       const movedShurikens: Shuriken[] = [];
+      const halfShuriken = SHURIKEN_SIZE / 2;
 
       for (const shuriken of shurikensRef.current) {
-        const newY = shuriken.y - SHURIKEN_SPEED;
+        // Move along the aimed direction
+        const newX = shuriken.x + shuriken.vx;
+        const newY = shuriken.y + shuriken.vy;
 
-        const hitObstacle = obstaclesRef.current.find(
-          (o) =>
-            !hitObstacleIds.has(o.id) &&
-            o.lane === shuriken.lane &&
-            newY <= o.y + OBSTACLE_HEIGHT &&
-            newY + SHURIKEN_SIZE >= o.y,
-        );
+        // Box-overlap check against every obstacle (obstacles are lane-based)
+        const hitObstacle = obstaclesRef.current.find((o) => {
+          if (hitObstacleIds.has(o.id)) return false;
+          const obstacleLeft = getLaneX(o.lane, OBSTACLE_WIDTH);
+          return (
+            newX + halfShuriken >= obstacleLeft &&
+            newX - halfShuriken <= obstacleLeft + OBSTACLE_WIDTH &&
+            newY + halfShuriken >= o.y &&
+            newY - halfShuriken <= o.y + OBSTACLE_HEIGHT
+          );
+        });
 
         if (hitObstacle) {
           // Shuriken and obstacle both disappear, explosion appears
@@ -620,9 +664,15 @@ function NinjaRushGame({
           continue;
         }
 
-        // Keep the shuriken only while it is still on screen
-        if (newY + SHURIKEN_SIZE > 0) {
-          movedShurikens.push({ ...shuriken, y: newY });
+        // Keep the shuriken only while it is still inside the game area
+        const isOffScreen =
+          newX < -SHURIKEN_SIZE ||
+          newX > SCREEN_WIDTH + SHURIKEN_SIZE ||
+          newY < -SHURIKEN_SIZE ||
+          newY > gameAreaHeightRef.current + SHURIKEN_SIZE;
+
+        if (!isOffScreen) {
+          movedShurikens.push({ ...shuriken, x: newX, y: newY });
         }
       }
 
@@ -783,8 +833,11 @@ function NinjaRushGame({
           Math.abs(gestureState.dx) < TAP_MAX_MOVE &&
           Math.abs(gestureState.dy) < TAP_MAX_MOVE
         ) {
-          // A tap, not a swipe
-          throwShuriken();
+          // A tap: aim at the touch point, converted to game-area coordinates
+          const { x0, y0 } = gestureState;
+          gameAreaRef.current?.measure((_x, _y, _w, _h, pageX, pageY) => {
+            throwShuriken(x0 - pageX, y0 - pageY);
+          });
         }
       },
     }),
@@ -943,6 +996,7 @@ function NinjaRushGame({
       ) : null}
 
       <View
+        ref={gameAreaRef}
         style={[styles.gameArea, { paddingBottom: bottomReserve }]}
         onLayout={(e) => setGameAreaHeight(e.nativeEvent.layout.height)}
         {...panResponder.panHandlers}
@@ -996,7 +1050,7 @@ function NinjaRushGame({
           />
         ))}
 
-        {/* Shurikens */}
+        {/* Shurikens — drawn at their own free position (x, y are centers) */}
         {shurikens.map((shuriken) => (
           <Image
             key={`shuriken-${shuriken.id}`}
@@ -1004,8 +1058,8 @@ function NinjaRushGame({
             style={[
               styles.shuriken,
               {
-                left: getLaneX(shuriken.lane, SHURIKEN_SIZE),
-                top: shuriken.y,
+                left: shuriken.x - SHURIKEN_SIZE / 2,
+                top: shuriken.y - SHURIKEN_SIZE / 2,
               },
             ]}
             resizeMode="contain"
